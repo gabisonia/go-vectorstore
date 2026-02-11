@@ -27,8 +27,8 @@ This library can be used to build retrieval systems such as:
 
 - `vectordata`: backend-agnostic core interfaces, record model, filters, typed wrapper
 - `stores/postgres`: Postgres implementation with `pgxpool`
-- `samples/semantic-search`: semantic search sample app
-- `samples/ragrimosa`: RAG sample app
+- `samples`: runnable demos (see `samples/README.md`)
+- `docs`: architecture and implementation notes
 
 ## Install
 
@@ -208,12 +208,14 @@ Notes:
 
 ## Samples
 
+- Overview and entry points: [`samples/README.md`](samples/README.md)
 - Semantic search sample app: `samples/semantic-search`
 - RAG sample app (`RAGrimosa`): `samples/ragrimosa`
 
 ## Documentation
 
-- Internals and architecture: [`docs/README.md`](docs/README.md)
+- Docs index: [`docs/README.md`](docs/README.md)
+- Internals and architecture: [`docs/architecture.md`](docs/architecture.md)
 
 ## License
 

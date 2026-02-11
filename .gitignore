@@ -1,0 +1,16 @@
+# OS files
+.DS_Store
+
+# IDE/project files
+.idea/
+.vscode/
+
+# Local env files
+.env
+.env.local
+*.env.local
+
+# Go build/test outputs
+*.test
+*.out
+coverage.out
