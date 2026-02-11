@@ -33,6 +33,7 @@ docker compose down
 ```bash
 cd samples/ragrimosa
 export OPENAI_API_KEY=your_key_here
+go get github.com/gabisonia/go-vectorstore/vectordata@latest
 
 docker compose up -d postgres
 go run . -q "How did Lacrimosa and Rex build trust?" -topk 4

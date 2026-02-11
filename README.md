@@ -51,6 +51,7 @@ docker compose up -d postgres
 
 ```bash
 export OPENAI_API_KEY=your_key_here
+go get github.com/gabisonia/go-vectorstore/vectordata@latest
 go run ./samples/semantic-search -q "how can I reduce cloud costs?"
 ```
 
