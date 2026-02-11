@@ -135,6 +135,10 @@ Unit tests run with:
 go test ./...
 ```
 
+## Samples
+
+- Semantic search sample app: `samples/semantic-search`
+
 ## License
 
 This project is licensed under the MIT License.
