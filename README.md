@@ -134,3 +134,7 @@ Unit tests run with:
 ```bash
 go test ./...
 ```
+
+## License
+
+This project is licensed under the MIT License.
