@@ -17,6 +17,10 @@ MVP scope:
 - `vectordata`: backend-agnostic core interfaces, record model, filters, typed wrapper
 - `stores/postgres`: Postgres implementation with `pgxpool`
 
+## Documentation
+
+- Detailed internals and architecture: `docs/how-it-works.md`
+
 ## Install
 
 ```bash
