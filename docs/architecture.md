@@ -8,6 +8,7 @@ The project is split into two layers:
 
 - `vectordata`: backend-agnostic contracts and primitives
 - `stores/postgres`: PostgreSQL + pgvector implementation
+- `stores/mssql`: SQL Server implementation
 
 This keeps the public API stable while allowing additional storage engines later.
 
@@ -23,7 +24,7 @@ The base record type is `vectordata.Record`:
 Search returns `vectordata.SearchResult`:
 
 - `Record`: matched item
-- `Distance`: raw pgvector distance
+- `Distance`: backend-computed distance value
 - `Score`: normalized score derived from distance
 
 Score normalization:
@@ -57,6 +58,11 @@ All methods require `context.Context`.
 - `EnsureExtension`: `true`
 - `StrictByDefault`: `true`
 
+`mssql.StoreOptions` defaults (`mssql.DefaultStoreOptions()`):
+
+- `Schema`: `dbo`
+- `StrictByDefault`: `true`
+
 Collection defaults:
 
 - Metric defaults to cosine when omitted
@@ -71,7 +77,7 @@ Other operational defaults:
 
 ## 5) Request Flow
 
-### Ensure collection
+### Postgres: Ensure collection
 
 `PostgresVectorStore.EnsureCollection`:
 
@@ -90,7 +96,7 @@ metadata jsonb not null default '{}'::jsonb,
 content text
 ```
 
-### Insert / Upsert
+### Postgres: Insert / Upsert
 
 Bulk writes are chunked and executed as parameterized SQL:
 
@@ -103,7 +109,7 @@ Each record is validated before sending:
 - vector dimension match
 - metadata JSON serialization
 
-### Search
+### Postgres: Search
 
 `SearchByVector` builds a query plan, then executes it:
 
@@ -120,6 +126,22 @@ Each record is validated before sending:
 8. Scans rows into `SearchResult`
 
 The pgvector operators are documented in the [pgvector README](https://github.com/pgvector/pgvector#querying).
+
+### MSSQL: Ensure / Search
+
+`MSSQLVectorStore.EnsureCollection`:
+
+1. Ensures target schema exists
+2. Ensures internal collection metadata table exists
+3. Creates or validates the collection table
+4. Persists and validates dimension/metric metadata
+
+`MSSQLCollection.SearchByVector`:
+
+1. Loads records from SQL Server
+2. Evaluates filters against records in-process
+3. Computes distance in-process (cosine/l2/inner product)
+4. Applies threshold, sorts by distance, returns top-k
 
 ## 6) Filter System (AST -> SQL)
 
@@ -146,6 +168,8 @@ Behavior details:
 - column filters are whitelist-based (`id`, `content` in the postgres backend)
 
 JSON path extraction behavior comes from PostgreSQL [JSON/JSONB functions and operators](https://www.postgresql.org/docs/current/functions-json.html).
+
+For MSSQL in this MVP, the same AST is evaluated in-process against loaded records.
 
 ## 7) Schema Safety Modes
 
@@ -238,7 +262,8 @@ Errors are wrapped with context so callers can use `errors.Is(...)` against base
 
 Current MVP scope:
 
-- Postgres + pgvector only
+- Postgres + pgvector backend
+- MSSQL backend (vectors stored as JSON payloads)
 - single-vector column per collection
 - metadata filtering through a focused AST
 
@@ -247,8 +272,10 @@ Future extension points:
 - additional backends under `stores/`
 - richer filter operators
 - optional reranking strategies
+- native MSSQL vector indexing/query pushdown
 
 ## 13) References
 
 - pgvector project docs: https://github.com/pgvector/pgvector
 - PostgreSQL docs: https://www.postgresql.org/docs/current/index.html
+- SQL Server docs: https://learn.microsoft.com/sql/sql-server/
