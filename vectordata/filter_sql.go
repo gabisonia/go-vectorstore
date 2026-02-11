@@ -1,6 +1,7 @@
 package vectordata
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 )
@@ -75,11 +76,15 @@ func (c *filterCompiler) compileEq(node EqFilter) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	ph := c.bind(node.Value)
 	if !isMetadata {
+		ph := c.bind(node.Value)
 		return fmt.Sprintf("(%s = %s)", fieldExpr, ph), nil
 	}
-	return fmt.Sprintf("(%s = to_jsonb(%s))", metadataPathJSONBExpr(fieldExpr, path), ph), nil
+	ph, err := c.bindJSONB(node.Value)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("(%s = %s::jsonb)", metadataPathJSONBExpr(fieldExpr, path), ph), nil
 }
 
 func (c *filterCompiler) compileIn(node InFilter) (string, error) {
@@ -92,11 +97,15 @@ func (c *filterCompiler) compileIn(node InFilter) (string, error) {
 	}
 	parts := make([]string, 0, len(node.Values))
 	for _, v := range node.Values {
-		ph := c.bind(v)
 		if isMetadata {
-			parts = append(parts, fmt.Sprintf("to_jsonb(%s)", ph))
+			ph, err := c.bindJSONB(v)
+			if err != nil {
+				return "", err
+			}
+			parts = append(parts, fmt.Sprintf("%s::jsonb", ph))
 			continue
 		}
+		ph := c.bind(v)
 		parts = append(parts, ph)
 	}
 	if !isMetadata {
@@ -196,6 +205,17 @@ func (c *filterCompiler) bind(v any) string {
 	c.nextArg++
 	c.args = append(c.args, v)
 	return ph
+}
+
+func (c *filterCompiler) bindJSONB(v any) (string, error) {
+	encoded, err := json.Marshal(v)
+	if err != nil {
+		return "", fmt.Errorf("%w: JSON encode value: %v", ErrInvalidFilter, err)
+	}
+	ph := fmt.Sprintf("$%d", c.nextArg)
+	c.nextArg++
+	c.args = append(c.args, encoded)
+	return ph, nil
 }
 
 func metadataPathJSONBExpr(metadataExpr string, path []string) string {

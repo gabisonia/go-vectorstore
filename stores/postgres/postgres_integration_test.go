@@ -13,21 +13,146 @@ import (
 
 	"github.com/gabisonia/go-vectorstore/vectordata"
 	"github.com/jackc/pgx/v5/pgxpool"
+	testcontainers "github.com/testcontainers/testcontainers-go"
+	"github.com/testcontainers/testcontainers-go/wait"
 )
 
-const defaultIntegrationDSN = "postgres://postgres:postgres@localhost:54329/vectorstore_test?sslmode=disable"
+const (
+	integrationPostgresUser     = "postgres"
+	integrationPostgresPassword = "postgres"
+	integrationPostgresDatabase = "vectorstore_test"
+)
 
-var schemaSeq atomic.Uint64
+var (
+	schemaSeq            atomic.Uint64
+	integrationDSN       string
+	integrationContainer testcontainers.Container
+)
+
+func TestMain(m *testing.M) {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+
+	dsn := strings.TrimSpace(os.Getenv("PGVECTOR_TEST_DSN"))
+	if dsn == "" {
+		container, generatedDSN, err := startPgVectorContainer(ctx)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "failed to start integration container: %v\n", err)
+			os.Exit(1)
+		}
+		integrationContainer = container
+		integrationDSN = generatedDSN
+	} else {
+		integrationDSN = dsn
+	}
+
+	exitCode := m.Run()
+
+	if integrationContainer != nil {
+		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer shutdownCancel()
+		if err := integrationContainer.Terminate(shutdownCtx); err != nil {
+			fmt.Fprintf(os.Stderr, "failed to terminate integration container: %v\n", err)
+			if exitCode == 0 {
+				exitCode = 1
+			}
+		}
+	}
+
+	os.Exit(exitCode)
+}
+
+func startPgVectorContainer(ctx context.Context) (testcontainers.Container, string, error) {
+	request := testcontainers.ContainerRequest{
+		Image:        "pgvector/pgvector:pg16",
+		ExposedPorts: []string{"5432/tcp"},
+		Env: map[string]string{
+			"POSTGRES_USER":     integrationPostgresUser,
+			"POSTGRES_PASSWORD": integrationPostgresPassword,
+			"POSTGRES_DB":       integrationPostgresDatabase,
+		},
+		WaitingFor: wait.ForLog("database system is ready to accept connections").
+			WithOccurrence(2).
+			WithStartupTimeout(2 * time.Minute),
+	}
+
+	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{
+		ContainerRequest: request,
+		Started:          true,
+	})
+	if err != nil {
+		return nil, "", fmt.Errorf("start pgvector container: %w", err)
+	}
+
+	host, err := container.Host(ctx)
+	if err != nil {
+		_ = container.Terminate(context.Background())
+		return nil, "", fmt.Errorf("resolve container host: %w", err)
+	}
+	mappedPort, err := container.MappedPort(ctx, "5432/tcp")
+	if err != nil {
+		_ = container.Terminate(context.Background())
+		return nil, "", fmt.Errorf("resolve container port: %w", err)
+	}
+
+	dsn := fmt.Sprintf(
+		"postgres://%s:%s@%s:%s/%s?sslmode=disable",
+		integrationPostgresUser,
+		integrationPostgresPassword,
+		host,
+		mappedPort.Port(),
+		integrationPostgresDatabase,
+	)
+
+	if err := waitForDatabase(ctx, dsn); err != nil {
+		_ = container.Terminate(context.Background())
+		return nil, "", err
+	}
+
+	return container, dsn, nil
+}
+
+func waitForDatabase(parent context.Context, dsn string) error {
+	ctx, cancel := context.WithTimeout(parent, 90*time.Second)
+	defer cancel()
+
+	for {
+		cfg, err := pgxpool.ParseConfig(dsn)
+		if err != nil {
+			return fmt.Errorf("parse integration DSN: %w", err)
+		}
+
+		pool, err := pgxpool.NewWithConfig(ctx, cfg)
+		if err == nil {
+			pingCtx, pingCancel := context.WithTimeout(ctx, 3*time.Second)
+			pingErr := pool.Ping(pingCtx)
+			pingCancel()
+			pool.Close()
+			if pingErr == nil {
+				return nil
+			}
+		}
+
+		select {
+		case <-ctx.Done():
+			if err != nil {
+				return fmt.Errorf("connect integration database: %w", err)
+			}
+			return fmt.Errorf("wait for integration database: %w", ctx.Err())
+		case <-time.After(300 * time.Millisecond):
+		}
+	}
+}
 
 func integrationPool(t *testing.T) *pgxpool.Pool {
 	t.Helper()
 
-	dsn := os.Getenv("PGVECTOR_TEST_DSN")
+	dsn := strings.TrimSpace(integrationDSN)
 	if dsn == "" {
-		dsn = defaultIntegrationDSN
+		t.Fatal("integration DSN is not initialized")
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
 	cfg, err := pgxpool.ParseConfig(dsn)
@@ -37,13 +162,6 @@ func integrationPool(t *testing.T) *pgxpool.Pool {
 	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
 		t.Fatalf("connect pool: %v", err)
-	}
-
-	pingCtx, pingCancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer pingCancel()
-	if err := pool.Ping(pingCtx); err != nil {
-		pool.Close()
-		t.Skipf("skipping integration test; database unavailable at %s: %v", dsn, err)
 	}
 
 	t.Cleanup(pool.Close)
@@ -75,18 +193,22 @@ func newTestStore(t *testing.T, pool *pgxpool.Pool) *PostgresVectorStore {
 }
 
 func TestIntegrationEnsureCollection(t *testing.T) {
+	// Arrange
 	pool := integrationPool(t)
 	store := newTestStore(t, pool)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 
+	// Act
 	_, err := store.EnsureCollection(ctx, vectordata.CollectionSpec{
 		Name:      "docs",
 		Dimension: 3,
 		Metric:    vectordata.DistanceCosine,
 		Mode:      vectordata.EnsureStrict,
 	})
+
+	// Assert
 	if err != nil {
 		t.Fatalf("EnsureCollection: %v", err)
 	}
@@ -112,6 +234,7 @@ func TestIntegrationEnsureCollection(t *testing.T) {
 }
 
 func TestIntegrationUpsertAndGet(t *testing.T) {
+	// Arrange
 	pool := integrationPool(t)
 	store := newTestStore(t, pool)
 
@@ -129,7 +252,7 @@ func TestIntegrationUpsertAndGet(t *testing.T) {
 	}
 
 	content := "first"
-	err = collection.Upsert(ctx, []vectordata.Record{{
+	firstUpsertErr := collection.Upsert(ctx, []vectordata.Record{{
 		ID:      "r1",
 		Vector:  []float32{1, 0},
 		Content: &content,
@@ -138,13 +261,16 @@ func TestIntegrationUpsertAndGet(t *testing.T) {
 			"rank":     1,
 		},
 	}})
-	if err != nil {
-		t.Fatalf("Upsert: %v", err)
-	}
 
-	rec, err := collection.Get(ctx, "r1")
-	if err != nil {
-		t.Fatalf("Get: %v", err)
+	// Act
+	rec, getErr := collection.Get(ctx, "r1")
+
+	// Assert
+	if firstUpsertErr != nil {
+		t.Fatalf("Upsert: %v", firstUpsertErr)
+	}
+	if getErr != nil {
+		t.Fatalf("Get: %v", getErr)
 	}
 	if rec.ID != "r1" {
 		t.Fatalf("expected ID r1, got %q", rec.ID)
@@ -160,7 +286,7 @@ func TestIntegrationUpsertAndGet(t *testing.T) {
 	}
 
 	updated := "updated"
-	err = collection.Upsert(ctx, []vectordata.Record{{
+	secondUpsertErr := collection.Upsert(ctx, []vectordata.Record{{
 		ID:      "r1",
 		Vector:  []float32{0.5, 0.5},
 		Content: &updated,
@@ -169,19 +295,22 @@ func TestIntegrationUpsertAndGet(t *testing.T) {
 			"rank":     3,
 		},
 	}})
-	if err != nil {
-		t.Fatalf("Upsert second call: %v", err)
-	}
 
-	rec, err = collection.Get(ctx, "r1")
-	if err != nil {
-		t.Fatalf("Get after upsert: %v", err)
+	// Act
+	updatedRec, updatedGetErr := collection.Get(ctx, "r1")
+
+	// Assert
+	if secondUpsertErr != nil {
+		t.Fatalf("Upsert second call: %v", secondUpsertErr)
 	}
-	if rec.Content == nil || *rec.Content != "updated" {
-		t.Fatalf("content not updated: %#v", rec.Content)
+	if updatedGetErr != nil {
+		t.Fatalf("Get after upsert: %v", updatedGetErr)
 	}
-	if rec.Metadata["category"] != "blog" {
-		t.Fatalf("metadata not updated: %#v", rec.Metadata)
+	if updatedRec.Content == nil || *updatedRec.Content != "updated" {
+		t.Fatalf("content not updated: %#v", updatedRec.Content)
+	}
+	if updatedRec.Metadata["category"] != "blog" {
+		t.Fatalf("metadata not updated: %#v", updatedRec.Metadata)
 	}
 }
 
@@ -194,6 +323,7 @@ func TestIntegrationSearchByMetric(t *testing.T) {
 
 	for _, metric := range metrics {
 		t.Run(string(metric), func(t *testing.T) {
+			// Arrange
 			pool := integrationPool(t)
 			store := newTestStore(t, pool)
 
@@ -219,7 +349,10 @@ func TestIntegrationSearchByMetric(t *testing.T) {
 				t.Fatalf("Upsert: %v", err)
 			}
 
+			// Act
 			results, err := collection.SearchByVector(ctx, []float32{1, 0}, 2, vectordata.SearchOptions{})
+
+			// Assert
 			if err != nil {
 				t.Fatalf("SearchByVector: %v", err)
 			}
@@ -234,6 +367,7 @@ func TestIntegrationSearchByMetric(t *testing.T) {
 }
 
 func TestIntegrationMetadataFilter(t *testing.T) {
+	// Arrange
 	pool := integrationPool(t)
 	store := newTestStore(t, pool)
 
@@ -264,9 +398,13 @@ func TestIntegrationMetadataFilter(t *testing.T) {
 		vectordata.Gt(vectordata.Metadata("rank"), 1),
 	)
 
-	results, err := collection.SearchByVector(ctx, []float32{1, 0}, 10, vectordata.SearchOptions{Filter: filter})
-	if err != nil {
-		t.Fatalf("SearchByVector with filter: %v", err)
+	// Act
+	results, searchErr := collection.SearchByVector(ctx, []float32{1, 0}, 10, vectordata.SearchOptions{Filter: filter})
+	count, countErr := collection.Count(ctx, filter)
+
+	// Assert
+	if searchErr != nil {
+		t.Fatalf("SearchByVector with filter: %v", searchErr)
 	}
 	if len(results) != 1 {
 		t.Fatalf("expected 1 result, got %d", len(results))
@@ -274,10 +412,8 @@ func TestIntegrationMetadataFilter(t *testing.T) {
 	if results[0].Record.ID != "b" {
 		t.Fatalf("expected result b, got %s", results[0].Record.ID)
 	}
-
-	count, err := collection.Count(ctx, filter)
-	if err != nil {
-		t.Fatalf("Count with filter: %v", err)
+	if countErr != nil {
+		t.Fatalf("Count with filter: %v", countErr)
 	}
 	if count != 1 {
 		t.Fatalf("expected count 1, got %d", count)

@@ -134,8 +134,7 @@ if err != nil {
 ## Integration tests
 
 ```bash
-docker compose up -d
-PGVECTOR_TEST_DSN='postgres://postgres:postgres@localhost:54329/vectorstore_test?sslmode=disable' go test -tags=integration ./...
+go test -tags=integration ./...
 ```
 
 Unit tests run with:
@@ -143,6 +142,19 @@ Unit tests run with:
 ```bash
 go test ./...
 ```
+
+Notes:
+- Integration tests start Postgres + pgvector automatically via Testcontainers.
+- Docker daemon must be available when running integration tests.
+- Optional override: set `PGVECTOR_TEST_DSN` to use an existing Postgres instance instead of starting a container.
+
+## Docker Compose (optional)
+
+`docker-compose.yml` at the repository root is kept for manual local runs.
+
+- Use root `docker-compose.yml` when you want a persistent local Postgres+pgvector instance outside tests.
+- Use Testcontainers (`go test -tags=integration ./...`) for integration tests.
+- Sample app has its own compose file at `samples/semantic-search/docker-compose.yml`.
 
 ## Samples
 

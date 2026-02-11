@@ -17,6 +17,7 @@ func testFilterConfig() FilterSQLConfig {
 }
 
 func TestCompileFilterSQL_Complex(t *testing.T) {
+	// Arrange
 	filter := And(
 		Eq(Column("id"), "r1"),
 		Or(
@@ -25,7 +26,10 @@ func TestCompileFilterSQL_Complex(t *testing.T) {
 		),
 	)
 
+	// Act
 	sql, args, next, err := CompileFilterSQL(filter, testFilterConfig(), 1)
+
+	// Assert
 	if err != nil {
 		t.Fatalf("CompileFilterSQL error: %v", err)
 	}
@@ -46,7 +50,13 @@ func TestCompileFilterSQL_Complex(t *testing.T) {
 }
 
 func TestCompileFilterSQL_StartArgOffset(t *testing.T) {
-	sql, args, next, err := CompileFilterSQL(Eq(Column("content"), "hello"), testFilterConfig(), 5)
+	// Arrange
+	filter := Eq(Column("content"), "hello")
+
+	// Act
+	sql, args, next, err := CompileFilterSQL(filter, testFilterConfig(), 5)
+
+	// Assert
 	if err != nil {
 		t.Fatalf("CompileFilterSQL error: %v", err)
 	}
@@ -62,7 +72,13 @@ func TestCompileFilterSQL_StartArgOffset(t *testing.T) {
 }
 
 func TestCompileFilterSQL_InvalidColumn(t *testing.T) {
-	_, _, _, err := CompileFilterSQL(Eq(Column("unknown"), "x"), testFilterConfig(), 1)
+	// Arrange
+	filter := Eq(Column("unknown"), "x")
+
+	// Act
+	_, _, _, err := CompileFilterSQL(filter, testFilterConfig(), 1)
+
+	// Assert
 	if err == nil {
 		t.Fatal("expected error")
 	}
@@ -72,17 +88,45 @@ func TestCompileFilterSQL_InvalidColumn(t *testing.T) {
 }
 
 func TestCompileFilterSQL_InFilter(t *testing.T) {
-	sql, args, next, err := CompileFilterSQL(In(Metadata("category"), "a", "b"), testFilterConfig(), 1)
+	// Arrange
+	filter := In(Metadata("category"), "a", "b")
+
+	// Act
+	sql, args, next, err := CompileFilterSQL(filter, testFilterConfig(), 1)
+
+	// Assert
 	if err != nil {
 		t.Fatalf("CompileFilterSQL error: %v", err)
 	}
-	if sql != `(("metadata" #> ARRAY['category']) IN (to_jsonb($1), to_jsonb($2)))` {
+	if sql != `(("metadata" #> ARRAY['category']) IN ($1::jsonb, $2::jsonb))` {
 		t.Fatalf("unexpected SQL: %s", sql)
 	}
-	if !reflect.DeepEqual(args, []any{"a", "b"}) {
+	if !reflect.DeepEqual(args, []any{[]byte(`"a"`), []byte(`"b"`)}) {
 		t.Fatalf("unexpected args: %#v", args)
 	}
 	if next != 3 {
+		t.Fatalf("unexpected next arg index: %d", next)
+	}
+}
+
+func TestCompileFilterSQL_MetadataEqFilter(t *testing.T) {
+	// Arrange
+	filter := Eq(Metadata("category"), "news")
+
+	// Act
+	sql, args, next, err := CompileFilterSQL(filter, testFilterConfig(), 1)
+
+	// Assert
+	if err != nil {
+		t.Fatalf("CompileFilterSQL error: %v", err)
+	}
+	if sql != `(("metadata" #> ARRAY['category']) = $1::jsonb)` {
+		t.Fatalf("unexpected SQL: %s", sql)
+	}
+	if !reflect.DeepEqual(args, []any{[]byte(`"news"`)}) {
+		t.Fatalf("unexpected args: %#v", args)
+	}
+	if next != 2 {
 		t.Fatalf("unexpected next arg index: %d", next)
 	}
 }
