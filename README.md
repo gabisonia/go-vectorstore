@@ -8,9 +8,14 @@
 A lightweight Go vector-store library inspired by `Microsoft.Extensions.VectorData`.
 
 MVP scope:
-- Go 1.22+
+- Go 1.24.x
 - Postgres + `pgvector` only
 - Record-based core API with optional typed codec wrapper
+
+This library can be used to build retrieval systems such as:
+- semantic search
+- RAG pipelines (retrieve from vector DB, then generate with an LLM)
+- context-aware assistants grounded on your own data
 
 ## Project layout
 
@@ -154,11 +159,13 @@ Notes:
 
 - Use root `docker-compose.yml` when you want a persistent local Postgres+pgvector instance outside tests.
 - Use Testcontainers (`go test -tags=integration ./...`) for integration tests.
-- Sample app has its own compose file at `samples/semantic-search/docker-compose.yml`.
+- Sample apps have their own compose files at `samples/semantic-search/docker-compose.yml` and `samples/ragrimosa/docker-compose.yml`.
+- Sample Dockerfiles use `golang:1.24-alpine` to match the repo Go version (`1.24.x`).
 
 ## Samples
 
 - Semantic search sample app: `samples/semantic-search`
+- RAG sample app (`RAGrimosa`): `samples/ragrimosa`
 
 ## License
 

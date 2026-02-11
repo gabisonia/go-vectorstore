@@ -1,0 +1,37 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: go-vectorstore-ragrimosa-pg
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: vectorstore_test
+    ports:
+      - "54330:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d vectorstore_test"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
+  app:
+    profiles: ["app"]
+    build:
+      context: ../..
+      dockerfile: samples/ragrimosa/Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_EMBEDDING_MODEL: ${OPENAI_EMBEDDING_MODEL:-text-embedding-3-small}
+      OPENAI_CHAT_MODEL: ${OPENAI_CHAT_MODEL:-gpt-4o-mini}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
+      PG_DSN: ${PG_DSN:-postgres://postgres:postgres@postgres:5432/vectorstore_test?sslmode=disable}
+    command:
+      [
+        "-q",
+        "${QUERY:-How did Lacrimosa adapt after moving to Amsterdam?}",
+        "-topk",
+        "${TOP_K:-4}",
+      ]

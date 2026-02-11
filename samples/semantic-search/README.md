@@ -19,6 +19,9 @@ Optional metadata filter:
 docker compose --profile app run --rm app -q "go cancellation patterns" -category backend
 ```
 
+Note:
+- The sample image builds with `golang:1.24-alpine` to match the repository Go version (`1.24.x`).
+
 Shutdown:
 
 ```bash

@@ -180,9 +180,9 @@ Common exported errors:
 
 Errors are wrapped with context so callers can use `errors.Is(...)` against base error types.
 
-## 10) Semantic-search sample flow
+## 10) Sample app flows
 
-The sample app in `samples/semantic-search` does:
+### `samples/semantic-search`
 
 1. Build embeddings for 3 fake articles via OpenAI embeddings API.
 2. Ensure a Postgres vector collection.
@@ -190,6 +190,15 @@ The sample app in `samples/semantic-search` does:
 4. Ensure vector + metadata indexes.
 5. Embed user query and run semantic search.
 6. Print ranked top matches with score and distance.
+
+### `samples/ragrimosa`
+
+1. Build embeddings for manually chunked Lacrimosa story records.
+2. Ensure a Postgres vector collection.
+3. Upsert chunk records and ensure indexes.
+4. Embed user prompt and retrieve nearest chunks from DB.
+5. Send the retrieved chunks as context to OpenAI chat completions.
+6. Print the grounded answer.
 
 ## 11) Current scope and limits
 
