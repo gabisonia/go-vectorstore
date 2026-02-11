@@ -19,7 +19,7 @@ MVP scope:
 
 ## Documentation
 
-- Detailed internals and architecture: `docs/how-it-works.md`
+- Detailed internals and architecture: `docs/README.md`
 
 ## Install
 
