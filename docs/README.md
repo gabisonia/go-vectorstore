@@ -7,7 +7,7 @@ This page explains the internal design of `go-vectorstore` and how requests move
 The project is split into two layers:
 
 - `vectordata`: backend-agnostic contracts and primitives.
-- `stores/postgres`: PostgreSQL + pgvector implementation.
+- `stores/postgres`: [PostgreSQL](https://www.postgresql.org/docs/current/index.html) + [pgvector](https://github.com/pgvector/pgvector) implementation.
 
 This keeps the public API stable while allowing additional storage engines later.
 
@@ -93,11 +93,13 @@ Each record is validated before sending:
 6. Order by `distance ASC`, limit by `topK`.
 7. Scan rows into `SearchResult`.
 
+The pgvector operators are documented in the [pgvector README](https://github.com/pgvector/pgvector#querying).
+
 Score normalization:
 
-- cosine: `1 - distance`
-- l2: `1 / (1 + distance)`
-- inner product: `-distance`
+- cosine: `1 - distance` ([cosine similarity](https://en.wikipedia.org/wiki/Cosine_similarity))
+- l2: `1 / (1 + distance)` ([Euclidean distance / L2](https://en.wikipedia.org/wiki/Euclidean_distance))
+- inner product: `-distance` ([dot product / inner product](https://en.wikipedia.org/wiki/Dot_product))
 
 ## 5) Filter system (AST -> SQL)
 
@@ -117,6 +119,7 @@ Fields can target:
 - parameter list
 
 This keeps SQL injection-safe behavior by binding values as query args.
+JSON path extraction behavior comes from PostgreSQL [JSON/JSONB functions and operators](https://www.postgresql.org/docs/current/functions-json.html).
 
 ## 6) Schema safety modes
 
@@ -139,6 +142,16 @@ Dimension is always validated against `vector(n)` and must match.
 - Metadata index:
   - GIN on `metadata` JSONB
   - optional `jsonb_path_ops`
+
+For vector indexing details:
+
+- HNSW: [original paper](https://arxiv.org/abs/1603.09320) and [overview](https://en.wikipedia.org/wiki/Hierarchical_navigable_small_world).
+- IVFFlat: [FAISS index reference](https://github.com/facebookresearch/faiss/wiki/Faiss-indexes) and [pgvector IVFFlat docs](https://github.com/pgvector/pgvector#ivfflat).
+
+For metadata indexing details:
+
+- GIN index basics: [PostgreSQL GIN indexes](https://www.postgresql.org/docs/current/gin.html).
+- JSONB operators / indexing context: [PostgreSQL JSON functions and operators](https://www.postgresql.org/docs/current/functions-json.html).
 
 Metric-specific operator classes are selected automatically:
 
@@ -191,3 +204,11 @@ Future extension points:
 - additional backends under `stores/`.
 - richer filter operators.
 - optional reranking strategies.
+
+## 12) References
+
+- pgvector project docs: https://github.com/pgvector/pgvector
+- PostgreSQL docs: https://www.postgresql.org/docs/current/index.html
+- ANN concept: https://en.wikipedia.org/wiki/Nearest_neighbor_search
+- HNSW paper: https://arxiv.org/abs/1603.09320
+- FAISS index families (including IVF): https://github.com/facebookresearch/faiss/wiki/Faiss-indexes
