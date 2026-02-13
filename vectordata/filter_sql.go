@@ -6,6 +6,8 @@ import (
 	"strings"
 )
 
+const numericTextPattern = `^[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)([eE][+-]?[0-9]+)?$`
+
 // FilterSQLConfig configures filter compilation into SQL expressions.
 type FilterSQLConfig struct {
 	// ColumnExpr maps logical column names to pre-quoted SQL expressions.
@@ -123,7 +125,7 @@ func (c *filterCompiler) compileGt(node GtFilter) (string, error) {
 		return fmt.Sprintf("(%s > %s)", fieldExpr, c.bind(node.Value)), nil
 	}
 	if num, ok := toFloat64(node.Value); ok {
-		return fmt.Sprintf("((%s)::double precision > %s)", metadataPathTextExpr(fieldExpr, path), c.bind(num)), nil
+		return c.compileMetadataNumericCompare(fieldExpr, path, ">", num), nil
 	}
 	return fmt.Sprintf("(%s > %s)", metadataPathTextExpr(fieldExpr, path), c.bind(fmt.Sprint(node.Value))), nil
 }
@@ -137,9 +139,21 @@ func (c *filterCompiler) compileLt(node LtFilter) (string, error) {
 		return fmt.Sprintf("(%s < %s)", fieldExpr, c.bind(node.Value)), nil
 	}
 	if num, ok := toFloat64(node.Value); ok {
-		return fmt.Sprintf("((%s)::double precision < %s)", metadataPathTextExpr(fieldExpr, path), c.bind(num)), nil
+		return c.compileMetadataNumericCompare(fieldExpr, path, "<", num), nil
 	}
 	return fmt.Sprintf("(%s < %s)", metadataPathTextExpr(fieldExpr, path), c.bind(fmt.Sprint(node.Value))), nil
+}
+
+func (c *filterCompiler) compileMetadataNumericCompare(metadataExpr string, path []string, op string, value float64) string {
+	textExpr := metadataPathTextExpr(metadataExpr, path)
+	return fmt.Sprintf(
+		"(CASE WHEN (%s) ~ %s THEN ((%s)::double precision %s %s) ELSE FALSE END)",
+		textExpr,
+		singleQuoted(numericTextPattern),
+		textExpr,
+		op,
+		c.bind(value),
+	)
 }
 
 func (c *filterCompiler) compileExists(node ExistsFilter) (string, error) {

@@ -33,7 +33,7 @@ var (
 )
 
 func TestMain(m *testing.M) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 12*time.Minute)
 	defer cancel()
 
 	dsn := strings.TrimSpace(os.Getenv("MSSQL_TEST_DSN"))
@@ -67,15 +67,17 @@ func TestMain(m *testing.M) {
 
 func startMSSQLContainer(ctx context.Context) (testcontainers.Container, string, error) {
 	request := testcontainers.ContainerRequest{
-		Image:        "mcr.microsoft.com/mssql/server:2022-latest",
-		ExposedPorts: []string{"1433/tcp"},
+		Image:           "mcr.microsoft.com/mssql/server:2022-latest",
+		ImagePlatform:   "linux/amd64",
+		AlwaysPullImage: true,
+		ExposedPorts:    []string{"1433/tcp"},
 		Env: map[string]string{
 			"ACCEPT_EULA":       "Y",
 			"MSSQL_SA_PASSWORD": integrationMSSQLPassword,
 			"MSSQL_PID":         "Developer",
 		},
 		WaitingFor: wait.ForLog("SQL Server is now ready for client connections").
-			WithStartupTimeout(4 * time.Minute),
+			WithStartupTimeout(10 * time.Minute),
 	}
 
 	container, err := testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{

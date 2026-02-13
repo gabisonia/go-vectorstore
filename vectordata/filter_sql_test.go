@@ -34,7 +34,7 @@ func TestCompileFilterSQL_Complex(t *testing.T) {
 		t.Fatalf("CompileFilterSQL error: %v", err)
 	}
 
-	expectedSQL := `(("id" = $1) AND (((jsonb_extract_path_text("metadata", 'rank'))::double precision > $2) OR (("metadata" #> ARRAY['flags', 'pinned']) IS NOT NULL)))`
+	expectedSQL := `(("id" = $1) AND ((CASE WHEN (jsonb_extract_path_text("metadata", 'rank')) ~ '^[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)([eE][+-]?[0-9]+)?$' THEN ((jsonb_extract_path_text("metadata", 'rank'))::double precision > $2) ELSE FALSE END) OR (("metadata" #> ARRAY['flags', 'pinned']) IS NOT NULL)))`
 	if sql != expectedSQL {
 		t.Fatalf("unexpected SQL\nwant: %s\n got: %s", expectedSQL, sql)
 	}
@@ -46,6 +46,30 @@ func TestCompileFilterSQL_Complex(t *testing.T) {
 
 	if next != 3 {
 		t.Fatalf("unexpected next arg index: want 3 got %d", next)
+	}
+}
+
+func TestCompileFilterSQL_MetadataGtNumericUsesSafeCast(t *testing.T) {
+	// Arrange
+	filter := Gt(Metadata("rank"), 10)
+
+	// Act
+	sql, args, next, err := CompileFilterSQL(filter, testFilterConfig(), 1)
+
+	// Assert
+	if err != nil {
+		t.Fatalf("CompileFilterSQL error: %v", err)
+	}
+	expectedSQL := `(CASE WHEN (jsonb_extract_path_text("metadata", 'rank')) ~ '^[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)([eE][+-]?[0-9]+)?$' THEN ((jsonb_extract_path_text("metadata", 'rank'))::double precision > $1) ELSE FALSE END)`
+	if sql != expectedSQL {
+		t.Fatalf("unexpected SQL\nwant: %s\n got: %s", expectedSQL, sql)
+	}
+	expectedArgs := []any{float64(10)}
+	if !reflect.DeepEqual(args, expectedArgs) {
+		t.Fatalf("unexpected args\nwant: %#v\n got: %#v", expectedArgs, args)
+	}
+	if next != 2 {
+		t.Fatalf("unexpected next arg index: %d", next)
 	}
 }
 
