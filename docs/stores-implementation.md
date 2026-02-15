@@ -171,18 +171,18 @@ Write behavior:
 - Chunk in batches of 500
 - Use transaction per chunk
 - Upsert strategy:
-  - attempt `UPDATE`
-  - if `RowsAffected == 0`, execute `INSERT`
+  - execute single-statement `UPDATE ... WITH (UPDLOCK, SERIALIZABLE)` + conditional `INSERT`
+  - avoids race conditions under concurrent upserts for the same ID
 
 Search behavior (MVP):
 
 1. Validate `topK` and vector dimension
-2. Load records from SQL table into memory
+2. Stream records row-by-row from SQL
 3. Evaluate filter AST in-process (`matchesFilter`)
 4. Compute distance in-process (`distanceBetween`)
 5. Apply optional threshold
-6. Sort by distance asc (stable tie-break by `ID`)
-7. Apply projection and cut to top-k
+6. Maintain bounded top-k max-heap in memory (`O(k)` memory)
+7. Return results sorted by distance asc (tie-break by `ID`)
 
 `EnsureIndexes` is intentionally a no-op in MSSQL backend for this MVP.
 
@@ -197,7 +197,7 @@ Filter AST supports:
 Execution strategy by backend:
 
 - Postgres: compile AST -> parameterized SQL via `CompileFilterSQL`
-- MSSQL: evaluate AST in Go against materialized records
+- MSSQL: evaluate AST in Go against streamed records
 
 Important behavior:
 
@@ -257,4 +257,3 @@ To add a new store backend, follow the same contract shape:
 4. Support filter handling (compiled or in-process)
 5. Reuse `vectordata` errors and scoring semantics
 6. Add integration tests matching existing backend test coverage style
-
