@@ -138,10 +138,11 @@ The pgvector operators are documented in the [pgvector README](https://github.co
 
 `MSSQLCollection.SearchByVector`:
 
-1. Loads records from SQL Server
+1. Streams records from SQL Server
 2. Evaluates filters against records in-process
 3. Computes distance in-process (cosine/l2/inner product)
-4. Applies threshold, sorts by distance, returns top-k
+4. Applies threshold and keeps a bounded in-memory top-k heap
+5. Returns top-k sorted by distance
 
 ## 6) Filter System (AST -> SQL)
 

@@ -1,6 +1,7 @@
 package mssql
 
 import (
+	"container/heap"
 	"context"
 	"database/sql"
 	"errors"
@@ -126,20 +127,18 @@ func (c *MSSQLCollection) Count(ctx context.Context, filter vectordata.Filter) (
 		return count, nil
 	}
 
-	records, err := c.loadRecords(ctx, false)
-	if err != nil {
-		return 0, err
-	}
-
 	count := int64(0)
-	for _, record := range records {
+	if err := c.streamRecords(ctx, false, func(record vectordata.Record) error {
 		matches, err := matchesFilter(filter, record)
 		if err != nil {
-			return 0, err
+			return err
 		}
 		if matches {
 			count++
 		}
+		return nil
+	}); err != nil {
+		return 0, err
 	}
 	return count, nil
 }
@@ -154,50 +153,54 @@ func (c *MSSQLCollection) SearchByVector(ctx context.Context, vector []float32, 
 
 	projection := resolveProjection(opts.Projection)
 	metric := defaultMetric(c.metric)
-	records, err := c.loadRecords(ctx, true)
-	if err != nil {
-		return nil, err
-	}
-
-	results := make([]vectordata.SearchResult, 0, len(records))
-	for _, record := range records {
+	topKHeap := make(searchResultMaxHeap, 0, topK)
+	heap.Init(&topKHeap)
+	if err := c.streamRecords(ctx, true, func(record vectordata.Record) error {
 		if err := c.validateVectorDimension(record.Vector); err != nil {
-			return nil, fmt.Errorf("invalid stored vector for record %q: %w", record.ID, err)
+			return fmt.Errorf("invalid stored vector for record %q: %w", record.ID, err)
 		}
 
 		matches, err := matchesFilter(opts.Filter, record)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		if !matches {
-			continue
+			return nil
 		}
 
 		distance, err := distanceBetween(metric, vector, record.Vector)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		if opts.Threshold != nil && distance > *opts.Threshold {
-			continue
+			return nil
 		}
 
-		results = append(results, vectordata.SearchResult{
+		candidate := vectordata.SearchResult{
 			Record:   projectRecord(record, projection),
 			Distance: distance,
 			Score:    vectordata.ScoreFromDistance(metric, distance),
-		})
-	}
-
-	sort.Slice(results, func(i, j int) bool {
-		if results[i].Distance == results[j].Distance {
-			return results[i].Record.ID < results[j].Record.ID
 		}
-		return results[i].Distance < results[j].Distance
-	})
 
-	if len(results) > topK {
-		results = results[:topK]
+		if topKHeap.Len() < topK {
+			heap.Push(&topKHeap, candidate)
+			return nil
+		}
+		worst := topKHeap[0]
+		if isBetterResult(candidate, worst) {
+			heap.Pop(&topKHeap)
+			heap.Push(&topKHeap, candidate)
+		}
+		return nil
+	}); err != nil {
+		return nil, err
 	}
+
+	results := make([]vectordata.SearchResult, 0, topKHeap.Len())
+	for topKHeap.Len() > 0 {
+		results = append(results, heap.Pop(&topKHeap).(vectordata.SearchResult))
+	}
+	sort.Slice(results, func(i, j int) bool { return isBetterResult(results[i], results[j]) })
 
 	return results, nil
 }
@@ -221,13 +224,7 @@ func (c *MSSQLCollection) writeRecords(ctx context.Context, records []vectordata
 		quoteIdent(metadataColumn),
 		quoteIdent(contentColumn),
 	)
-	updateQuery := fmt.Sprintf("UPDATE %s SET %s = @p2, %s = @p3, %s = @p4 WHERE %s = @p1",
-		c.tableName(),
-		quoteIdent(vectorColumn),
-		quoteIdent(metadataColumn),
-		quoteIdent(contentColumn),
-		quoteIdent(idColumn),
-	)
+	upsertQuery := buildUpsertQuery(c.tableName())
 
 	for start := 0; start < len(records); start += maxRowsPerStatement {
 		end := start + maxRowsPerStatement
@@ -239,7 +236,7 @@ func (c *MSSQLCollection) writeRecords(ctx context.Context, records []vectordata
 		if err != nil {
 			return err
 		}
-		if err := c.writeBatch(ctx, tx, records[start:end], mode, insertQuery, updateQuery); err != nil {
+		if err := c.writeBatch(ctx, tx, records[start:end], mode, insertQuery, upsertQuery); err != nil {
 			_ = tx.Rollback()
 			return err
 		}
@@ -258,7 +255,7 @@ func (c *MSSQLCollection) writeBatch(
 	records []vectordata.Record,
 	mode writeMode,
 	insertQuery string,
-	updateQuery string,
+	upsertQuery string,
 ) error {
 	for _, record := range records {
 		if strings.TrimSpace(record.ID) == "" {
@@ -288,19 +285,8 @@ func (c *MSSQLCollection) writeBatch(
 				return err
 			}
 		case writeModeUpsert:
-			result, err := tx.ExecContext(ctx, updateQuery, record.ID, vectorPayload, metadataPayload, contentArg)
-			if err != nil {
+			if _, err := tx.ExecContext(ctx, upsertQuery, record.ID, vectorPayload, metadataPayload, contentArg); err != nil {
 				return err
-			}
-
-			rowsAffected, err := result.RowsAffected()
-			if err != nil {
-				return err
-			}
-			if rowsAffected == 0 {
-				if _, err := tx.ExecContext(ctx, insertQuery, record.ID, vectorPayload, metadataPayload, contentArg); err != nil {
-					return err
-				}
 			}
 		default:
 			return fmt.Errorf("unsupported write mode %d", mode)
@@ -310,7 +296,7 @@ func (c *MSSQLCollection) writeBatch(
 	return nil
 }
 
-func (c *MSSQLCollection) loadRecords(ctx context.Context, includeVector bool) ([]vectordata.Record, error) {
+func (c *MSSQLCollection) streamRecords(ctx context.Context, includeVector bool, yield func(vectordata.Record) error) error {
 	selectColumns := []string{quoteIdent(idColumn)}
 	if includeVector {
 		selectColumns = append(selectColumns, quoteIdent(vectorColumn))
@@ -320,11 +306,10 @@ func (c *MSSQLCollection) loadRecords(ctx context.Context, includeVector bool) (
 	query := fmt.Sprintf("SELECT %s FROM %s", strings.Join(selectColumns, ", "), c.tableName())
 	rows, err := c.store.db.QueryContext(ctx, query)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer rows.Close()
 
-	records := make([]vectordata.Record, 0)
 	for rows.Next() {
 		var record vectordata.Record
 		var vectorRaw string
@@ -333,22 +318,22 @@ func (c *MSSQLCollection) loadRecords(ctx context.Context, includeVector bool) (
 
 		if includeVector {
 			if err := rows.Scan(&record.ID, &vectorRaw, &metadataRaw, &content); err != nil {
-				return nil, err
+				return err
 			}
 			parsedVector, err := parseVectorJSON(vectorRaw)
 			if err != nil {
-				return nil, fmt.Errorf("decode vector: %w", err)
+				return fmt.Errorf("decode vector: %w", err)
 			}
 			record.Vector = parsedVector
 		} else {
 			if err := rows.Scan(&record.ID, &metadataRaw, &content); err != nil {
-				return nil, err
+				return err
 			}
 		}
 
 		metadata, err := parseMetadataJSON(metadataRaw)
 		if err != nil {
-			return nil, fmt.Errorf("decode metadata: %w", err)
+			return fmt.Errorf("decode metadata: %w", err)
 		}
 		record.Metadata = metadata
 
@@ -357,13 +342,14 @@ func (c *MSSQLCollection) loadRecords(ctx context.Context, includeVector bool) (
 			record.Content = &value
 		}
 
-		records = append(records, record)
+		if err := yield(record); err != nil {
+			return err
+		}
 	}
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return err
 	}
-
-	return records, nil
+	return nil
 }
 
 func (c *MSSQLCollection) validateVectorDimension(vector []float32) error {
@@ -394,4 +380,62 @@ func projectRecord(record vectordata.Record, projection vectordata.Projection) v
 		projected.Content = &contentCopy
 	}
 	return projected
+}
+
+// buildUpsertQuery uses key-range locks so concurrent upserts on the same ID remain atomic.
+func buildUpsertQuery(tableName string) string {
+	return fmt.Sprintf(`UPDATE %s WITH (UPDLOCK, SERIALIZABLE)
+SET %s = @p2, %s = @p3, %s = @p4
+WHERE %s = @p1;
+IF @@ROWCOUNT = 0
+BEGIN
+	INSERT INTO %s (%s, %s, %s, %s) VALUES (@p1, @p2, @p3, @p4);
+END`,
+		tableName,
+		quoteIdent(vectorColumn),
+		quoteIdent(metadataColumn),
+		quoteIdent(contentColumn),
+		quoteIdent(idColumn),
+		tableName,
+		quoteIdent(idColumn),
+		quoteIdent(vectorColumn),
+		quoteIdent(metadataColumn),
+		quoteIdent(contentColumn),
+	)
+}
+
+type searchResultMaxHeap []vectordata.SearchResult
+
+func (h *searchResultMaxHeap) Len() int { return len(*h) }
+
+func (h *searchResultMaxHeap) Less(i, j int) bool {
+	return isWorseResult((*h)[i], (*h)[j])
+}
+
+func (h *searchResultMaxHeap) Swap(i, j int) { (*h)[i], (*h)[j] = (*h)[j], (*h)[i] }
+
+func (h *searchResultMaxHeap) Push(x any) {
+	*h = append(*h, x.(vectordata.SearchResult))
+}
+
+func (h *searchResultMaxHeap) Pop() any {
+	old := *h
+	n := len(old)
+	item := old[n-1]
+	*h = old[:n-1]
+	return item
+}
+
+func isBetterResult(left, right vectordata.SearchResult) bool {
+	if left.Distance == right.Distance {
+		return left.Record.ID < right.Record.ID
+	}
+	return left.Distance < right.Distance
+}
+
+func isWorseResult(left, right vectordata.SearchResult) bool {
+	if left.Distance == right.Distance {
+		return left.Record.ID > right.Record.ID
+	}
+	return left.Distance > right.Distance
 }
