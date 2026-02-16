@@ -3,7 +3,6 @@ package mssql
 import (
 	"fmt"
 	"reflect"
-	"strings"
 
 	"github.com/gabisonia/go-vectorstore/vectordata"
 )
@@ -115,14 +114,14 @@ func matchesFilter(filter vectordata.Filter, record vectordata.Record) (bool, er
 }
 
 func resolveFieldValue(field vectordata.FieldRef, record vectordata.Record) (value any, exists bool, err error) {
-	switch field.Kind {
-	case vectordata.FieldColumn:
-		name := strings.TrimSpace(field.Name)
-		if name == "" {
-			return nil, false, fmt.Errorf("%w: column field name is empty", vectordata.ErrInvalidFilter)
-		}
+	normalized, err := vectordata.NormalizeFieldRef(field)
+	if err != nil {
+		return nil, false, err
+	}
 
-		switch name {
+	switch normalized.Kind {
+	case vectordata.FieldColumn:
+		switch normalized.Name {
 		case idColumn:
 			return record.ID, true, nil
 		case contentColumn:
@@ -131,23 +130,15 @@ func resolveFieldValue(field vectordata.FieldRef, record vectordata.Record) (val
 			}
 			return *record.Content, true, nil
 		default:
-			return nil, false, fmt.Errorf("%w: unknown column %q", vectordata.ErrInvalidFilter, name)
+			return nil, false, fmt.Errorf("%w: unknown column %q", vectordata.ErrInvalidFilter, normalized.Name)
 		}
 	case vectordata.FieldMetadata:
-		if len(field.Path) == 0 {
-			return nil, false, fmt.Errorf("%w: metadata path is empty", vectordata.ErrInvalidFilter)
-		}
 		if record.Metadata == nil {
 			return nil, false, nil
 		}
 
 		var current any = record.Metadata
-		for _, segment := range field.Path {
-			key := strings.TrimSpace(segment)
-			if key == "" {
-				return nil, false, fmt.Errorf("%w: metadata path segment is empty", vectordata.ErrInvalidFilter)
-			}
-
+		for _, key := range normalized.Path {
 			asMap, ok := current.(map[string]any)
 			if !ok {
 				return nil, false, nil
@@ -162,7 +153,7 @@ func resolveFieldValue(field vectordata.FieldRef, record vectordata.Record) (val
 
 		return current, true, nil
 	default:
-		return nil, false, fmt.Errorf("%w: unsupported field kind %q", vectordata.ErrInvalidFilter, field.Kind)
+		return nil, false, fmt.Errorf("%w: unsupported field kind %q", vectordata.ErrInvalidFilter, normalized.Kind)
 	}
 }
 

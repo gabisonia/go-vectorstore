@@ -186,31 +186,30 @@ func (c *filterCompiler) compileLogical(op string, children []Filter) (string, e
 }
 
 func (c *filterCompiler) resolveField(ref FieldRef) (expr string, isMetadata bool, path []string, err error) {
-	switch ref.Kind {
+	normalized, err := NormalizeFieldRef(ref)
+	if err != nil {
+		return "", false, nil, err
+	}
+
+	switch normalized.Kind {
 	case FieldColumn:
-		if ref.Name == "" {
-			return "", false, nil, fmt.Errorf("%w: column field name is empty", ErrInvalidFilter)
-		}
 		if c.cfg.ColumnExpr == nil {
 			return "", false, nil, fmt.Errorf("%w: no column mapping configured", ErrInvalidFilter)
 		}
-		expr, ok := c.cfg.ColumnExpr[ref.Name]
+		expr, ok := c.cfg.ColumnExpr[normalized.Name]
 		if !ok || expr == "" {
-			return "", false, nil, fmt.Errorf("%w: unknown column %q", ErrInvalidFilter, ref.Name)
+			return "", false, nil, fmt.Errorf("%w: unknown column %q", ErrInvalidFilter, normalized.Name)
 		}
 		return expr, false, nil, nil
 	case FieldMetadata:
 		if c.cfg.MetadataExpr == "" {
 			return "", false, nil, fmt.Errorf("%w: metadata expression not configured", ErrInvalidFilter)
 		}
-		if len(ref.Path) == 0 {
-			return "", false, nil, fmt.Errorf("%w: metadata path is empty", ErrInvalidFilter)
-		}
-		cp := make([]string, len(ref.Path))
-		copy(cp, ref.Path)
+		cp := make([]string, len(normalized.Path))
+		copy(cp, normalized.Path)
 		return c.cfg.MetadataExpr, true, cp, nil
 	default:
-		return "", false, nil, fmt.Errorf("%w: unsupported field kind %q", ErrInvalidFilter, ref.Kind)
+		return "", false, nil, fmt.Errorf("%w: unsupported field kind %q", ErrInvalidFilter, normalized.Kind)
 	}
 }
 

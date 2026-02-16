@@ -184,7 +184,10 @@ Search behavior (MVP):
 6. Maintain bounded top-k max-heap in memory (`O(k)` memory)
 7. Return results sorted by distance asc (tie-break by `ID`)
 
-`EnsureIndexes` is intentionally a no-op in MSSQL backend for this MVP.
+`EnsureIndexes` is explicit in MSSQL backend:
+
+- returns `nil` when no index options are requested
+- returns an error when vector/metadata index options are provided (index management is not supported yet)
 
 ## 6) Filter System and Execution Model
 
@@ -242,7 +245,7 @@ These rules are enforced in both backends:
   - MSSQL: in-process AST evaluation
 - Indexing:
   - Postgres: vector + metadata index creation supported
-  - MSSQL: no-op in MVP
+  - MSSQL: explicit unsupported error when index options are requested
 - Metric/dimension persistence:
   - Postgres: inferred/validated from physical `vector(n)` column
   - MSSQL: persisted in `__vector_collections`

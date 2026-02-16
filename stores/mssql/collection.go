@@ -127,6 +127,19 @@ func (c *MSSQLCollection) Count(ctx context.Context, filter vectordata.Filter) (
 		return count, nil
 	}
 
+	filterSQL, filterArgs, _, err := compileMSSQLFilterSQL(filter, 1)
+	if err == nil {
+		query := fmt.Sprintf("SELECT COUNT(*) FROM %s WHERE %s", c.tableName(), filterSQL)
+		var count int64
+		if err := c.store.db.QueryRowContext(ctx, query, filterArgs...).Scan(&count); err != nil {
+			return 0, err
+		}
+		return count, nil
+	}
+	if !errors.Is(err, errFilterPushdownUnsupported) {
+		return 0, err
+	}
+
 	count := int64(0)
 	if err := c.streamRecords(ctx, false, func(record vectordata.Record) error {
 		matches, err := matchesFilter(filter, record)
@@ -151,6 +164,18 @@ func (c *MSSQLCollection) SearchByVector(ctx context.Context, vector []float32, 
 		return nil, err
 	}
 
+	plan, err := c.buildSearchSQLPlan(vector, topK, opts)
+	if err == nil {
+		return c.executeSearchSQLPlan(ctx, plan)
+	}
+	if !errors.Is(err, errFilterPushdownUnsupported) {
+		return nil, err
+	}
+
+	return c.searchByVectorStreaming(ctx, vector, topK, opts)
+}
+
+func (c *MSSQLCollection) searchByVectorStreaming(ctx context.Context, vector []float32, topK int, opts vectordata.SearchOptions) ([]vectordata.SearchResult, error) {
 	projection := resolveProjection(opts.Projection)
 	metric := defaultMetric(c.metric)
 	topKHeap := make(searchResultMaxHeap, 0, topK)
@@ -206,10 +231,11 @@ func (c *MSSQLCollection) SearchByVector(ctx context.Context, vector []float32, 
 }
 
 func (c *MSSQLCollection) EnsureIndexes(ctx context.Context, opts vectordata.IndexOptions) error {
-	// SQL Server backend stores vectors as JSON payloads in this MVP, so index options are no-op.
 	_ = ctx
-	_ = opts
-	return nil
+	if opts.Vector == nil && opts.Metadata == nil {
+		return nil
+	}
+	return fmt.Errorf("%w: index management is not supported by the mssql backend", vectordata.ErrSchemaMismatch)
 }
 
 func (c *MSSQLCollection) writeRecords(ctx context.Context, records []vectordata.Record, mode writeMode) error {
