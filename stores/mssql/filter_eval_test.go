@@ -57,6 +57,33 @@ func TestMatchesFilterUnknownColumnReturnsError(t *testing.T) {
 	}
 }
 
+func TestMatchesFilterTrimsFieldReferences(t *testing.T) {
+	content := "x"
+	record := vectordata.Record{
+		ID:      "doc-1",
+		Content: &content,
+		Metadata: map[string]any{
+			"nested": map[string]any{"key": "value"},
+		},
+	}
+
+	columnMatch, err := matchesFilter(vectordata.Eq(vectordata.Column("  id "), "doc-1"), record)
+	if err != nil {
+		t.Fatalf("column match: %v", err)
+	}
+	if !columnMatch {
+		t.Fatalf("expected trimmed column reference to match")
+	}
+
+	metadataMatch, err := matchesFilter(vectordata.Eq(vectordata.Metadata(" nested ", " key "), "value"), record)
+	if err != nil {
+		t.Fatalf("metadata match: %v", err)
+	}
+	if !metadataMatch {
+		t.Fatalf("expected trimmed metadata path to match")
+	}
+}
+
 func TestDistanceBetweenMetrics(t *testing.T) {
 	left := []float32{1, 0}
 	right := []float32{0.8, 0.2}

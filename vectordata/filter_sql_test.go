@@ -154,3 +154,38 @@ func TestCompileFilterSQL_MetadataEqFilter(t *testing.T) {
 		t.Fatalf("unexpected next arg index: %d", next)
 	}
 }
+
+func TestCompileFilterSQL_TrimsColumnFieldName(t *testing.T) {
+	// Arrange
+	filter := Eq(Column("  id  "), "r1")
+
+	// Act
+	sql, args, _, err := CompileFilterSQL(filter, testFilterConfig(), 1)
+
+	// Assert
+	if err != nil {
+		t.Fatalf("CompileFilterSQL error: %v", err)
+	}
+	if sql != `("id" = $1)` {
+		t.Fatalf("unexpected SQL: %s", sql)
+	}
+	if !reflect.DeepEqual(args, []any{"r1"}) {
+		t.Fatalf("unexpected args: %#v", args)
+	}
+}
+
+func TestCompileFilterSQL_MetadataPathRejectsWhitespaceSegment(t *testing.T) {
+	// Arrange
+	filter := Eq(Metadata("rank", "   "), 1)
+
+	// Act
+	_, _, _, err := CompileFilterSQL(filter, testFilterConfig(), 1)
+
+	// Assert
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	if !errors.Is(err, ErrInvalidFilter) {
+		t.Fatalf("expected ErrInvalidFilter, got %v", err)
+	}
+}
