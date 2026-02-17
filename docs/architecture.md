@@ -8,7 +8,6 @@ The project is split into two layers:
 
 - `vectordata`: backend-agnostic contracts and primitives
 - `stores/postgres`: PostgreSQL + pgvector implementation
-- `stores/mssql`: SQL Server implementation
 
 This keeps the public API stable while allowing additional storage engines later.
 
@@ -56,11 +55,6 @@ All methods require `context.Context`.
 
 - `Schema`: `public`
 - `EnsureExtension`: `true`
-- `StrictByDefault`: `true`
-
-`mssql.StoreOptions` defaults (`mssql.DefaultStoreOptions()`):
-
-- `Schema`: `dbo`
 - `StrictByDefault`: `true`
 
 Collection defaults:
@@ -127,23 +121,6 @@ Each record is validated before sending:
 
 The pgvector operators are documented in the [pgvector README](https://github.com/pgvector/pgvector#querying).
 
-### MSSQL: Ensure / Search
-
-`MSSQLVectorStore.EnsureCollection`:
-
-1. Ensures target schema exists
-2. Ensures internal collection metadata table exists
-3. Creates or validates the collection table
-4. Persists and validates dimension/metric metadata
-
-`MSSQLCollection.SearchByVector`:
-
-1. Streams records from SQL Server
-2. Evaluates filters against records in-process
-3. Computes distance in-process (cosine/l2/inner product)
-4. Applies threshold and keeps a bounded in-memory top-k heap
-5. Returns top-k sorted by distance
-
 ## 6) Filter System (AST -> SQL)
 
 Filters are represented as an AST in `vectordata`:
@@ -169,8 +146,6 @@ Behavior details:
 - column filters are whitelist-based (`id`, `content` in the postgres backend)
 
 JSON path extraction behavior comes from PostgreSQL [JSON/JSONB functions and operators](https://www.postgresql.org/docs/current/functions-json.html).
-
-For MSSQL in this MVP, the same AST is evaluated in-process against loaded records.
 
 ## 7) Schema Safety Modes
 
@@ -264,7 +239,6 @@ Errors are wrapped with context so callers can use `errors.Is(...)` against base
 Current MVP scope:
 
 - Postgres + pgvector backend
-- MSSQL backend (vectors stored as JSON payloads)
 - single-vector column per collection
 - metadata filtering through a focused AST
 
@@ -273,10 +247,8 @@ Future extension points:
 - additional backends under `stores/`
 - richer filter operators
 - optional reranking strategies
-- native MSSQL vector indexing/query pushdown
 
 ## 13) References
 
 - pgvector project docs: https://github.com/pgvector/pgvector
 - PostgreSQL docs: https://www.postgresql.org/docs/current/index.html
-- SQL Server docs: https://learn.microsoft.com/sql/sql-server/

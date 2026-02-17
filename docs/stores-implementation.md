@@ -7,7 +7,7 @@ This document explains how `go-vectorstore` store backends are implemented, how 
 - Keep a single backend-agnostic public API in `vectordata`
 - Isolate backend specifics inside `stores/<backend>`
 - Enforce schema and vector-dimension correctness at runtime
-- Keep write/read/search behavior consistent across backends where possible
+- Keep write/read/search behavior consistent across implementations
 - Allow adding future store implementations without changing caller-facing contracts
 
 ## 2) Layering and Boundaries
@@ -16,7 +16,6 @@ The implementation is split into:
 
 - `vectordata`: shared contracts, record/search types, filter AST, filter SQL compiler, typed codec wrapper, error model
 - `stores/postgres`: PostgreSQL + pgvector implementation
-- `stores/mssql`: SQL Server implementation
 
 Each backend implements:
 
@@ -121,75 +120,7 @@ content text
 - Metadata GIN index
   - optional `jsonb_path_ops`
 
-## 5) MSSQL Store (`stores/mssql`)
-
-### 5.1 Main Components
-
-- `MSSQLVectorStore` (`store.go`)
-  - Owns `*sql.DB` and options (`Schema`, `StrictByDefault`)
-  - Validates/normalizes collection specs
-  - Ensures schema and metadata table
-  - Creates/validates collection table
-- `MSSQLCollection` (`collection.go`)
-  - Implements collection operations
-  - Uses transactional batched writes
-  - Executes similarity + filters in process for this MVP
-- Schema utilities (`schema.go`)
-  - Ensures schema
-  - Ensures internal metadata table `__vector_collections`
-  - Validates collection table columns/PK
-  - Stores/validates logical dimension and metric in metadata table
-- Filter evaluator (`filter_eval.go`)
-  - Evaluates filter AST directly against loaded records (column + metadata paths)
-- Helpers (`helpers.go`)
-  - JSON encoding/decoding for vector and metadata
-  - Distance math (cosine/l2/inner product)
-  - projection resolver and type helpers
-
-### 5.2 Data Model and Metadata Strategy
-
-MSSQL MVP stores:
-
-- vector as `NVARCHAR(MAX)` JSON (not native vector type)
-- metadata as `NVARCHAR(MAX)` JSON
-- content as `NVARCHAR(MAX)` nullable
-
-Because vector dimension and metric are not part of physical type, they are tracked in `__vector_collections`:
-
-- `name` (PK)
-- `dimension`
-- `metric`
-
-`EnsureCollection` validates both table shape and metadata row consistency.
-
-### 5.3 Write / Read / Search Path
-
-Write behavior:
-
-- Validate `ID` and vector dimension
-- Serialize vector + metadata to JSON
-- Chunk in batches of 500
-- Use transaction per chunk
-- Upsert strategy:
-  - execute single-statement `UPDATE ... WITH (UPDLOCK, SERIALIZABLE)` + conditional `INSERT`
-  - avoids race conditions under concurrent upserts for the same ID
-
-Search behavior (MVP):
-
-1. Validate `topK` and vector dimension
-2. Stream records row-by-row from SQL
-3. Evaluate filter AST in-process (`matchesFilter`)
-4. Compute distance in-process (`distanceBetween`)
-5. Apply optional threshold
-6. Maintain bounded top-k max-heap in memory (`O(k)` memory)
-7. Return results sorted by distance asc (tie-break by `ID`)
-
-`EnsureIndexes` is explicit in MSSQL backend:
-
-- returns `nil` when no index options are requested
-- returns an error when vector/metadata index options are provided (index management is not supported yet)
-
-## 6) Filter System and Execution Model
+## 5) Filter System and Execution Model
 
 Filter AST supports:
 
@@ -200,7 +131,6 @@ Filter AST supports:
 Execution strategy by backend:
 
 - Postgres: compile AST -> parameterized SQL via `CompileFilterSQL`
-- MSSQL: evaluate AST in Go against streamed records
 
 Important behavior:
 
@@ -208,7 +138,7 @@ Important behavior:
 - Numeric comparisons are numeric when values are numeric; otherwise textual comparison is used
 - Missing fields typically evaluate as non-match, except `Exists` which reports presence
 
-## 7) Schema Safety Modes
+## 6) Schema Safety Modes
 
 `CollectionSpec.Mode` controls schema handling:
 
@@ -220,9 +150,9 @@ Mode default comes from backend options:
 - `StrictByDefault=true` -> strict mode when spec mode is unset
 - `StrictByDefault=false` -> auto-migrate mode when spec mode is unset
 
-## 8) Cross-Backend Invariants
+## 7) Invariants
 
-These rules are enforced in both backends:
+These rules are enforced in all current implementations:
 
 - Collection name must be non-empty
 - Dimension must be greater than zero
@@ -232,25 +162,7 @@ These rules are enforced in both backends:
 - Nil metadata is normalized to empty object
 - `Get` returns `ErrNotFound` on missing ID
 
-## 9) Key Differences: Postgres vs MSSQL
-
-- Vector storage:
-  - Postgres: native `vector(n)` type via pgvector
-  - MSSQL: JSON string payload (`NVARCHAR(MAX)`)
-- Search execution:
-  - Postgres: SQL-level distance computation and ordering
-  - MSSQL: in-memory computation after loading rows
-- Filter execution:
-  - Postgres: SQL compilation and pushdown
-  - MSSQL: in-process AST evaluation
-- Indexing:
-  - Postgres: vector + metadata index creation supported
-  - MSSQL: explicit unsupported error when index options are requested
-- Metric/dimension persistence:
-  - Postgres: inferred/validated from physical `vector(n)` column
-  - MSSQL: persisted in `__vector_collections`
-
-## 10) Extending with a New Backend
+## 8) Extending with a New Backend
 
 To add a new store backend, follow the same contract shape:
 
@@ -260,3 +172,5 @@ To add a new store backend, follow the same contract shape:
 4. Support filter handling (compiled or in-process)
 5. Reuse `vectordata` errors and scoring semantics
 6. Add integration tests matching existing backend test coverage style
+
+For a practical checklist and repository wiring steps, see [`connector-development.md`](connector-development.md).
