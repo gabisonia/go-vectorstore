@@ -6,7 +6,6 @@ toolchain go1.24.9
 
 require (
 	github.com/jackc/pgx/v5 v5.7.2
-	github.com/microsoft/go-mssqldb v1.8.0
 	github.com/testcontainers/testcontainers-go v0.33.0
 )
 

@@ -10,7 +10,6 @@ A lightweight Go vector-store library inspired by `Microsoft.Extensions.VectorDa
 MVP scope:
 - Go 1.24.x
 - Postgres + `pgvector`
-- MSSQL connector
 - Record-based core API with optional typed codec wrapper
 
 This library can be used to build retrieval systems such as:
@@ -22,14 +21,12 @@ This library can be used to build retrieval systems such as:
 
 - Go 1.24.x
 - PostgreSQL 16+ with `pgvector` extension
-- SQL Server 2022+ (for `stores/mssql`)
 - Docker (optional, for integration tests and sample compose flows)
 
 ## Project layout
 
 - `vectordata`: backend-agnostic core interfaces, record model, filters, typed wrapper
 - `stores/postgres`: Postgres implementation with `pgxpool`
-- `stores/mssql`: SQL Server implementation with `database/sql`
 - `samples`: runnable demos (see `samples/README.md`)
 - `docs`: architecture and implementation notes
 
@@ -197,25 +194,15 @@ go test ./...
 ```
 
 Notes:
-- Integration tests start Postgres/pgvector and SQL Server automatically via Testcontainers
+- Integration tests start Postgres/pgvector automatically via Testcontainers
 - Docker daemon must be available when running integration tests
 - Optional override: set `PGVECTOR_TEST_DSN` to use an existing Postgres instance instead of starting a container
-- Optional override: set `MSSQL_TEST_DSN` to use an existing SQL Server instance instead of starting a container
-
-Run MSSQL integration tests against root compose service:
-
-```bash
-docker compose up -d mssql
-MSSQL_TEST_DSN="sqlserver://sa:YourStrong%21Passw0rd@localhost:14339?database=master&encrypt=disable" \
-  go test -tags=integration ./stores/mssql
-```
 
 ## Docker Compose (optional)
 
 `docker-compose.yml` at the repository root is kept for manual local runs.
 
 - Use root `docker-compose.yml` when you want a persistent local Postgres+pgvector instance outside tests
-- Root compose also includes SQL Server (`mssql`) for local MSSQL connector validation
 - Use Testcontainers (`go test -tags=integration ./...`) for integration tests
 - Sample apps have their own compose files at `samples/semantic-search/docker-compose.yml` and `samples/ragrimosa/docker-compose.yml`
 - Sample Dockerfiles use `golang:1.24-alpine` to match the repo Go version (`1.24.x`)
@@ -233,8 +220,9 @@ Release options:
 2. Tag-driven: push a semver tag and the workflow publishes release notes automatically:
 
 ```bash
-git tag v0.2.3
-git push origin v0.2.3
+VERSION="$(cat VERSION)"
+git tag "v${VERSION}"
+git push origin "v${VERSION}"
 ```
 
 ## Samples
@@ -247,6 +235,7 @@ git push origin v0.2.3
 
 - Docs index: [`docs/README.md`](docs/README.md)
 - Internals and architecture: [`docs/architecture.md`](docs/architecture.md)
+- Connector development guide: [`docs/connector-development.md`](docs/connector-development.md)
 
 ## License
 

@@ -1,4 +1,4 @@
-.PHONY: test test-no-cache test-stores test-stores-no-cache test-integration-all test-integration-all-no-cache test-integration-stores test-integration-stores-no-cache test-integration-postgres test-integration-postgres-no-cache test-integration-mssql test-integration-mssql-no-cache test-integration-msql
+.PHONY: test test-no-cache test-stores test-stores-no-cache test-integration-all test-integration-all-no-cache test-integration-stores test-integration-stores-no-cache test-integration-postgres test-integration-postgres-no-cache
 
 GO ?= go
 GOTOOLCHAIN ?= local
@@ -37,11 +37,3 @@ test-integration-postgres:
 
 test-integration-postgres-no-cache:
 	$(GO_ENV) $(GO) test -count=1 -mod=$(MOD_MODE) -tags=$(INTEGRATION_TAG) -timeout=$(TEST_TIMEOUT) $(TEST_FLAGS) ./stores/postgres
-
-test-integration-mssql:
-	$(GO_ENV) $(GO) test -mod=$(MOD_MODE) -tags=$(INTEGRATION_TAG) -timeout=$(TEST_TIMEOUT) $(TEST_FLAGS) ./stores/mssql
-
-test-integration-mssql-no-cache:
-	$(GO_ENV) $(GO) test -count=1 -mod=$(MOD_MODE) -tags=$(INTEGRATION_TAG) -timeout=$(TEST_TIMEOUT) $(TEST_FLAGS) ./stores/mssql
-
-test-integration-msql: test-integration-mssql
