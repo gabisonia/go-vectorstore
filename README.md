@@ -216,7 +216,7 @@ GitHub Actions workflows are configured for:
 
 Release options:
 
-1. Manual (recommended): run `Release` workflow via GitHub UI with `version` input (`0.2.3` or `v0.2.3`).
+1. Manual (recommended): run `Release` workflow via GitHub UI with `version` input (`0.3.0` or `v0.3.0`).
 2. Tag-driven: push a semver tag and the workflow publishes release notes automatically:
 
 ```bash
