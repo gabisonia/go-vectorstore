@@ -104,7 +104,7 @@ content text
 2. Resolve metric operator (`<=>`, `<->`, `<#>`)
 3. Build distance expression and dynamic projection columns
 4. Compile optional filter AST into SQL + bind args
-5. Apply optional threshold (`distance <= threshold`)
+5. Apply optional backend distance threshold (`distance <= threshold`; lower is stricter)
 6. Order by ascending distance and limit by `topK`
 7. Scan rows and map distance to score
 
@@ -119,6 +119,8 @@ content text
     - IVFFlat: `lists=100`
 - Metadata GIN index
   - optional `jsonb_path_ops`
+
+Metadata indexes are created on the JSONB column. They may not accelerate every supported filter expression because the current compiler emits JSONB extraction and text/numeric comparison predicates.
 
 ## 5) Filter System and Execution Model
 

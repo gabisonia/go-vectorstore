@@ -115,7 +115,7 @@ Each record is validated before sending:
    - inner product: `<#>`
 4. Builds `distance` expression (`"vector" <op> $1::vector`)
 5. Applies optional filter SQL
-6. Applies optional distance threshold (`distance <= threshold`)
+6. Applies optional backend distance threshold (`distance <= threshold`; lower is stricter)
 7. Orders by `distance ASC`, limits by `topK`
 8. Scans rows into `SearchResult`
 
@@ -168,6 +168,8 @@ Dimension is always validated against `vector(n)` and must match.
 - Metadata index:
   - GIN on `metadata` JSONB
   - optional `jsonb_path_ops`
+
+Metadata indexes accelerate JSONB containment/path-style workloads. Current filters use JSONB extraction plus text or numeric comparisons, so PostgreSQL planner choices depend on the exact predicate.
 
 Defaults when index options are omitted:
 

@@ -3,11 +3,11 @@ name: Release
 on:
   push:
     tags:
-      - "v*"
+      - "v*.*.*"
   workflow_dispatch:
     inputs:
       version:
-        description: "Semver version (e.g. 0.3.0 or v0.3.0)"
+        description: "Version to release, with or without leading v"
         required: true
         type: string
 
@@ -16,29 +16,30 @@ permissions:
 
 jobs:
   release:
+    name: Publish release
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Setup Go
+      - name: Set up Go
         uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+          cache: true
 
-      - name: Run unit tests
+      - name: Test
         run: go test ./...
 
-      - name: Resolve release tag
-        id: tag
+      - name: Resolve version
+        id: version
         shell: bash
         run: |
           set -euo pipefail
 
-          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             raw="${{ inputs.version }}"
             raw="${raw#v}"
             if [[ ! "$raw" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]; then
@@ -49,31 +50,26 @@ jobs:
           else
             tag="${GITHUB_REF_NAME}"
           fi
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
 
-          echo "tag_name=$tag" >> "$GITHUB_OUTPUT"
-
-      - name: Create git tag (manual release)
+      - name: Create tag for manual releases
         if: github.event_name == 'workflow_dispatch'
         shell: bash
         run: |
           set -euo pipefail
 
-          tag="${{ steps.tag.outputs.tag_name }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          if git rev-parse "$tag" >/dev/null 2>&1; then
-            echo "Tag $tag already exists locally"
-          else
+          tag="${{ steps.version.outputs.tag }}"
+          if ! git rev-parse "$tag" >/dev/null 2>&1; then
             git tag "$tag"
           fi
-
-          if git ls-remote --tags origin "refs/tags/$tag" | grep -q "$tag"; then
-            echo "Tag $tag already exists on origin"
-          else
+          if ! git ls-remote --tags origin "refs/tags/$tag" | grep -q "$tag"; then
             git push origin "$tag"
           fi
 
-      - name: Publish GitHub release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ steps.tag.outputs.tag_name }}
-          generate_release_notes: true
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${{ steps.version.outputs.tag }}" --generate-notes --verify-tag

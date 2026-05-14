@@ -48,7 +48,6 @@ docker compose up -d postgres
 
 ```bash
 export OPENAI_API_KEY=your_key_here
-go get github.com/gabisonia/go-vectorstore/vectordata@latest
 go run ./samples/semantic-search -q "how can I reduce cloud costs?"
 ```
 
@@ -148,7 +147,7 @@ func main() {
 
 ## Search Options
 
-`SearchByVector` supports filtering, thresholding, and projection control.
+`SearchByVector` supports filtering, distance thresholding, and projection control.
 
 ```go
 threshold := 0.35
@@ -166,6 +165,7 @@ results, err := collection.SearchByVector(ctx, queryVector, 10, vectordata.Searc
 ```
 
 If `Projection` is `nil`, the default projection includes `Metadata` and `Content`, but not `Vector`.
+`Threshold` is compared to the backend distance value, so lower is stricter. It is not a normalized score cutoff.
 
 ## Store Options
 
@@ -211,12 +211,12 @@ Notes:
 
 GitHub Actions workflows are configured for:
 
-- CI on pushes/PRs (`.github/workflows/ci.yml`)
-- release publishing (`.github/workflows/release.yml`)
+- CI on pushes/PRs with unit tests, `go vet`, and Postgres integration tests (`.github/workflows/ci.yml`)
+- release publishing from semver tags or manual workflow dispatch (`.github/workflows/release.yml`)
 
 Release options:
 
-1. Manual (recommended): run `Release` workflow via GitHub UI with `version` input (`0.3.0` or `v0.3.0`).
+1. Manual (recommended): run `Release` workflow via GitHub UI with `version` input (`0.3.1` or `v0.3.1`).
 2. Tag-driven: push a semver tag and the workflow publishes release notes automatically:
 
 ```bash

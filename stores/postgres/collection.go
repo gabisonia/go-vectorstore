@@ -25,6 +25,11 @@ type searchPlan struct {
 	projection vectordata.Projection
 }
 
+type writeBatch struct {
+	query string
+	args  []any
+}
+
 // PostgresCollection is a PostgreSQL-backed vector collection.
 type PostgresCollection struct {
 	store     *PostgresVectorStore
@@ -145,7 +150,7 @@ func (c *PostgresCollection) EnsureIndexes(ctx context.Context, opts vectordata.
 
 func (c *PostgresCollection) buildSearchPlan(vector []float32, topK int, opts vectordata.SearchOptions) (searchPlan, error) {
 	if topK <= 0 {
-		return searchPlan{}, fmt.Errorf("topK must be > 0")
+		return searchPlan{}, fmt.Errorf("%w: topK must be > 0", vectordata.ErrInvalidSearchOptions)
 	}
 	if err := c.validateVectorDimension(vector); err != nil {
 		return searchPlan{}, err
@@ -155,7 +160,7 @@ func (c *PostgresCollection) buildSearchPlan(vector []float32, topK int, opts ve
 	if err != nil {
 		return searchPlan{}, err
 	}
-	distanceExpr := fmt.Sprintf(`%s %s $1::vector`, quoteIdent(vectorColumn), operator)
+	distanceExpr := fmt.Sprintf(`(%s %s $1::vector)`, quoteIdent(vectorColumn), operator)
 	projection := resolveProjection(opts.Projection)
 
 	selectCols := []string{quoteIdent(idColumn)}
@@ -286,6 +291,7 @@ func (c *PostgresCollection) writeRecords(ctx context.Context, records []vectord
 		return nil
 	}
 
+	batches := make([]writeBatch, 0, (len(records)+maxRowsPerStatement-1)/maxRowsPerStatement)
 	for start := 0; start < len(records); start += maxRowsPerStatement {
 		end := start + maxRowsPerStatement
 		if end > len(records) {
@@ -296,11 +302,23 @@ func (c *PostgresCollection) writeRecords(ctx context.Context, records []vectord
 		if err != nil {
 			return err
 		}
-		if _, err := c.store.pool.Exec(ctx, query, args...); err != nil {
+		batches = append(batches, writeBatch{query: query, args: args})
+	}
+
+	tx, err := c.store.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = tx.Rollback(ctx)
+	}()
+
+	for _, batch := range batches {
+		if _, err := tx.Exec(ctx, batch.query, batch.args...); err != nil {
 			return err
 		}
 	}
-	return nil
+	return tx.Commit(ctx)
 }
 
 func (c *PostgresCollection) buildWriteBatch(records []vectordata.Record, mode writeMode) (string, []any, error) {
@@ -309,7 +327,7 @@ func (c *PostgresCollection) buildWriteBatch(records []vectordata.Record, mode w
 
 	for i, record := range records {
 		if strings.TrimSpace(record.ID) == "" {
-			return "", nil, fmt.Errorf("record id is empty")
+			return "", nil, fmt.Errorf("%w: record id is empty", vectordata.ErrInvalidRecord)
 		}
 		if err := c.validateVectorDimension(record.Vector); err != nil {
 			return "", nil, err
@@ -317,7 +335,7 @@ func (c *PostgresCollection) buildWriteBatch(records []vectordata.Record, mode w
 
 		metadataPayload, err := metadataJSON(record.Metadata)
 		if err != nil {
-			return "", nil, fmt.Errorf("encode metadata for record %q: %w", record.ID, err)
+			return "", nil, fmt.Errorf("%w: encode metadata for record %q: %v", vectordata.ErrInvalidRecord, record.ID, err)
 		}
 
 		base := i*4 + 1
@@ -447,6 +465,12 @@ func buildVectorIndexWithClause(method vectordata.IndexMethod, opts *vectordata.
 	case vectordata.IndexMethodHNSW:
 		m := opts.HNSW.M
 		ef := opts.HNSW.EfConstruction
+		if m != 0 && m < 2 {
+			return "", fmt.Errorf("%w: HNSW m must be 0 or >= 2", vectordata.ErrInvalidSearchOptions)
+		}
+		if ef != 0 && ef < 4 {
+			return "", fmt.Errorf("%w: HNSW ef_construction must be 0 or >= 4", vectordata.ErrInvalidSearchOptions)
+		}
 		if m == 0 {
 			m = 16
 		}
@@ -456,6 +480,9 @@ func buildVectorIndexWithClause(method vectordata.IndexMethod, opts *vectordata.
 		return fmt.Sprintf(" WITH (m = %d, ef_construction = %d)", m, ef), nil
 	case vectordata.IndexMethodIVFFlat:
 		lists := opts.IVFFlat.Lists
+		if lists < 0 {
+			return "", fmt.Errorf("%w: IVFFlat lists must be >= 0", vectordata.ErrInvalidSearchOptions)
+		}
 		if lists == 0 {
 			lists = 100
 		}

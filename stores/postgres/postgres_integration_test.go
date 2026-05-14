@@ -4,6 +4,7 @@ package postgres
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -417,5 +418,274 @@ func TestIntegrationMetadataFilter(t *testing.T) {
 	}
 	if count != 1 {
 		t.Fatalf("expected count 1, got %d", count)
+	}
+}
+
+func TestIntegrationGetNotFoundAndDelete(t *testing.T) {
+	// Arrange
+	pool := integrationPool(t)
+	store := newTestStore(t, pool)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	collection, err := store.EnsureCollection(ctx, vectordata.CollectionSpec{
+		Name:      "docs",
+		Dimension: 2,
+		Metric:    vectordata.DistanceCosine,
+		Mode:      vectordata.EnsureStrict,
+	})
+	if err != nil {
+		t.Fatalf("EnsureCollection: %v", err)
+	}
+	if err := collection.Upsert(ctx, []vectordata.Record{{ID: "r1", Vector: []float32{1, 0}}}); err != nil {
+		t.Fatalf("Upsert: %v", err)
+	}
+
+	// Act
+	deleted, deleteErr := collection.Delete(ctx, []string{"r1", "missing"})
+	_, getErr := collection.Get(ctx, "r1")
+
+	// Assert
+	if deleteErr != nil {
+		t.Fatalf("Delete: %v", deleteErr)
+	}
+	if deleted != 1 {
+		t.Fatalf("expected 1 deleted row, got %d", deleted)
+	}
+	if !errors.Is(getErr, vectordata.ErrNotFound) {
+		t.Fatalf("expected ErrNotFound, got %v", getErr)
+	}
+}
+
+func TestIntegrationInsertDuplicateFailsWithoutOverwrite(t *testing.T) {
+	// Arrange
+	pool := integrationPool(t)
+	store := newTestStore(t, pool)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+
+	collection, err := store.EnsureCollection(ctx, vectordata.CollectionSpec{
+		Name:      "docs",
+		Dimension: 2,
+		Metric:    vectordata.DistanceCosine,
+		Mode:      vectordata.EnsureStrict,
+	})
+	if err != nil {
+		t.Fatalf("EnsureCollection: %v", err)
+	}
+	if err := collection.Insert(ctx, []vectordata.Record{{ID: "r1", Vector: []float32{1, 0}}}); err != nil {
+		t.Fatalf("Insert first record: %v", err)
+	}
+
+	// Act
+	err = collection.Insert(ctx, []vectordata.Record{{ID: "r1", Vector: []float32{0, 1}}})
+	rec, getErr := collection.Get(ctx, "r1")
+
+	// Assert
+	if err == nil {
+		t.Fatal("expected duplicate Insert to fail")
+	}
+	if getErr != nil {
+		t.Fatalf("Get: %v", getErr)
+	}
+	if rec.Vector[0] != 1 || rec.Vector[1] != 0 {
+		t.Fatalf("duplicate Insert overwrote record: %#v", rec.Vector)
+	}
+}
+
+func TestIntegrationSearchProjectionAndThreshold(t *testing.T) {
+	// Arrange
+	pool := integrationPool(t)
+	store := newTestStore(t, pool)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	collection, err := store.EnsureCollection(ctx, vectordata.CollectionSpec{
+		Name:      "docs",
+		Dimension: 2,
+		Metric:    vectordata.DistanceCosine,
+		Mode:      vectordata.EnsureStrict,
+	})
+	if err != nil {
+		t.Fatalf("EnsureCollection: %v", err)
+	}
+	content := "alpha"
+	if err := collection.Upsert(ctx, []vectordata.Record{
+		{ID: "a", Vector: []float32{1, 0}, Content: &content, Metadata: map[string]any{"category": "near"}},
+		{ID: "b", Vector: []float32{0, 1}, Metadata: map[string]any{"category": "far"}},
+	}); err != nil {
+		t.Fatalf("Upsert: %v", err)
+	}
+	threshold := 0.05
+	projection := vectordata.Projection{IncludeVector: true}
+
+	// Act
+	results, err := collection.SearchByVector(ctx, []float32{1, 0}, 10, vectordata.SearchOptions{
+		Projection: &projection,
+		Threshold:  &threshold,
+	})
+
+	// Assert
+	if err != nil {
+		t.Fatalf("SearchByVector: %v", err)
+	}
+	if len(results) != 1 {
+		t.Fatalf("expected 1 thresholded result, got %d", len(results))
+	}
+	rec := results[0].Record
+	if rec.ID != "a" {
+		t.Fatalf("expected result a, got %s", rec.ID)
+	}
+	if len(rec.Vector) != 2 || rec.Vector[0] != 1 || rec.Vector[1] != 0 {
+		t.Fatalf("expected vector projection, got %#v", rec.Vector)
+	}
+	if rec.Metadata != nil {
+		t.Fatalf("metadata should not be projected: %#v", rec.Metadata)
+	}
+	if rec.Content != nil {
+		t.Fatalf("content should not be projected: %#v", rec.Content)
+	}
+}
+
+func TestIntegrationMultiBatchInsertRollsBackOnLaterFailure(t *testing.T) {
+	// Arrange
+	pool := integrationPool(t)
+	store := newTestStore(t, pool)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	collection, err := store.EnsureCollection(ctx, vectordata.CollectionSpec{
+		Name:      "docs",
+		Dimension: 2,
+		Metric:    vectordata.DistanceCosine,
+		Mode:      vectordata.EnsureStrict,
+	})
+	if err != nil {
+		t.Fatalf("EnsureCollection: %v", err)
+	}
+
+	records := make([]vectordata.Record, 0, maxRowsPerStatement+1)
+	for i := 0; i < maxRowsPerStatement; i++ {
+		records = append(records, vectordata.Record{
+			ID:     fmt.Sprintf("r%d", i),
+			Vector: []float32{1, 0},
+		})
+	}
+	records = append(records, vectordata.Record{ID: "r0", Vector: []float32{0, 1}})
+
+	// Act
+	insertErr := collection.Insert(ctx, records)
+	count, countErr := collection.Count(ctx, nil)
+
+	// Assert
+	if insertErr == nil {
+		t.Fatal("expected duplicate record in later batch to fail")
+	}
+	if countErr != nil {
+		t.Fatalf("Count: %v", countErr)
+	}
+	if count != 0 {
+		t.Fatalf("expected transaction rollback to leave 0 records, got %d", count)
+	}
+}
+
+func TestIntegrationSchemaMismatchAndAutoMigrate(t *testing.T) {
+	// Arrange
+	pool := integrationPool(t)
+	store := newTestStore(t, pool)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	if err := store.ensureBaseSchema(ctx); err != nil {
+		t.Fatalf("ensureBaseSchema: %v", err)
+	}
+	_, err := pool.Exec(ctx, fmt.Sprintf(`
+		CREATE TABLE %s (
+			%s text PRIMARY KEY,
+			%s vector(2) NOT NULL
+		)
+	`, qualifiedTable(store.opts.Schema, "legacy_docs"), quoteIdent(idColumn), quoteIdent(vectorColumn)))
+	if err != nil {
+		t.Fatalf("create legacy table: %v", err)
+	}
+
+	// Act
+	_, strictErr := store.EnsureCollection(ctx, vectordata.CollectionSpec{
+		Name:      "legacy_docs",
+		Dimension: 2,
+		Metric:    vectordata.DistanceCosine,
+		Mode:      vectordata.EnsureStrict,
+	})
+	collection, migrateErr := store.EnsureCollection(ctx, vectordata.CollectionSpec{
+		Name:      "legacy_docs",
+		Dimension: 2,
+		Metric:    vectordata.DistanceCosine,
+		Mode:      vectordata.EnsureAutoMigrate,
+	})
+	upsertErr := error(nil)
+	if collection != nil {
+		upsertErr = collection.Upsert(ctx, []vectordata.Record{{ID: "r1", Vector: []float32{1, 0}}})
+	}
+
+	// Assert
+	if !errors.Is(strictErr, vectordata.ErrSchemaMismatch) {
+		t.Fatalf("expected strict schema mismatch, got %v", strictErr)
+	}
+	if migrateErr != nil {
+		t.Fatalf("auto-migrate EnsureCollection: %v", migrateErr)
+	}
+	if upsertErr != nil {
+		t.Fatalf("Upsert after auto-migrate: %v", upsertErr)
+	}
+}
+
+func TestIntegrationEnsureIndexesCreatesIndexes(t *testing.T) {
+	// Arrange
+	pool := integrationPool(t)
+	store := newTestStore(t, pool)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+
+	collection, err := store.EnsureCollection(ctx, vectordata.CollectionSpec{
+		Name:      "docs",
+		Dimension: 2,
+		Metric:    vectordata.DistanceCosine,
+		Mode:      vectordata.EnsureStrict,
+	})
+	if err != nil {
+		t.Fatalf("EnsureCollection: %v", err)
+	}
+
+	// Act
+	err = collection.EnsureIndexes(ctx, vectordata.IndexOptions{
+		Vector:   &vectordata.VectorIndexOptions{Name: "docs_vec_hnsw", Method: vectordata.IndexMethodHNSW},
+		Metadata: &vectordata.MetadataIndexOptions{Name: "docs_metadata_gin"},
+	})
+
+	// Assert
+	if err != nil {
+		t.Fatalf("EnsureIndexes: %v", err)
+	}
+	for _, indexName := range []string{"docs_vec_hnsw", "docs_metadata_gin"} {
+		var exists bool
+		err := pool.QueryRow(ctx, `
+			SELECT EXISTS (
+				SELECT 1
+				FROM pg_indexes
+				WHERE schemaname = $1 AND tablename = $2 AND indexname = $3
+			)
+		`, store.opts.Schema, "docs", indexName).Scan(&exists)
+		if err != nil {
+			t.Fatalf("check index %s: %v", indexName, err)
+		}
+		if !exists {
+			t.Fatalf("expected index %s to exist", indexName)
+		}
 	}
 }
