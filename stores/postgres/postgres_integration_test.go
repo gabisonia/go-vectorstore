@@ -689,3 +689,103 @@ func TestIntegrationEnsureIndexesCreatesIndexes(t *testing.T) {
 		}
 	}
 }
+
+func TestIntegrationRejectsIncompatiblePrimaryKeys(t *testing.T) {
+	pool := integrationPool(t)
+	for _, primaryKey := range []string{
+		"PRIMARY KEY (id, tenant)",
+		"PRIMARY KEY (tenant, id)",
+		"PRIMARY KEY (tenant)",
+		"PRIMARY KEY (id) DEFERRABLE",
+	} {
+		t.Run(primaryKey, func(t *testing.T) {
+			store := newTestStore(t, pool)
+			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			defer cancel()
+			if err := store.ensureBaseSchema(ctx); err != nil {
+				t.Fatal(err)
+			}
+			_, err := pool.Exec(ctx, fmt.Sprintf(`CREATE TABLE %s (
+				id text, tenant text, vector vector(2) NOT NULL,
+				metadata jsonb NOT NULL DEFAULT '{}'::jsonb, content text, %s
+			)`, qualifiedTable(store.opts.Schema, "docs"), primaryKey))
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = store.EnsureCollection(ctx, vectordata.CollectionSpec{Name: "docs", Dimension: 2})
+			if !errors.Is(err, vectordata.ErrSchemaMismatch) {
+				t.Fatalf("expected ErrSchemaMismatch, got %v", err)
+			}
+		})
+	}
+}
+
+func TestIntegrationAutoMigrateValidatesBeforeAddingColumns(t *testing.T) {
+	pool := integrationPool(t)
+	for _, columns := range []string{
+		"id text PRIMARY KEY, vector vector(3) NOT NULL",
+		"id text PRIMARY KEY, vector vector(2) NOT NULL, content integer",
+		"id text PRIMARY KEY, vector vector NOT NULL",
+	} {
+		t.Run(columns, func(t *testing.T) {
+			store := newTestStore(t, pool)
+			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			defer cancel()
+			if err := store.ensureBaseSchema(ctx); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := pool.Exec(ctx, fmt.Sprintf("CREATE TABLE %s (%s)", qualifiedTable(store.opts.Schema, "docs"), columns)); err != nil {
+				t.Fatal(err)
+			}
+			_, err := store.EnsureCollection(ctx, vectordata.CollectionSpec{
+				Name: "docs", Dimension: 2, Mode: vectordata.EnsureAutoMigrate,
+			})
+			if !errors.Is(err, vectordata.ErrSchemaMismatch) {
+				t.Errorf("expected ErrSchemaMismatch, got %v", err)
+			}
+			var metadataExists bool
+			if err := pool.QueryRow(ctx, `SELECT EXISTS (
+				SELECT 1 FROM information_schema.columns
+				WHERE table_schema = $1 AND table_name = 'docs' AND column_name = 'metadata'
+			)`, store.opts.Schema).Scan(&metadataExists); err != nil {
+				t.Fatal(err)
+			}
+			if metadataExists {
+				t.Fatal("incompatible schema was modified before validation failed")
+			}
+		})
+	}
+}
+
+func TestIntegrationNullEquality(t *testing.T) {
+	pool := integrationPool(t)
+	store := newTestStore(t, pool)
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	collection, err := store.EnsureCollection(ctx, vectordata.CollectionSpec{Name: "docs", Dimension: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := "hello"
+	if err := collection.Insert(ctx, []vectordata.Record{
+		{ID: "null", Vector: []float32{1, 0}, Metadata: map[string]any{"value": nil}},
+		{ID: "text", Vector: []float32{1, 0}, Content: &content, Metadata: map[string]any{"value": "hello"}},
+		{ID: "missing", Vector: []float32{1, 0}, Content: &content},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	for _, filter := range []vectordata.Filter{
+		vectordata.Eq(vectordata.Column("content"), nil),
+		vectordata.Eq(vectordata.Column("content"), (*string)(nil)),
+		vectordata.Eq(vectordata.Metadata("value"), nil),
+	} {
+		count, err := collection.Count(ctx, filter)
+		if err != nil || count != 1 {
+			t.Errorf("Count(%#v) = %d, %v; want 1, nil", filter, count, err)
+		}
+		results, err := collection.SearchByVector(ctx, []float32{1, 0}, 3, vectordata.SearchOptions{Filter: filter})
+		if err != nil || len(results) != 1 || results[0].Record.ID != "null" {
+			t.Errorf("SearchByVector(%#v) = %#v, %v; want record null", filter, results, err)
+		}
+	}
+}

@@ -142,6 +142,7 @@ Behavior details:
 
 - SQL injection safety is preserved by binding values as query args
 - metadata `Eq`/`In` compares JSONB values (`::jsonb`), so value types matter
+- column `Eq` with a nil value matches SQL NULL; metadata `Eq` with nil matches JSON null, excluding missing paths
 - metadata `Gt`/`Lt` uses numeric comparison when the input is numeric, otherwise text comparison
 - column filters are whitelist-based (`id`, `content` in the postgres backend)
 
@@ -157,6 +158,8 @@ JSON path extraction behavior comes from PostgreSQL [JSON/JSONB functions and op
   - can add missing optional columns (`metadata`, `content`)
 
 Dimension is always validated against `vector(n)` and must match.
+The primary key must be non-deferrable and contain only `id`, as required by upserts.
+Existing column types and dimensions are checked before auto-migration adds optional columns.
 
 ## 8) Index Management
 

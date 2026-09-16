@@ -3,6 +3,7 @@ package vectordata
 import (
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"strings"
 )
 
@@ -79,6 +80,9 @@ func (c *filterCompiler) compileEq(node EqFilter) (string, error) {
 		return "", err
 	}
 	if !isMetadata {
+		if isNilValue(node.Value) {
+			return fmt.Sprintf("(%s IS NULL)", fieldExpr), nil
+		}
 		ph := c.bind(node.Value)
 		return fmt.Sprintf("(%s = %s)", fieldExpr, ph), nil
 	}
@@ -87,6 +91,18 @@ func (c *filterCompiler) compileEq(node EqFilter) (string, error) {
 		return "", err
 	}
 	return fmt.Sprintf("(%s = %s::jsonb)", metadataPathJSONBExpr(fieldExpr, path), ph), nil
+}
+
+func isNilValue(value any) bool {
+	if value == nil {
+		return true
+	}
+	switch v := reflect.ValueOf(value); v.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Pointer, reflect.Slice:
+		return v.IsNil()
+	default:
+		return false
+	}
 }
 
 func (c *filterCompiler) compileIn(node InFilter) (string, error) {

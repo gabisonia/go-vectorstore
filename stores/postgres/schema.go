@@ -113,9 +113,6 @@ func (s *PostgresVectorStore) validateCollectionSchema(ctx context.Context, tabl
 		if mode == vectordata.EnsureStrict {
 			return fmt.Errorf("%w: missing column %q", vectordata.ErrSchemaMismatch, metadataColumn)
 		}
-		if err := s.addMetadataColumn(ctx, table); err != nil {
-			return err
-		}
 	} else if cols[metadataColumn].udtName != "jsonb" {
 		return fmt.Errorf("%w: expected %q type jsonb, got %q", vectordata.ErrSchemaMismatch, metadataColumn, cols[metadataColumn].udtName)
 	}
@@ -123,9 +120,6 @@ func (s *PostgresVectorStore) validateCollectionSchema(ctx context.Context, tabl
 	if _, ok := cols[contentColumn]; !ok {
 		if mode == vectordata.EnsureStrict {
 			return fmt.Errorf("%w: missing column %q", vectordata.ErrSchemaMismatch, contentColumn)
-		}
-		if err := s.addContentColumn(ctx, table); err != nil {
-			return err
 		}
 	} else if cols[contentColumn].dataType != "text" {
 		return fmt.Errorf("%w: expected %q data type text, got %q", vectordata.ErrSchemaMismatch, contentColumn, cols[contentColumn].dataType)
@@ -137,6 +131,18 @@ func (s *PostgresVectorStore) validateCollectionSchema(ctx context.Context, tabl
 	}
 	if dimension != expectedDimension {
 		return fmt.Errorf("%w: expected vector dimension %d, got %d", vectordata.ErrSchemaMismatch, expectedDimension, dimension)
+	}
+
+	// Check all existing columns before making optional schema changes.
+	if _, ok := cols[metadataColumn]; !ok {
+		if err := s.addMetadataColumn(ctx, table); err != nil {
+			return err
+		}
+	}
+	if _, ok := cols[contentColumn]; !ok {
+		if err := s.addContentColumn(ctx, table); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -155,14 +161,24 @@ func (s *PostgresVectorStore) ensurePrimaryKeyOnID(ctx context.Context, table st
 			WHERE tc.table_schema = $1
 				AND tc.table_name = $2
 				AND tc.constraint_type = 'PRIMARY KEY'
+				AND tc.is_deferrable = 'NO'
 				AND kcu.column_name = $3
+				AND NOT EXISTS (
+					SELECT 1 FROM information_schema.key_column_usage other
+					WHERE other.constraint_catalog = tc.constraint_catalog
+						AND other.constraint_schema = tc.constraint_schema
+						AND other.constraint_name = tc.constraint_name
+						AND other.table_schema = tc.table_schema
+						AND other.table_name = tc.table_name
+						AND other.column_name <> $3
+				)
 		)
 	`, s.opts.Schema, table, idColumn).Scan(&hasPK)
 	if err != nil {
 		return fmt.Errorf("check primary key: %w", err)
 	}
 	if !hasPK {
-		return fmt.Errorf("%w: primary key on %q is required", vectordata.ErrSchemaMismatch, idColumn)
+		return fmt.Errorf("%w: non-deferrable primary key on %q alone is required", vectordata.ErrSchemaMismatch, idColumn)
 	}
 	return nil
 }
@@ -207,7 +223,7 @@ func (s *PostgresVectorStore) readVectorDimension(ctx context.Context, table str
 	}
 	dim, err := parseVectorDimension(typeName)
 	if err != nil {
-		return 0, fmt.Errorf("parse vector dimension from %q: %w", typeName, err)
+		return 0, fmt.Errorf("%w: parse vector dimension from %q: %w", vectordata.ErrSchemaMismatch, typeName, err)
 	}
 	return dim, nil
 }

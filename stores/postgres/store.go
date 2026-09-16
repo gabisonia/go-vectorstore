@@ -95,8 +95,9 @@ func (s *PostgresVectorStore) ensureTableWithValidation(ctx context.Context, tab
 		if err := s.createCollectionTable(ctx, tableName, dimension); err != nil {
 			return err
 		}
-		return nil
 	}
+	// Another caller may have created the table after the existence check.
+	// Validate the actual schema even when CREATE TABLE IF NOT EXISTS succeeds.
 	return s.validateCollectionSchema(ctx, tableName, dimension, mode)
 }
 

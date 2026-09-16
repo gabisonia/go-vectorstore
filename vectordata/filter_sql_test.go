@@ -364,3 +364,19 @@ func TestCompileFilterSQL_MetadataPathRejectsWhitespaceSegment(t *testing.T) {
 		t.Fatalf("expected ErrInvalidFilter, got %v", err)
 	}
 }
+
+func TestCompileFilterSQL_ColumnNullEquality(t *testing.T) {
+	for _, value := range []any{nil, (*string)(nil)} {
+		filter := And(Eq(Column("content"), value), Eq(Column("id"), "a"))
+		sql, args, next, err := CompileFilterSQL(filter, testFilterConfig(), 3)
+		if err != nil {
+			t.Fatalf("CompileFilterSQL: %v", err)
+		}
+		if sql != `(("content" IS NULL) AND ("id" = $3))` {
+			t.Fatalf("unexpected SQL: %s", sql)
+		}
+		if !reflect.DeepEqual(args, []any{"a"}) || next != 4 {
+			t.Fatalf("unexpected args %#v and next %d", args, next)
+		}
+	}
+}
