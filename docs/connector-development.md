@@ -169,3 +169,13 @@ Use provider-specific filter translation or `MatchModelFilter` for an in-memory
 implementation. The PostgreSQL compiler is in `stores/postgres/filtersql`.
 See [model-api.md](model-api.md) for null, projection, key, score and iterator
 semantics, and keep integration tests against the real production database.
+
+Providers can additionally implement `vectordata.CapabilityProvider` without
+changing `ModelStore`. Return a local `ProviderCapabilities` snapshot with supported
+key/generated-key/data types, metrics, physical index methods and data types,
+full-text indexing and hybrid search. Return independent slices, describe connector
+support rather than deployment health, and distinguish accepted schema hints from
+actual indexes. `conformance.Run` exercises advertised features when this optional
+interface is present, including native keys/data, generated keys, metrics, indexes
+and hybrid search. Providers without metadata continue to run the other contract
+checks.

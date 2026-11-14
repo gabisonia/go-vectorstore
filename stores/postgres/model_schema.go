@@ -55,16 +55,33 @@ func (s *PostgresVectorStore) CollectionExists(ctx context.Context, name string)
 	if err := validCollectionName(name); err != nil {
 		return false, err
 	}
-	names, err := s.ListCollectionNames(ctx)
+	// Resolve only the requested relation. Legacy/vector model collections need
+	// one catalog query; registered models without vectors need a registry lookup.
+	var kind string
+	var vector, registry bool
+	err := s.pool.QueryRow(ctx, `SELECT c.relkind::text,
+ EXISTS (SELECT 1 FROM pg_attribute a JOIN pg_type t ON t.oid=a.atttypid
+         WHERE a.attrelid=c.oid AND NOT a.attisdropped AND t.typname='vector'),
+ to_regclass($2) IS NOT NULL
+ FROM pg_class c WHERE c.oid=to_regclass($1)`, qualifiedTable(s.opts.Schema, name), qualifiedTable(s.opts.Schema, modelRegistry)).Scan(&kind, &vector, &registry)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, nil
+	}
 	if err != nil {
 		return false, err
 	}
-	for _, n := range names {
-		if n == name {
-			return true, nil
-		}
+	if kind != "r" && kind != "p" {
+		return false, nil
 	}
-	return false, nil
+	if vector {
+		return true, nil
+	}
+	if !registry {
+		return false, nil
+	}
+	var exists bool
+	err = s.pool.QueryRow(ctx, "SELECT EXISTS (SELECT 1 FROM "+qualifiedTable(s.opts.Schema, modelRegistry)+" WHERE name=$1)", name).Scan(&exists)
+	return exists, err
 }
 func (s *PostgresVectorStore) DeleteCollection(ctx context.Context, name string) error {
 	if err := validCollectionName(name); err != nil {

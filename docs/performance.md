@@ -109,6 +109,38 @@ vectors excluded by default. Large-vector writes still allocate substantially
 more than their raw payload: binary vector encoding/COPY remain candidates for a
 separate measured optimization, as in the original ingestion profile above.
 
+## Collection lookup benchmarks
+
+Compare targeted lookups with the previous list-and-search strategy:
+
+```sh
+go test -tags=integration -run '^$' -bench BenchmarkCollectionExists \
+  -benchmem -benchtime=200ms -count=3 -timeout=5m ./stores/postgres
+```
+
+Fixtures contain either 1 or 1,000 vector collections plus one registered scalar
+model. Catalog population runs outside the timed region. `models`, `scalar` and
+`missing` benchmark named lookups; `list_reference` lists the namespace and checks
+for the target, matching the previous implementation. Query tracing in integration
+tests also verifies that existing vector and missing relations need one query,
+scalar models need two, and every query returns at most one row.
+
+Local medians of three 200 ms samples on Apple M3 Pro, darwin/arm64, Go 1.27.4
+and PostgreSQL 18 in Docker:
+
+| Lookup | Vector collections | Time/op | Bytes/op |
+| --- | ---: | ---: | ---: |
+| Named vector model | 1 | 0.146 ms | 795 |
+| Named vector model | 1,000 | 0.162 ms | 796 |
+| Named scalar model | 1,000 | 0.302 ms | 1,465 |
+| Missing relation | 1,000 | 0.153 ms | 700 |
+| List reference | 1 | 0.500 ms | 2,235 |
+| List reference | 1,000 | 4.084 ms | 84,415 |
+
+The named lookup avoids transferring and allocating every collection name.
+These local timings include Docker/network overhead and are workload-specific;
+repeat against the target deployment when assessing latency.
+
 ## Index and recall verification
 
 ```sh
