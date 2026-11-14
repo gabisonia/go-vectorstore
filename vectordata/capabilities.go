@@ -23,4 +23,6 @@ type ProviderCapabilities struct {
 	// FullTextIndexing applies to string properties.
 	FullTextIndexing bool
 	HybridSearch     bool
+	// MigrationPlanning describes plan generation, not migration execution.
+	MigrationPlanning bool
 }

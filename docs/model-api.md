@@ -93,7 +93,9 @@ primary-key shape must match. Existing indexes are checked for conflicts.
 Definitions are registered in the provider's reserved `__vectorstore_models`
 table; runtime embedder objects are not persisted. Changing a registered model
 requires an explicit migration or a new collection. The original Record API's
-strict/auto-migrate modes are unchanged.
+strict/auto-migrate modes are unchanged. PostgreSQL also exposes a
+[plan-only migration API](migrations.md) for reviewing model changes before
+explicit application.
 
 ## Provider capabilities
 
@@ -120,6 +122,7 @@ portable data types, and cosine/L2/inner-product metrics.
 | `IndexedDataTypes` | None | String, int64, float64, bool, time, string array |
 | `FullTextIndexing` | False | True, for string properties |
 | `HybridSearch` | False | True |
+| `MigrationPlanning` | False | True, plan-only |
 
 Index fields describe physical acceleration. Memory still accepts index hints
 for portability. Generic JSON indexing remains unsupported; provider-specific
