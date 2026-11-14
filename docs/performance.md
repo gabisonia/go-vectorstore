@@ -49,11 +49,10 @@ input. This bounds batch preparation memory; it does not bound the caller's inpu
 slice or driver protocol buffers. Later validation and database errors roll back
 all earlier batches.
 
-An allocation profile of the revised 5,000-row ingestion case attributed about
+A profile of the earlier text-based 5,000-row ingestion case attributed about
 86% of total sampled allocation space to pgx parameter encoding and Bind message
-buffers. Further work should compare binary vector encoding and COPY against
-this baseline, including connection setup, duplicate handling, and transaction
-rollback behavior.
+buffers. The transport comparison below evaluates binary vector encoding and COPY against
+text, including connection setup and transaction commit.
 
 ## Model API benchmarks
 
@@ -68,7 +67,7 @@ Native model writes and searches use the same Testcontainers/`PGVECTOR_TEST_DSN`
 setup as the ingestion benchmark:
 
 ```sh
-go test -tags=integration -run '^$' -bench 'BenchmarkModelWrite|BenchmarkModelSearch' \
+go test -tags=integration -run '^$' -bench '^(BenchmarkModelWrite|BenchmarkModelSearch)$' \
   -benchmem -benchtime=200ms -count=3 -timeout=5m ./stores/postgres
 ```
 
@@ -105,9 +104,102 @@ short samples and the Docker transport introduce timing variation.
 
 Codec timings measure mapping alone; they do not include storage validation or
 JSON serialization during writes. The projection comparison supports keeping
-vectors excluded by default. Large-vector writes still allocate substantially
-more than their raw payload: binary vector encoding/COPY remain candidates for a
-separate measured optimization, as in the original ingestion profile above.
+vectors excluded by default. The preceding table records the original model API
+baseline, before binary ingestion was added. The transport comparison below
+measures the current write path against text encoding and COPY staging.
+
+## Binary vector ingestion and COPY comparison
+
+PostgreSQL writes now select binary vector parameters when a request contains at
+least 1,024 float32 values across its records and named vectors. Smaller requests
+retain text parameters to avoid codec/type-lookup overhead. This heuristic follows
+the local small-write benchmarks; it is not a latency guarantee for every dataset.
+Both the original Record API and model API use this selection without new options.
+
+The encoder appends pgvector's binary payload directly to pgx's parameter buffer.
+It follows [pgvector's binary input/output format](https://github.com/pgvector/pgvector/blob/v0.8.0/src/vector.c#L336):
+a dimension/reserved header and network-order float32 elements. It checks dimension
+representation bounds to prevent truncation; existing public write validation
+still checks dimensions and finite values before serialization. Text-only parameter
+protocols retain the encoder's text fallback.
+
+A binary write resolves the vector type inside its transaction, then installs a
+codec on an operation-scoped copy of the leased connection's type map. The lease
+stays owned until the transaction and codec cleanup finish. The original type map,
+including caller registrations and wrappers, is restored before returning the
+connection to the pool. Pool configuration and AfterConnect hooks need no changes.
+SQL write statements retain their existing per-record/model and per-batch/Record
+shape, generated-key handling, returned-key ordering and conflict behavior.
+
+Reproduce the transport comparison separately from concurrent tests or workloads:
+
+```sh
+go test -tags=integration -run '^$' \
+  -bench '^(BenchmarkModelWriteTransport|BenchmarkSmallModelWriteTransport)$' \
+  -benchmem -benchtime=200ms -count=3 -timeout=5m ./stores/postgres
+go test -tags=integration -run '^$' -bench '^BenchmarkRecordWriteTransport$' \
+  -benchmem -benchtime=3x -count=3 -timeout=5m ./stores/postgres
+go test -run '^$' -bench '^BenchmarkVectorParameterEncoding$' \
+  -benchmem -benchtime=200ms -count=3 ./stores/postgres
+```
+
+`text` and `binary` run the same model validation, SQL writes and returned-key
+mapping with different vector encoders. `copy_stage` is a benchmark-only prototype
+for supplied unique int64 keys: it creates a temporary staging table, performs
+binary COPY, then inserts/upserts into the target with RETURNING. All candidates
+include validation, transaction setup and commit. Upsert cases preload existing
+records outside the timer. Count/key-count checks validate every benchmark case.
+COPY comparisons use the same unindexed data fixture as the model write benchmark.
+
+Local medians on Apple M3 Pro, darwin/arm64, Go 1.27.4, PostgreSQL 18.7 / pgvector
+0.8.7 in Docker. Model rows use three 200 ms samples; Record rows use three samples
+of three writes each. Each operation writes 1,000 records:
+
+| API / operation | Dimensions | Transport | Time/op | Bytes/op |
+| --- | ---: | --- | ---: | ---: |
+| Model insert | 128 | Text | 27.19 ms | 15,310,123 |
+| Model insert | 128 | Binary | 15.29 ms | 7,503,389 |
+| Model insert | 128 | COPY staging | 11.09 ms | 2,060,197 |
+| Model insert | 1,536 | Text | 182.77 ms | 128,187,192 |
+| Model insert | 1,536 | Binary | 62.49 ms | 49,447,584 |
+| Model insert | 1,536 | COPY staging | 75.01 ms | 7,649,672 |
+| Model update existing | 1,536 | Text | 204.40 ms | 128,870,472 |
+| Model update existing | 1,536 | Binary | 71.18 ms | 50,152,098 |
+| Model update existing | 1,536 | COPY staging | 102.01 ms | 7,672,368 |
+| Record insert | 1,536 | Text | 299.78 ms | 192,791,642 |
+| Record insert | 1,536 | Binary | 76.38 ms | 70,555,093 |
+| Record update existing | 1,536 | Text | 307.07 ms | 192,789,024 |
+| Record update existing | 1,536 | Binary | 83.54 ms | 70,554,965 |
+
+Binary parameters reduce allocated bytes by about 61% for the 1,536-dimensional
+model insert fixture and 63% for the equivalent Record fixture. Encoding one
+1,536-dimensional parameter into a reusable buffer measured 45.7 µs / 19,072 bytes
+for text and 0.543 µs / zero additional bytes for binary. Whole writes still
+allocate prepared records, SQL/argument structures, Bind messages and driver
+buffers; these encoding-only results do not represent end-to-end allocations.
+
+Small-request measurements support retaining the text path: one 3-dimensional
+model update measured 0.705 ms with text versus 1.022 ms with binary setup; one
+128-dimensional update measured 0.678 ms versus 0.828 ms. Eight 128-dimensional
+records and one 1,536-dimensional record favored binary in this run. Timing is
+sensitive to Docker transport, cache state and host load; compare longer runs
+against production workloads before making throughput or latency projections.
+
+COPY staging remains a benchmark prototype. It needs temporary-table privileges,
+and its set-based INSERT changes statement-trigger behavior and needs additional
+design for generated IDs, repeated-key upserts and trigger-modified returned keys.
+It therefore is not selected by the public APIs. Binary parameters improve the
+large-vector case while preserving the existing write contract and permissions.
+
+To profile the selected public model path without also selecting the transport
+comparison benchmark, anchor the benchmark name:
+
+```sh
+go test -tags=integration -run '^$' -bench '^BenchmarkModelWrite$' \
+  -benchtime=3x -count=3 -memprofile=/tmp/vectorstore-ingest.mem \
+  -o /tmp/vectorstore-ingest.test -timeout=5m ./stores/postgres
+go tool pprof -alloc_space /tmp/vectorstore-ingest.test /tmp/vectorstore-ingest.mem
+```
 
 ## Collection lookup benchmarks
 

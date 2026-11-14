@@ -231,7 +231,7 @@ func TestBuildWriteBatchBuildsInsertAndUpsertSQL(t *testing.T) {
 	if insertSQL != expectedInsertSQL {
 		t.Fatalf("unexpected insert SQL\nwant: %s\n got: %s", expectedInsertSQL, insertSQL)
 	}
-	if !reflect.DeepEqual(insertArgs, []any{"a", "[1,0,0]", []byte(`{"category":"news"}`), &content, "b", "[0,1,0]", []byte(`{}`), (*string)(nil)}) {
+	if !reflect.DeepEqual(insertArgs, []any{"a", writeVector{1, 0, 0}, []byte(`{"category":"news"}`), &content, "b", writeVector{0, 1, 0}, []byte(`{}`), (*string)(nil)}) {
 		t.Fatalf("unexpected insert args: %#v", insertArgs)
 	}
 

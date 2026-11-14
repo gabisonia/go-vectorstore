@@ -50,7 +50,14 @@ func (c *ModelCollection) Insert(ctx context.Context, records []vectordata.Model
 func (c *ModelCollection) Upsert(ctx context.Context, records []vectordata.ModelRecord) ([]any, error) {
 	return c.write(ctx, records, true)
 }
-func (c *ModelCollection) write(ctx context.Context, records []vectordata.ModelRecord, upsert bool) (keys []any, err error) {
+func (c *ModelCollection) write(ctx context.Context, records []vectordata.ModelRecord, upsert bool) ([]any, error) {
+	dimensions := 0
+	for _, p := range c.definition.Vectors {
+		dimensions += min(p.Dimensions, minBinaryVectorValues-dimensions)
+	}
+	return c.writeEncoded(ctx, records, upsert, useBinaryVectors(len(records), dimensions))
+}
+func (c *ModelCollection) writeEncoded(ctx context.Context, records []vectordata.ModelRecord, upsert, useBinary bool) (keys []any, err error) {
 	defer func() { err = c.operation("write", err) }()
 	prepared, err := vectordata.PrepareModelRecords(ctx, c.definition, c.options, records)
 	if err != nil {
@@ -60,16 +67,17 @@ func (c *ModelCollection) write(ctx context.Context, records []vectordata.ModelR
 	if len(records) == 0 {
 		return keys, nil
 	}
-	tx, err := c.store.pool.Begin(ctx)
+	tx, release, err := beginVectorWrite(ctx, c.store.pool, useBinary)
 	if err != nil {
 		return nil, err
 	}
+	defer release()
 	defer rollbackTx(ctx, tx)
 	for start := 0; start < len(prepared); start += maxRowsPerStatement {
 		end := min(start+maxRowsPerStatement, len(prepared))
 		batch := &pgx.Batch{}
 		for _, r := range prepared[start:end] {
-			sql, args, err := c.writeStatement(r, upsert)
+			sql, args, err := c.writeStatement(r, upsert, useBinary)
 			if err != nil {
 				return nil, err
 			}
@@ -93,7 +101,7 @@ func (c *ModelCollection) write(ctx context.Context, records []vectordata.ModelR
 	}
 	return keys, nil
 }
-func (c *ModelCollection) writeStatement(r vectordata.ModelRecord, upsert bool) (string, []any, error) {
+func (c *ModelCollection) writeStatement(r vectordata.ModelRecord, upsert, useBinary bool) (string, []any, error) {
 	d := c.definition
 	columns := []string{quoteIdent(d.Key.StorageName)}
 	values := []string{}
@@ -125,7 +133,7 @@ func (c *ModelCollection) writeStatement(r vectordata.ModelRecord, upsert bool) 
 		column := quoteIdent(p.StorageName)
 		columns = append(columns, column)
 		updates = append(updates, column+"=EXCLUDED."+column)
-		values = append(values, bind(vectorLiteral(r.Vectors[p.Name]), "::vector"))
+		values = append(values, bind(vectorWriteArg(r.Vectors[p.Name], useBinary), "::vector"))
 	}
 	query := "INSERT INTO " + c.table() + " (" + strings.Join(columns, ",") + ") VALUES (" + strings.Join(values, ",") + ")"
 	if upsert && r.Key != nil {
