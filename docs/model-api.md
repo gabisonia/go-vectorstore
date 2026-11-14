@@ -138,7 +138,16 @@ The filter contract preserves SQL-style unknown/null behavior under negation:
 a missing JSON path does not match `Eq(path,nil)` or its negation. A present JSON
 null does match `Eq(path,nil)`. An optional native JSON column can contain SQL
 NULL (`nil`) or JSON null (`JSONNull{}`); `Column` tests native SQL null, while
-`DataPath` tests JSON values. Invalid fields are rejected even for empty stores.
+`DataPath` tests JSON values. `JSONNull{}` is also accepted in JSON path equality
+and membership predicates. JSON numbers and strings remain distinct for equality.
+Native NULL array membership remains unknown under `Not`, while a missing/nonarray
+JSON membership test is false. Invalid fields are rejected even for empty stores.
+
+Ordered JSON comparisons against numbers use guarded numeric conversion;
+missing, null and nonnumeric values compare false. Text comparisons preserve SQL
+unknown for missing/null paths, including under negation. Array paths support
+negative indexes and leading ASCII whitespace; trailing whitespace is invalid.
+Object path segments always remain literal keys.
 
 The AST lives in `vectordata/filterast`. PostgreSQL SQL compilation lives in
 `stores/postgres/filtersql`. The old `vectordata.CompileFilterSQL` and
@@ -181,7 +190,10 @@ embedders must honor cancellation and be safe for concurrent use.
 PostgreSQL implements optional `HybridSearcher`. Declare a string data property
 with `IsFullTextIndexed` (or the `fulltext` tag), then call `HybridSearch` or
 `HybridSearchText`. Specify `TextProperty` if more than one field is full-text
-indexed, and `VectorProperty` if more than one vector is defined.
+indexed, and `VectorProperty` if more than one vector is defined. Invalid paging,
+thresholds, keywords, properties, filters and local provider settings are rejected
+before `HybridSearchText` invokes the embedder; an already-canceled request also
+skips embedding.
 
 Keyword search uses PostgreSQL's `simple` text-search configuration and
 `plainto_tsquery`. Filters apply to both the vector and keyword candidate sets.
@@ -202,7 +214,11 @@ and PostgreSQL integration tests run it, including key types, identity keys,
 filters, nulls, projections, paging, thresholds, atomicity, and lifecycle.
 PostgreSQL-specific tests cover typed mapping, embedding generation, hybrid
 search, index conflicts, concurrent initialization and early iterator cleanup.
-Keep production database integration tests even when using memory for development.
+`conformance.RunFilterParity` compares generated filter trees between two providers;
+expected-result edge cases also run as part of `conformance.Run`. See
+[performance and verification](performance.md) for benchmark commands, local
+measurements and model index-plan checks. Keep production database integration
+tests even when using memory for development.
 
 This is a Go adaptation of the main model-driven workflows, not binary or full
 feature parity with every .NET provider. Half/binary/sparse vectors, additional
