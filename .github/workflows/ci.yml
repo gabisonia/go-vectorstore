@@ -2,46 +2,61 @@ name: CI
 
 on:
   push:
-    branches:
-      - master
-      - main
+    branches: [master, main]
   pull_request:
+  workflow_call:
 
 permissions:
   contents: read
 
 jobs:
   test:
-    name: Test and vet
+    name: Test and vet (Go ${{ matrix.go }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        go: ['1.25.x', stable]
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version: ${{ matrix.go }}
           cache: true
-
-      - name: Test
-        run: go test ./...
-
+      - name: Test with race detection
+        run: go test -race -timeout=5m ./...
       - name: Vet
         run: go vet ./...
+      - name: Test release tooling
+        run: bash .github/scripts/release_test.sh
 
   integration-postgres:
-    name: Postgres integration
+    name: Postgres ${{ matrix.postgres }} (Go ${{ matrix.go }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        go: ['1.25.x', stable]
+        postgres: ['16', '18']
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go }}
+          cache: true
+      - name: Run Postgres integration tests with race detection
+        env:
+          PGVECTOR_TEST_IMAGE: pgvector/pgvector:pg${{ matrix.postgres }}
+        run: go test -race -tags=integration -timeout=5m ./stores/postgres
+
+  vulnerabilities:
+    name: Vulnerability scan
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
         with:
-          go-version-file: go.mod
+          go-version: stable
           cache: true
-
-      - name: Run Postgres integration tests
-        run: go test -tags=integration ./stores/postgres
+      - name: Scan production and integration dependencies
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 -test -tags=integration ./...

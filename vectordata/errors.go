@@ -5,6 +5,7 @@ import "errors"
 var (
 	ErrNotFound             = errors.New("vectordata: record not found")
 	ErrDimensionMismatch    = errors.New("vectordata: vector dimension mismatch")
+	ErrInvalidVector        = errors.New("vectordata: invalid vector")
 	ErrSchemaMismatch       = errors.New("vectordata: schema mismatch")
 	ErrInvalidFilter        = errors.New("vectordata: invalid filter")
 	ErrInvalidRecord        = errors.New("vectordata: invalid record")

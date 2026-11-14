@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 
 	"github.com/gabisonia/go-vectorstore/vectordata"
@@ -149,7 +150,7 @@ func (c *PostgresCollection) buildSearchPlan(vector []float32, topK int, opts ve
 	if topK <= 0 {
 		return searchPlan{}, fmt.Errorf("%w: topK must be > 0", vectordata.ErrInvalidSearchOptions)
 	}
-	if err := c.validateVectorDimension(vector); err != nil {
+	if err := c.validateVector(vector); err != nil {
 		return searchPlan{}, err
 	}
 	settings, iterative, err := searchSettings(opts)
@@ -372,8 +373,8 @@ func (c *PostgresCollection) buildWriteBatch(records []vectordata.Record, mode w
 		if strings.TrimSpace(record.ID) == "" {
 			return "", nil, fmt.Errorf("%w: record id is empty", vectordata.ErrInvalidRecord)
 		}
-		if err := c.validateVectorDimension(record.Vector); err != nil {
-			return "", nil, err
+		if err := c.validateVector(record.Vector); err != nil {
+			return "", nil, fmt.Errorf("%w: record %q: %w", vectordata.ErrInvalidRecord, record.ID, err)
 		}
 
 		metadataPayload, err := metadataJSON(record.Metadata)
@@ -422,9 +423,19 @@ func (c *PostgresCollection) filterConfig() vectordata.FilterSQLConfig {
 	}
 }
 
-func (c *PostgresCollection) validateVectorDimension(vector []float32) error {
+func (c *PostgresCollection) validateVector(vector []float32) error {
 	if len(vector) != c.dimension {
 		return fmt.Errorf("%w: expected %d, got %d", vectordata.ErrDimensionMismatch, c.dimension, len(vector))
+	}
+	nonzero := false
+	for i, value := range vector {
+		if math.IsNaN(float64(value)) || math.IsInf(float64(value), 0) {
+			return fmt.Errorf("%w: element %d must be finite", vectordata.ErrInvalidVector, i)
+		}
+		nonzero = nonzero || value != 0
+	}
+	if !nonzero && defaultMetric(c.metric) == vectordata.DistanceCosine {
+		return fmt.Errorf("%w: cosine vectors must have nonzero norm", vectordata.ErrInvalidVector)
 	}
 	return nil
 }

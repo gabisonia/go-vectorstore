@@ -130,8 +130,12 @@ func TestMain(m *testing.M) {
 }
 
 func startPgVectorContainer(ctx context.Context) (testcontainers.Container, string, error) {
+	image := strings.TrimSpace(os.Getenv("PGVECTOR_TEST_IMAGE"))
+	if image == "" {
+		image = "pgvector/pgvector:pg16"
+	}
 	request := testcontainers.ContainerRequest{
-		Image:        "pgvector/pgvector:pg16",
+		Image:        image,
 		ExposedPorts: []string{"5432/tcp"},
 		Env: map[string]string{
 			"POSTGRES_USER":     integrationPostgresUser,

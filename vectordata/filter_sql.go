@@ -149,7 +149,7 @@ func (c *filterCompiler) withMetadataContainment(exact, metadataExpr string, pat
 	for _, segment := range path {
 		// #> accepts array indexes as well as object keys. A JSON object
 		// containment predicate cannot represent array traversal safely.
-		digits := strings.TrimPrefix(strings.TrimPrefix(segment, "+"), "-")
+		digits := strings.TrimPrefix(strings.TrimPrefix(strings.TrimSpace(segment), "+"), "-")
 		if digits != "" && strings.Trim(digits, "0123456789") == "" {
 			return exact, nil
 		}

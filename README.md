@@ -8,7 +8,7 @@
 A lightweight Go vector-store library inspired by `Microsoft.Extensions.VectorData`.
 
 MVP scope:
-- Go 1.24.x
+- Go 1.25+
 - Postgres + `pgvector`
 - Record-based core API with optional typed codec wrapper
 
@@ -19,7 +19,10 @@ This library can be used to build retrieval systems such as:
 
 ## Requirements
 
-- Go 1.24.x
+The minimum Go version is now 1.25 because the patched pgx and text dependencies
+require it. Use current stable Go for up-to-date standard-library security fixes.
+
+- Go 1.25+
 - PostgreSQL 16+ with `pgvector` extension
 - Docker (optional, for integration tests and sample compose flows)
 
@@ -145,6 +148,15 @@ func main() {
 }
 ```
 
+All vector elements must be finite. Cosine collections reject zero vectors for
+both writes and queries with `ErrInvalidVector`; L2 and inner-product collections
+allow zero vectors. Write validation errors also match `ErrInvalidRecord`.
+
+Metadata path segments are literal JSON keys, including empty strings and
+whitespace. `Metadata(" price ")` targets the key `" price "`; callers that relied
+on automatic trimming must pass the intended key explicitly. Fixed column names
+continue to be trimmed.
+
 ## Search Options
 
 `SearchByVector` supports filtering, distance thresholding, and projection control.
@@ -234,6 +246,7 @@ Notes:
 - Integration tests start Postgres/pgvector automatically via Testcontainers
 - Docker daemon must be available when running integration tests
 - Optional override: set `PGVECTOR_TEST_DSN` to use an existing Postgres instance instead of starting a container
+- Set `PGVECTOR_TEST_IMAGE=pgvector/pgvector:pg18` to test a different PostgreSQL image (the default is `pgvector/pgvector:pg16`)
 
 ## Docker Compose (optional)
 
@@ -242,14 +255,19 @@ Notes:
 - Use root `docker-compose.yml` when you want a persistent local Postgres+pgvector instance outside tests
 - Use Testcontainers (`go test -tags=integration ./...`) for integration tests
 - Sample apps have their own compose files at `samples/semantic-search/docker-compose.yml` and `samples/ragrimosa/docker-compose.yml`
-- Sample Dockerfiles use `golang:1.24-alpine` to match the repo Go version (`1.24.x`)
+- Sample Dockerfiles build with `golang:1.27-alpine`; the library minimum is Go 1.25
 
 ## Release Automation
 
 GitHub Actions workflows are configured for:
 
-- CI on pushes/PRs with unit tests, `go vet`, and Postgres integration tests (`.github/workflows/ci.yml`)
-- release publishing from semver tags or manual workflow dispatch (`.github/workflows/release.yml`)
+- CI on pushes/PRs with race detection, `go vet`, release-script tests, and vulnerability scanning, testing Go 1.25/current stable and PostgreSQL 16/18 (`.github/workflows/ci.yml`)
+- release publishing from semver tags or manual workflow dispatch (`.github/workflows/release.yml`), gated on the same CI checks
+
+Release version input is passed through environment variables and validated before
+any publishing job runs. Existing tags must point to the checked-out, tested
+commit; the workflow will not move a tag to another commit. Prerelease versions
+are published as GitHub prereleases.
 
 Release options:
 

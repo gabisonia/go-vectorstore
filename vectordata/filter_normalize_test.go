@@ -12,12 +12,12 @@ func TestNormalizeFieldRef_ColumnTrimmed(t *testing.T) {
 	}
 }
 
-func TestNormalizeFieldRef_MetadataTrimmed(t *testing.T) {
+func TestNormalizeFieldRef_MetadataKeysPreserved(t *testing.T) {
 	normalized, err := NormalizeFieldRef(Metadata("  flags  ", " pinned "))
 	if err != nil {
 		t.Fatalf("NormalizeFieldRef: %v", err)
 	}
-	if len(normalized.Path) != 2 || normalized.Path[0] != "flags" || normalized.Path[1] != "pinned" {
+	if len(normalized.Path) != 2 || normalized.Path[0] != "  flags  " || normalized.Path[1] != " pinned " {
 		t.Fatalf("unexpected normalized path: %#v", normalized.Path)
 	}
 }
@@ -35,7 +35,6 @@ func TestNormalizeFieldRef_RejectsInvalidMetadataPath(t *testing.T) {
 		ref  FieldRef
 	}{
 		{name: "empty path", ref: Metadata()},
-		{name: "blank segment", ref: Metadata("valid", "   ")},
 	}
 
 	for _, tt := range tests {
@@ -44,6 +43,20 @@ func TestNormalizeFieldRef_RejectsInvalidMetadataPath(t *testing.T) {
 				t.Fatal("expected error")
 			}
 		})
+	}
+}
+
+func TestNormalizeFieldRef_MetadataEmptyAndWhitespaceKeys(t *testing.T) {
+	for _, key := range []string{"", " ", "\t"} {
+		field := Metadata(key)
+		normalized, err := NormalizeFieldRef(field)
+		if err != nil || len(normalized.Path) != 1 || normalized.Path[0] != key {
+			t.Fatalf("key %q changed: %#v, %v", key, normalized, err)
+		}
+		normalized.Path[0] = "changed"
+		if field.Path[0] != key {
+			t.Fatal("normalized metadata path aliases input")
+		}
 	}
 }
 

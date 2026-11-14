@@ -14,7 +14,7 @@ The connector must preserve shared behavior:
 - validate collection specs (`name`, `dimension`, `metric`, `mode`)
 - enforce vector dimension on write and search
 - return `vectordata.ErrNotFound` for missing records
-- return `vectordata.ErrDimensionMismatch`, `vectordata.ErrSchemaMismatch`, and `vectordata.ErrInvalidFilter` where applicable
+- return `vectordata.ErrDimensionMismatch`, `vectordata.ErrInvalidVector`, `vectordata.ErrSchemaMismatch`, and `vectordata.ErrInvalidFilter` where applicable
 - compute score via `vectordata.ScoreFromDistance`
 
 ## 2) Recommended Layout

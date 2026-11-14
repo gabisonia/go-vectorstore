@@ -20,13 +20,9 @@ func NormalizeFieldRef(ref FieldRef) (FieldRef, error) {
 			return FieldRef{}, fmt.Errorf("%w: metadata path is empty", ErrInvalidFilter)
 		}
 		path := make([]string, len(ref.Path))
-		for i, segment := range ref.Path {
-			trimmed := strings.TrimSpace(segment)
-			if trimmed == "" {
-				return FieldRef{}, fmt.Errorf("%w: metadata path segment is empty", ErrInvalidFilter)
-			}
-			path[i] = trimmed
-		}
+		// JSON object keys, including empty and whitespace-only strings, are
+		// literal names. Only fixed-column aliases are whitespace-normalized.
+		copy(path, ref.Path)
 		return FieldRef{Kind: FieldMetadata, Path: path}, nil
 	default:
 		return FieldRef{}, fmt.Errorf("%w: unsupported field kind %q", ErrInvalidFilter, ref.Kind)
