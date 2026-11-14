@@ -192,3 +192,13 @@ commit storage/index/registration changes atomically. Preserve provider errors a
 support context cancellation. The conformance suite exercises optional-property
 application and preserved records for each advertised native key type.
 See [migrations.md](migrations.md) for the PostgreSQL implementation and limits.
+
+For store-wide embedding defaults, resolve `ModelCollectionOptions.WithDefaults`
+when constructing collection handles. Runtime settings must not enter persisted
+definitions. Use `PrepareModelRecords` before storage writes so bounded requests,
+output validation and cancellation complete before mutation. `EmbedQuery` resolves
+property/collection embedders for text search. Run
+`conformance.RunEmbeddingConfiguration(t, factory)` in addition to `Run`; its
+factory receives embedding defaults and must return an isolated store configured
+with them. It verifies override precedence, batching, text/hybrid queries and
+atomic insert/upsert behavior after embedding errors or cancellation.

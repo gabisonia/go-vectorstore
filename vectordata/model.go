@@ -83,7 +83,29 @@ func (f EmbeddingFunc) Embed(ctx context.Context, inputs []string) ([][]float32,
 	return f(ctx, inputs)
 }
 
-type ModelCollectionOptions struct{ Embedder Embedder }
+type ModelCollectionOptions struct {
+	Embedder Embedder
+	// EmbeddingBatchSize bounds inputs per embedding request for each property.
+	// Zero inherits the store default, or uses one request when no default is set.
+	// Positive values override the store default; negative values are invalid.
+	EmbeddingBatchSize int
+}
+
+// WithDefaults resolves runtime collection settings without changing either input.
+// Property embedders still override the resolved collection embedder.
+func (o ModelCollectionOptions) WithDefaults(defaults ModelCollectionOptions) (ModelCollectionOptions, error) {
+	if o.EmbeddingBatchSize < 0 || defaults.EmbeddingBatchSize < 0 {
+		return ModelCollectionOptions{}, fmt.Errorf("%w: embedding batch size must be nonnegative", ErrInvalidEmbeddingOptions)
+	}
+	if isNilValue(o.Embedder) {
+		o.Embedder = defaults.Embedder
+	}
+	if o.EmbeddingBatchSize == 0 {
+		o.EmbeddingBatchSize = defaults.EmbeddingBatchSize
+	}
+	return o, nil
+}
+
 type RetrievalOptions struct{ IncludeVectors bool }
 type SortField struct {
 	Property   string
@@ -450,6 +472,12 @@ func normalizeData(value any, p DataProperty) (any, error) {
 // PrepareModelRecords copies and validates inputs and batches automatic embedding
 // generation per property. Providers call this before opening a write transaction.
 func PrepareModelRecords(ctx context.Context, d CollectionDefinition, opts ModelCollectionOptions, records []ModelRecord) ([]ModelRecord, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if _, err := opts.WithDefaults(ModelCollectionOptions{}); err != nil {
+		return nil, err
+	}
 	out := make([]ModelRecord, len(records))
 	for i, r := range records {
 		if err := ctx.Err(); err != nil {
@@ -501,6 +529,8 @@ func PrepareModelRecords(ctx context.Context, d CollectionDefinition, opts Model
 				}
 				positions = append(positions, i)
 				inputs = append(inputs, value)
+			} else if err := ValidateModelVector(out[i].Vectors[p.Name], p); err != nil {
+				return nil, fmt.Errorf("%w: record %d: %w", ErrInvalidRecord, i, err)
 			}
 		}
 		if len(inputs) > 0 {
@@ -511,26 +541,46 @@ func PrepareModelRecords(ctx context.Context, d CollectionDefinition, opts Model
 			if isNilValue(embedder) {
 				return nil, fmt.Errorf("%w: no embedder for %q", ErrUnsupported, p.Name)
 			}
-			vectors, err := embedder.Embed(ctx, inputs)
-			if err != nil {
-				return nil, err
+			batchSize := opts.EmbeddingBatchSize
+			if batchSize == 0 {
+				batchSize = len(inputs)
 			}
-			if len(vectors) != len(inputs) {
-				return nil, fmt.Errorf("%w: embedder returned %d vectors for %d inputs", ErrInvalidVector, len(vectors), len(inputs))
-			}
-			for j, i := range positions {
-				out[i].Vectors[p.Name] = append([]float32(nil), vectors[j]...)
-			}
-		}
-		for i := range out {
-			if err := ValidateModelVector(out[i].Vectors[p.Name], p); err != nil {
-				return nil, fmt.Errorf("%w: record %d: %w", ErrInvalidRecord, i, err)
+			for start := 0; start < len(inputs); {
+				if err := ctx.Err(); err != nil {
+					return nil, err
+				}
+				end := start + min(batchSize, len(inputs)-start)
+				vectors, err := embedder.Embed(ctx, inputs[start:end:end])
+				if err != nil {
+					return nil, err
+				}
+				if err := ctx.Err(); err != nil {
+					return nil, err
+				}
+				if len(vectors) != end-start {
+					return nil, fmt.Errorf("%w: embedder returned %d vectors for %d inputs", ErrInvalidVector, len(vectors), end-start)
+				}
+				for j, vector := range vectors {
+					i := positions[start+j]
+					if err := ValidateModelVector(vector, p); err != nil {
+						return nil, fmt.Errorf("%w: record %d: %w", ErrInvalidRecord, i, err)
+					}
+					// Embedders may reuse their output buffers on the next call.
+					out[i].Vectors[p.Name] = append([]float32(nil), vector...)
+				}
+				start = end
 			}
 		}
 	}
 	return out, nil
 }
 func EmbedQuery(ctx context.Context, text string, p VectorProperty, opts ModelCollectionOptions) ([]float32, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if _, err := opts.WithDefaults(ModelCollectionOptions{}); err != nil {
+		return nil, err
+	}
 	embedder := p.Embedder
 	if isNilValue(embedder) {
 		embedder = opts.Embedder
@@ -540,6 +590,9 @@ func EmbedQuery(ctx context.Context, text string, p VectorProperty, opts ModelCo
 	}
 	vectors, err := embedder.Embed(ctx, []string{text})
 	if err != nil {
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	if len(vectors) != 1 {

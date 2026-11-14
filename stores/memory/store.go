@@ -23,9 +23,27 @@ type state struct {
 type Store struct {
 	mu          sync.RWMutex
 	collections map[string]*state
+	options     vectordata.ModelCollectionOptions
 }
 
 func New() *Store { return &Store{collections: map[string]*state{}} }
+
+// StoreOptions configures runtime defaults for model collections.
+type StoreOptions struct {
+	Embedder vectordata.Embedder
+	// EmbeddingBatchSize bounds embedding requests; zero leaves them unbounded.
+	EmbeddingBatchSize int
+}
+
+// NewWithOptions creates a store with default embedding settings. New retains its
+// original behavior. Collection and property embedders can override this default.
+func NewWithOptions(opts StoreOptions) (*Store, error) {
+	defaults, err := (vectordata.ModelCollectionOptions{Embedder: opts.Embedder, EmbeddingBatchSize: opts.EmbeddingBatchSize}).WithDefaults(vectordata.ModelCollectionOptions{})
+	if err != nil {
+		return nil, err
+	}
+	return &Store{collections: map[string]*state{}, options: defaults}, nil
+}
 
 var _ vectordata.ModelStore = (*Store)(nil)
 
@@ -61,6 +79,10 @@ func (s *Store) DeleteCollection(ctx context.Context, name string) error {
 	return nil
 }
 func (s *Store) GetModelCollection(name string, d vectordata.CollectionDefinition, opts vectordata.ModelCollectionOptions) (vectordata.ModelCollection, error) {
+	opts, err := opts.WithDefaults(s.options)
+	if err != nil {
+		return nil, err
+	}
 	if name == "" || len(name) > 63 || strings.ContainsRune(name, 0) || name == "__vectorstore_models" {
 		return nil, fmt.Errorf("%w: invalid collection name", vectordata.ErrSchemaMismatch)
 	}

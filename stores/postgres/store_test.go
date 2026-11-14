@@ -28,6 +28,17 @@ func TestStoreOptionsWithDefaultsAndValidate(t *testing.T) {
 	if err := (StoreOptions{Schema: "tenant"}).validate(); err != nil {
 		t.Fatalf("validate tenant schema: %v", err)
 	}
+	if err := (StoreOptions{Schema: "tenant", EmbeddingBatchSize: -1}).validate(); !errors.Is(err, vectordata.ErrInvalidEmbeddingOptions) {
+		t.Fatalf("invalid embedding defaults: %v", err)
+	}
+}
+
+func TestModelHandleRejectsInvalidEmbeddingOptions(t *testing.T) {
+	store := &PostgresVectorStore{opts: DefaultStoreOptions()}
+	d := vectordata.CollectionDefinition{Key: vectordata.KeyProperty{Name: "ID", Type: vectordata.KeyString}}
+	if _, err := store.GetModelCollection("invalid", d, vectordata.ModelCollectionOptions{EmbeddingBatchSize: -1}); !errors.Is(err, vectordata.ErrInvalidEmbeddingOptions) {
+		t.Fatalf("invalid collection options: %v", err)
+	}
 }
 
 func TestNewVectorStoreRejectsNilPool(t *testing.T) {

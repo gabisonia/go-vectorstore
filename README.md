@@ -86,8 +86,9 @@ Run a complete example without an API key:
 go run ./samples/model-store
 ```
 
-The same sample accepts `-dsn` to use PostgreSQL. It demonstrates automatic
-embedding generation with a deterministic instructional embedder, typed reads,
+The same sample accepts `-dsn` to use PostgreSQL and `-embedding-batch-size` to
+bound embedding requests. It demonstrates store-wide embedding defaults
+with a deterministic instructional embedder, typed reads,
 array filtering, and generated keys. Use a real embedding model for semantic search.
 
 See [the model API guide](docs/model-api.md) for collection lifecycle, explicit

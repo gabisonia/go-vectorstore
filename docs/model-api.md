@@ -232,13 +232,40 @@ rejected. Transaction-local settings do not leak to other pooled requests.
 ## Automatic embeddings
 
 Implement `Embedder.Embed(ctx, inputs []string) ([][]float32,error)` and configure
-it in `ModelCollectionOptions`. A `VectorProperty.Embedder` can override the default.
+it on the store or in `ModelCollectionOptions`. Resolution is property embedder →
+collection embedder → store embedder; nil and typed-nil embedders inherit the next
+default. `SearchText` and `HybridSearchText` use the same resolved embedder as writes.
 Tagged models connect a vector to a string data field with `source=Description`.
 
-Writes generate missing vectors in one batch per vector property. Explicitly
-supplied vectors take precedence. Embedding counts/dimensions and the entire
-record batch are checked before writing, so embedding failures leave no partial
-records. `SearchText` embeds the query with the selected vector's embedder.
+Configure PostgreSQL defaults when constructing the store:
+
+```go
+opts := postgres.DefaultStoreOptions()
+opts.Embedder = embedder // Your vectordata.Embedder implementation.
+opts.EmbeddingBatchSize = 128
+store, err := postgres.NewVectorStore(pool, opts)
+```
+
+For memory, use `memory.NewWithOptions(memory.StoreOptions{Embedder: embedder,
+EmbeddingBatchSize: 128})`. Existing `memory.New()` callers retain their defaults.
+Both constructors reject negative batch sizes with `ErrInvalidEmbeddingOptions`.
+Override either setting per collection using `ModelCollectionOptions{Embedder:
+otherEmbedder, EmbeddingBatchSize: 32}`. Zero batch size inherits the store setting;
+if both are zero, writes use one request per vector property. A positive value is
+a maximum input count per request, not a token or byte limit. A collection can
+override the size upward or downward; zero does not disable a positive store limit.
+These runtime settings are captured by collection handles and are not persisted
+in model registrations or migration plans.
+
+Writes generate missing vectors in input order, separately for each property.
+Explicitly supplied vectors take precedence and do not consume embedding batches.
+Requests run sequentially, with cancellation checked before and after each call.
+Each batch's output count/dimensions/values are checked before another request.
+The complete record batch is prepared before any storage write, so a later
+embedding failure or cancellation leaves existing records untouched and inserts
+no new records. Earlier embedding requests may still have consumed provider quota;
+the library does not retry or undo those external calls. Text queries embed one
+input regardless of batch size.
 Callers must use compatible embedding models for ingestion and queries;
 embedders must honor cancellation and be safe for concurrent use.
 
