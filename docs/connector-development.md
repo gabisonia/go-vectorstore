@@ -179,3 +179,10 @@ actual indexes. `conformance.Run` exercises advertised features when this option
 interface is present, including native keys/data, generated keys, metrics, indexes
 and hybrid search. Providers without metadata continue to run the other contract
 checks.
+
+`vectordata.MigrationPlanner` is a separate optional capability for model schema
+planning. Advertise `MigrationPlanning` only when it is implemented. Planning must
+be read-only and return provider SQL/arguments for review; classify manual work,
+data removal, backfills and embedding changes explicitly. Keep registry
+finalization separate and do not infer support for execution from planning.
+See [migrations.md](migrations.md) for the PostgreSQL implementation and limits.

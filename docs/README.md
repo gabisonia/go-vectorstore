@@ -8,3 +8,5 @@ This directory contains internal design and implementation notes for `go-vectors
 - [`performance.md`](performance.md): reproducible benchmarks, measured allocation changes, and indexing/recall checks
 
 - [`model-api.md`](model-api.md): model definitions, typed/native keys, named vectors, retrieval, embeddings, and hybrid search
+
+- [`migrations.md`](migrations.md): read-only model migration planning, SQL/risk classifications, drift and registry finalization

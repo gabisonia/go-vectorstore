@@ -17,5 +17,6 @@ func (*PostgresVectorStore) Capabilities() vectordata.ProviderCapabilities {
 		IndexedDataTypes:   []vectordata.DataType{vectordata.TypeString, vectordata.TypeInt64, vectordata.TypeFloat64, vectordata.TypeBool, vectordata.TypeTime, vectordata.TypeStringArray},
 		FullTextIndexing:   true,
 		HybridSearch:       true,
+		MigrationPlanning:  true,
 	}
 }

@@ -94,6 +94,8 @@ See [the model API guide](docs/model-api.md) for collection lifecycle, explicit
 schemas, native UUID/int64 keys, multiple vectors, iterator APIs, embeddings and
 PostgreSQL hybrid search. Stores also expose optional `CapabilityProvider`
 metadata for supported keys, data types, metrics, indexes and hybrid search.
+PostgreSQL offers [plan-only model migrations](docs/migrations.md) with schema
+drift detection, reviewable SQL and backfill/re-embedding classifications.
 Original `Record`/`Collection` callers remain compatible.
 Bulk PostgreSQL writes automatically use binary vector parameters to reduce
 serialization allocations; see [the measured transport comparison](docs/performance.md#binary-vector-ingestion-and-copy-comparison).

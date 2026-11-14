@@ -233,42 +233,12 @@ func (c *ModelCollection) EnsureExists(ctx context.Context) (err error) {
 			return fmt.Errorf("%w: registered model definition differs", vectordata.ErrSchemaMismatch)
 		}
 	}
-	for _, p := range d.Data {
-		if p.IsIndexed {
-			name, _ := resolveIndexName("", fmt.Sprintf("idx_%s_%s_data", c.name, p.StorageName))
-			method := "btree"
-			if p.Type == vectordata.TypeStringArray {
-				method = "gin"
-			}
-			if err := c.ensureModelIndex(ctx, tx, name, method, p.StorageName, dataOpClass(p.Type), "", false); err != nil {
-				return err
-			}
-		}
-		if p.IsFullTextIndexed {
-			name, _ := resolveIndexName("", fmt.Sprintf("idx_%s_%s_fts", c.name, p.StorageName))
-			if err := c.ensureModelIndex(ctx, tx, name, "gin", p.StorageName, "tsvector_ops", "", true); err != nil {
-				return err
-			}
-		}
+	indexes, err := modelIndexSpecs(c.name, d)
+	if err != nil {
+		return err
 	}
-	for _, p := range d.Vectors {
-		if p.Index == nil {
-			continue
-		}
-		method := defaultIndexMethod(p.Index.Method)
-		op, err := metricOpClass(p.Metric)
-		if err != nil {
-			return err
-		}
-		with, err := buildVectorIndexWithClause(method, p.Index)
-		if err != nil {
-			return err
-		}
-		name, err := resolveIndexName(p.Index.Name, fmt.Sprintf("idx_%s_%s_%s", c.name, p.StorageName, method))
-		if err != nil {
-			return err
-		}
-		if err := c.ensureModelIndex(ctx, tx, name, string(method), p.StorageName, op, with, false); err != nil {
+	for _, index := range indexes {
+		if err := c.ensureModelIndex(ctx, tx, index.name, index.method, index.column, index.opClass, index.with, index.fullText); err != nil {
 			return err
 		}
 	}
@@ -377,6 +347,11 @@ func (c *ModelCollection) ensureModelIndex(ctx context.Context, tx pgx.Tx, name,
 	if _, err := tx.Exec(ctx, "CREATE INDEX IF NOT EXISTS "+quoteIdent(name)+" ON "+c.table()+" USING "+method+" ("+expression+")"+with); err != nil {
 		return err
 	}
+	return c.validateModelIndex(ctx, tx, name, method, column, opClass, with, fullText)
+}
+
+// validateModelIndex is read-only and shared by EnsureExists and migration inspection.
+func (c *ModelCollection) validateModelIndex(ctx context.Context, tx pgx.Tx, name, method, column, opClass, with string, fullText bool) error {
 	var actualMethod, actualColumn, actualClass, actualExpression, canonicalColumn string
 	var valid bool
 	var options []string

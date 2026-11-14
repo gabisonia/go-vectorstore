@@ -67,6 +67,16 @@ func runCapabilities(t *testing.T, factory Factory) {
 					t.Fatalf("advertised metric %s failed: %v, %v", vector.Metric, results, err)
 				}
 			}
+			if caps.MigrationPlanning {
+				planner, ok := store.(vectordata.MigrationPlanner)
+				if !ok {
+					t.Fatal("advertised migration planner is missing")
+				}
+				plan, err := planner.PlanMigration(ctx, c.Name(), d)
+				if err != nil || plan.HasManualWork() || len(plan.Steps) != 0 || plan.Finalization != nil {
+					t.Fatalf("planning the registered model should be a no-op: %+v, %v", plan, err)
+				}
+			}
 			if caps.HybridSearch {
 				hybrid, ok := c.(vectordata.HybridSearcher)
 				if !ok {
@@ -93,6 +103,12 @@ func runCapabilities(t *testing.T, factory Factory) {
 		keys, err := c.Insert(ctx, []vectordata.ModelRecord{{}, {}})
 		if err != nil || len(keys) != 2 || keys[0] == keys[1] {
 			t.Fatalf("advertised generated keys failed: %v, %v", keys, err)
+		}
+		if caps.MigrationPlanning {
+			plan, err := store.(vectordata.MigrationPlanner).PlanMigration(ctx, c.Name(), c.Definition())
+			if err != nil || plan.HasManualWork() || len(plan.Steps) != 0 || plan.Finalization != nil {
+				t.Fatalf("generated-key schema planning should be a no-op: %+v, %v", plan, err)
+			}
 		}
 	}
 	for _, method := range caps.VectorIndexMethods {
