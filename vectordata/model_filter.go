@@ -196,14 +196,16 @@ func modelField(r ModelRecord, ref FieldRef) (any, bool, bool) {
 		case map[string]any:
 			value, present = node[segment]
 		case []any:
-			i, err := strconv.Atoi(strings.TrimSpace(segment))
+			// PostgreSQL accepts leading ASCII whitespace in array indexes, but
+			// treats trailing whitespace as an invalid index. Object keys stay literal.
+			i, err := strconv.ParseInt(strings.TrimLeft(segment, " \t\n\r\v\f"), 10, 32)
 			if err != nil {
 				return nil, false, true
 			}
 			if i < 0 {
-				i += len(node)
+				i += int64(len(node))
 			}
-			if i < 0 || i >= len(node) {
+			if i < 0 || i >= int64(len(node)) {
 				return nil, false, true
 			}
 			value = node[i]
@@ -256,14 +258,21 @@ func modelNumber(value any) (*big.Rat, bool) {
 	return r, ok
 }
 func modelEqual(a, b any) bool {
+	if _, ok := a.(JSONNull); ok {
+		a = nil
+	}
+	if _, ok := b.(JSONNull); ok {
+		b = nil
+	}
 	// Strings stay strings for equality; numeric coercion only applies to numbers.
 	_, aString := a.(string)
 	_, bString := b.(string)
-	if !aString && !bString {
-		if x, ok := modelNumber(a); ok {
-			if y, ok := modelNumber(b); ok {
-				return x.Cmp(y) == 0
-			}
+	if aString || bString {
+		return aString && bString && a == b
+	}
+	if x, ok := modelNumber(a); ok {
+		if y, ok := modelNumber(b); ok {
+			return x.Cmp(y) == 0
 		}
 	}
 	if a == nil || b == nil {
@@ -366,8 +375,15 @@ func modelTruth(filter Filter, r ModelRecord, d CollectionDefinition) (truth, er
 		return modelField(r, normalized)
 	}
 	normalize := func(ref FieldRef, value any) any {
-		if ref.Kind != FieldColumn || value == nil {
+		if ref.Kind == FieldDataPath {
+			normalized, _ := normalizeData(value, DataProperty{Type: TypeJSON, Optional: true})
+			return normalized
+		}
+		if ref.Kind != FieldColumn {
 			return value
+		}
+		if isNilValue(value) {
+			return nil
 		}
 		name := strings.TrimSpace(ref.Name)
 		if name == d.Key.Name {
@@ -397,7 +413,7 @@ func modelTruth(filter Filter, r ModelRecord, d CollectionDefinition) (truth, er
 		value = normalize(ref, value)
 		actual, present, jsonPath := resolve(ref)
 		if !present || actual == nil {
-			if jsonPath {
+			if _, numeric, _ := numericLiteral(value); jsonPath && numeric {
 				return falseValue
 			}
 			return unknownValue
@@ -476,16 +492,23 @@ func modelTruth(filter Filter, r ModelRecord, d CollectionDefinition) (truth, er
 		value, present, jsonPath := resolve(f.Field)
 		return boolTruth(present && (jsonPath || value != nil)), nil
 	case ContainsFilter:
-		value, present, _ := resolve(f.Field)
+		value, present, jsonPath := resolve(f.Field)
 		if !present || value == nil {
+			if !jsonPath {
+				return unknownValue, nil
+			}
 			return falseValue, nil
 		}
 		array := reflect.ValueOf(value)
 		if array.Kind() != reflect.Slice && array.Kind() != reflect.Array {
 			return falseValue, nil
 		}
+		needle := f.Value
+		if jsonPath {
+			needle = normalize(f.Field, needle)
+		}
 		for i := 0; i < array.Len(); i++ {
-			if modelEqual(array.Index(i).Interface(), f.Value) {
+			if modelEqual(array.Index(i).Interface(), needle) {
 				return trueValue, nil
 			}
 		}

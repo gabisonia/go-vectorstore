@@ -5,13 +5,14 @@ package postgres
 import (
 	"context"
 	"errors"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/gabisonia/go-vectorstore/stores/memory"
 	"github.com/gabisonia/go-vectorstore/vectordata"
 	"github.com/gabisonia/go-vectorstore/vectordata/conformance"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type modelHotel struct {
@@ -213,4 +214,11 @@ func TestIntegrationLegacyRetrievalExtensions(t *testing.T) {
 	if err := collection.EnsureDeleted(ctx); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func TestIntegrationModelFilterParity(t *testing.T) {
+	conformance.RunFilterParity(t,
+		func(t *testing.T) vectordata.ModelStore { return memory.New() },
+		func(t *testing.T) vectordata.ModelStore { return newTestStore(t, integrationPool(t)) },
+	)
 }
