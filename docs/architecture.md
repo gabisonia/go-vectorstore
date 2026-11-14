@@ -72,6 +72,8 @@ Collection defaults:
 Other operational defaults:
 
 - Writes are encoded and executed one batch at a time (`maxRowsPerStatement=500`) in a single transaction
+- Requests with at least 1,024 vector values use binary parameters; smaller writes use text
+- A binary write holds its pool lease through transaction cleanup and restores the caller's type map before release (`vector_write.go`)
 - Search default projection includes `Metadata` and `Content`, but not `Vector`
 
 ## 5) Request Flow

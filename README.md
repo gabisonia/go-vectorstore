@@ -95,6 +95,9 @@ schemas, native UUID/int64 keys, multiple vectors, iterator APIs, embeddings and
 PostgreSQL hybrid search. Stores also expose optional `CapabilityProvider`
 metadata for supported keys, data types, metrics, indexes and hybrid search.
 Original `Record`/`Collection` callers remain compatible.
+Bulk PostgreSQL writes automatically use binary vector parameters to reduce
+serialization allocations; see [the measured transport comparison](docs/performance.md#binary-vector-ingestion-and-copy-comparison).
+
 
 ## Record API Walkthrough
 

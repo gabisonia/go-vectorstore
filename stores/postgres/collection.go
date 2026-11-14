@@ -335,14 +335,18 @@ func (c *PostgresCollection) scanSearchResult(rows pgx.Rows, projection vectorda
 }
 
 func (c *PostgresCollection) writeRecords(ctx context.Context, records []vectordata.Record, mode writeMode) error {
+	return c.writeRecordsEncoded(ctx, records, mode, useBinaryVectors(len(records), c.dimension))
+}
+func (c *PostgresCollection) writeRecordsEncoded(ctx context.Context, records []vectordata.Record, mode writeMode, useBinary bool) error {
 	if len(records) == 0 {
 		return nil
 	}
 
-	tx, err := c.store.pool.Begin(ctx)
+	tx, release, err := beginVectorWrite(ctx, c.store.pool, useBinary)
 	if err != nil {
 		return err
 	}
+	defer release()
 	defer rollbackTx(ctx, tx)
 	// Encode and execute one batch at a time so temporary memory does not
 	// grow with the entire input. A later error still rolls back every batch.
@@ -355,7 +359,7 @@ func (c *PostgresCollection) writeRecords(ctx context.Context, records []vectord
 			end = len(records)
 		}
 
-		query, args, err := c.buildWriteBatch(records[start:end], mode)
+		query, args, err := c.buildWriteBatchEncoded(records[start:end], mode, useBinary)
 		if err != nil {
 			return err
 		}
@@ -367,6 +371,9 @@ func (c *PostgresCollection) writeRecords(ctx context.Context, records []vectord
 }
 
 func (c *PostgresCollection) buildWriteBatch(records []vectordata.Record, mode writeMode) (string, []any, error) {
+	return c.buildWriteBatchEncoded(records, mode, true)
+}
+func (c *PostgresCollection) buildWriteBatchEncoded(records []vectordata.Record, mode writeMode, useBinary bool) (string, []any, error) {
 	args := make([]any, 0, len(records)*4)
 	values := make([]string, 0, len(records))
 
@@ -385,7 +392,7 @@ func (c *PostgresCollection) buildWriteBatch(records []vectordata.Record, mode w
 
 		base := i*4 + 1
 		values = append(values, fmt.Sprintf("($%d, $%d::vector, $%d::jsonb, $%d)", base, base+1, base+2, base+3))
-		args = append(args, record.ID, vectorLiteral(record.Vector), metadataPayload, record.Content)
+		args = append(args, record.ID, vectorWriteArg(record.Vector, useBinary), metadataPayload, record.Content)
 	}
 
 	var b strings.Builder

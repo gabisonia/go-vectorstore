@@ -157,6 +157,13 @@ do not validate a collection's schema.
 | `Delete` | Ignores missing keys and returns the number deleted |
 | `Count` | Applies the same filter language as retrieval/search |
 
+PostgreSQL selects binary vector parameters for requests containing at least
+1,024 vector values, and retains text for smaller writes. Both paths keep atomic
+writes, generated IDs and returned-key ordering. Driver type mappings are scoped
+to the write and restored before pool release. See the
+[transport benchmarks](performance.md#binary-vector-ingestion-and-copy-comparison)
+for measurements and the COPY comparison.
+
 Reads exclude vectors by default. Use `RetrievalOptions{IncludeVectors:true}`,
 `QueryOptions.IncludeVectors`, or `ModelSearchOptions.IncludeVectors` to load
 all named vectors. Filtered retrieval sorts by the requested scalar properties
