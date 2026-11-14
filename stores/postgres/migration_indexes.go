@@ -46,7 +46,7 @@ func modelIndexSpecs(collection string, d vectordata.CollectionDefinition) ([]mo
 			continue
 		}
 		method := defaultIndexMethod(p.Index.Method)
-		op, err := metricOpClass(p.Metric)
+		op, err := vectorOpClass(p)
 		if err != nil {
 			return nil, err
 		}

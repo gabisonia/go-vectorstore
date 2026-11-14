@@ -27,7 +27,7 @@ func (s *PostgresVectorStore) registryExists(ctx context.Context) (bool, error) 
 	return exists, err
 }
 func (s *PostgresVectorStore) ListCollectionNames(ctx context.Context) ([]string, error) {
-	query := `SELECT DISTINCT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname=$1 AND c.relkind IN ('r','p') AND EXISTS (SELECT 1 FROM pg_attribute a JOIN pg_type t ON t.oid=a.atttypid WHERE a.attrelid=c.oid AND NOT a.attisdropped AND t.typname='vector')`
+	query := `SELECT DISTINCT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname=$1 AND c.relkind IN ('r','p') AND EXISTS (SELECT 1 FROM pg_attribute a JOIN pg_type t ON t.oid=a.atttypid WHERE a.attrelid=c.oid AND NOT a.attisdropped AND t.typname IN ('vector','halfvec'))`
 	exists, err := s.registryExists(ctx)
 	if err != nil {
 		return nil, err
@@ -61,7 +61,7 @@ func (s *PostgresVectorStore) CollectionExists(ctx context.Context, name string)
 	var vector, registry bool
 	err := s.pool.QueryRow(ctx, `SELECT c.relkind::text,
  EXISTS (SELECT 1 FROM pg_attribute a JOIN pg_type t ON t.oid=a.atttypid
-         WHERE a.attrelid=c.oid AND NOT a.attisdropped AND t.typname='vector'),
+         WHERE a.attrelid=c.oid AND NOT a.attisdropped AND t.typname IN ('vector','halfvec')),
  to_regclass($2) IS NOT NULL
  FROM pg_class c WHERE c.oid=to_regclass($1)`, qualifiedTable(s.opts.Schema, name), qualifiedTable(s.opts.Schema, modelRegistry)).Scan(&kind, &vector, &registry)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -123,6 +123,9 @@ func (s *PostgresVectorStore) GetModelCollection(name string, definition vectord
 	}
 	d, err := definition.Normalize()
 	if err != nil {
+		return nil, err
+	}
+	if err := validateVectorDimensions(d); err != nil {
 		return nil, err
 	}
 	for _, p := range d.Vectors {
@@ -194,6 +197,9 @@ func (c *ModelCollection) EnsureExists(ctx context.Context) (err error) {
 		return err
 	}
 	defer rollbackTx(ctx, tx)
+	if err := c.validateVectorTypes(ctx, tx); err != nil {
+		return err
+	}
 	if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended($1,0))", c.table()); err != nil {
 		return err
 	}
@@ -211,7 +217,7 @@ func (c *ModelCollection) EnsureExists(ctx context.Context) (err error) {
 		columns = append(columns, sql)
 	}
 	for _, p := range d.Vectors {
-		columns = append(columns, fmt.Sprintf("%s vector(%d) NOT NULL", quoteIdent(p.StorageName), p.Dimensions))
+		columns = append(columns, quoteIdent(p.StorageName)+" "+vectorColumnType(p)+" NOT NULL")
 	}
 	if _, err := tx.Exec(ctx, "CREATE TABLE IF NOT EXISTS "+c.table()+" ("+strings.Join(columns, ", ")+")"); err != nil {
 		return err
@@ -306,7 +312,7 @@ func (c *ModelCollection) validateSchema(ctx context.Context, tx pgx.Tx) error {
 		want[p.StorageName] = col{dataSQLType(p.Type), !p.Optional, ""}
 	}
 	for _, p := range c.definition.Vectors {
-		want[p.StorageName] = col{fmt.Sprintf("vector(%d)", p.Dimensions), true, ""}
+		want[p.StorageName] = col{vectorColumnType(p), true, ""}
 	}
 	if len(want) != len(actual) {
 		return fmt.Errorf("%w: collection columns differ from definition", vectordata.ErrSchemaMismatch)

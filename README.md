@@ -93,7 +93,8 @@ array filtering, and generated keys. Use a real embedding model for semantic sea
 
 See [the model API guide](docs/model-api.md) for collection lifecycle, explicit
 schemas, native UUID/int64 keys, multiple vectors, iterator APIs, embeddings and
-PostgreSQL hybrid search. Stores also expose optional `CapabilityProvider`
+PostgreSQL hybrid search. Models can opt into float16 (`halfvec`) storage with
+`precision=float16` while keeping `[]float32` inputs and outputs. Stores also expose optional `CapabilityProvider`
 metadata for supported keys, data types, metrics, indexes and hybrid search.
 PostgreSQL offers [model migration planning and explicit additive application](docs/migrations.md)
 with schema drift detection, reviewable SQL and backfill/re-embedding classifications.

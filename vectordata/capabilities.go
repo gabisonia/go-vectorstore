@@ -17,6 +17,7 @@ type ProviderCapabilities struct {
 	GeneratedKeyTypes []KeyType
 	DataTypes         []DataType
 	DistanceMetrics   []DistanceMetric
+	VectorPrecisions  []VectorPrecision
 	// Index fields report physical indexes, rather than accepted schema hints.
 	VectorIndexMethods []IndexMethod
 	IndexedDataTypes   []DataType

@@ -28,6 +28,9 @@ func TestBuiltInCapabilitiesAreLocalSnapshots(t *testing.T) {
 			if !slices.Equal(before.GeneratedKeyTypes, []vectordata.KeyType{vectordata.KeyInt64}) {
 				t.Fatalf("generated keys: %v", before.GeneratedKeyTypes)
 			}
+			if !slices.Equal(before.VectorPrecisions, []vectordata.VectorPrecision{vectordata.VectorFloat32, vectordata.VectorFloat16}) {
+				t.Fatalf("vector precisions: %v", before.VectorPrecisions)
+			}
 			if tt.indexed {
 				if !slices.Equal(before.VectorIndexMethods, []vectordata.IndexMethod{vectordata.IndexMethodHNSW, vectordata.IndexMethodIVFFlat}) {
 					t.Fatalf("indexes: %v", before.VectorIndexMethods)
@@ -50,6 +53,9 @@ func TestBuiltInCapabilitiesAreLocalSnapshots(t *testing.T) {
 			}
 			for i := range mutated.DistanceMetrics {
 				mutated.DistanceMetrics[i] = "changed"
+			}
+			for i := range mutated.VectorPrecisions {
+				mutated.VectorPrecisions[i] = "changed"
 			}
 			for i := range mutated.VectorIndexMethods {
 				mutated.VectorIndexMethods[i] = "changed"

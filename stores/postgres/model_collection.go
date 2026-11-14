@@ -133,7 +133,13 @@ func (c *ModelCollection) writeStatement(r vectordata.ModelRecord, upsert, useBi
 		column := quoteIdent(p.StorageName)
 		columns = append(columns, column)
 		updates = append(updates, column+"=EXCLUDED."+column)
-		values = append(values, bind(vectorWriteArg(r.Vectors[p.Name], useBinary), "::vector"))
+		cast := "::vector"
+		if p.Precision == vectordata.VectorFloat16 {
+			// Reuse the scoped float32 wire codec, then cast to half storage. Values
+			// were rounded and validated before the write transaction began.
+			cast += "::halfvec"
+		}
+		values = append(values, bind(vectorWriteArg(r.Vectors[p.Name], useBinary), cast))
 	}
 	query := "INSERT INTO " + c.table() + " (" + strings.Join(columns, ",") + ") VALUES (" + strings.Join(values, ",") + ")"
 	if upsert && r.Key != nil {

@@ -51,14 +51,15 @@ func (s *PostgresVectorStore) PlanMigration(ctx context.Context, name string, de
 func (c *ModelCollection) planMigrationTx(ctx context.Context, tx pgx.Tx, indexes []modelIndexSpec) (plan vectordata.MigrationPlan, err error) {
 	s, name := c.store, c.name
 	plan = vectordata.MigrationPlan{Backend: "postgres", Namespace: s.opts.Schema, Collection: name, Desired: definitionForPlan(c.definition)}
-	var schema, registry, vector bool
+	var schema, registry, vector, halfvec bool
 	var kind, database, databaseID, namespaceID, storageID, registryID string
 	err = tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM pg_namespace WHERE nspname=$1),
  to_regclass($2) IS NOT NULL, to_regtype('vector') IS NOT NULL,
  coalesce((SELECT relkind::text FROM pg_class WHERE oid=to_regclass($3)),''),
  current_database(),(SELECT oid::text FROM pg_database WHERE datname=current_database()),
  coalesce((SELECT oid::text FROM pg_namespace WHERE nspname=$1),''),
- coalesce(to_regclass($3)::oid::text,''),coalesce(to_regclass($2)::oid::text,'')`, s.opts.Schema, qualifiedTable(s.opts.Schema, modelRegistry), c.table()).Scan(&schema, &registry, &vector, &kind, &database, &databaseID, &namespaceID, &storageID, &registryID)
+ coalesce(to_regclass($3)::oid::text,''),coalesce(to_regclass($2)::oid::text,''),
+ to_regtype('halfvec') IS NOT NULL`, s.opts.Schema, qualifiedTable(s.opts.Schema, modelRegistry), c.table()).Scan(&schema, &registry, &vector, &kind, &database, &databaseID, &namespaceID, &storageID, &registryID, &halfvec)
 	if err != nil {
 		return plan, err
 	}
@@ -158,6 +159,9 @@ func (c *ModelCollection) planMigrationTx(ctx context.Context, tx pgx.Tx, indexe
 	if len(c.definition.Vectors) > 0 && !vector {
 		plan.Steps = append([]vectordata.MigrationStep{{Kind: vectordata.MigrationPrerequisite, Manual: true, Description: "install pgvector and make the vector type visible in the migration search_path"}}, plan.Steps...)
 	}
+	if usesHalfVectors(c.definition) && !halfvec {
+		plan.Steps = append([]vectordata.MigrationStep{{Kind: vectordata.MigrationPrerequisite, Manual: true, Description: "float16 storage requires pgvector 0.7+ and a visible halfvec type"}}, plan.Steps...)
+	}
 	if len(plan.Issues) > 0 {
 		// Desired deltas remain visible as descriptions, without SQL against drifted storage.
 		for i := range plan.Steps {
@@ -204,7 +208,7 @@ func definitionColumns(d vectordata.CollectionDefinition) map[string]migrationCo
 		columns[p.StorageName] = migrationColumn{typ: dataSQLType(p.Type), required: !p.Optional}
 	}
 	for _, p := range d.Vectors {
-		columns[p.StorageName] = migrationColumn{typ: fmt.Sprintf("vector(%d)", p.Dimensions), required: true}
+		columns[p.StorageName] = migrationColumn{typ: vectorColumnType(p), required: true}
 	}
 	return columns
 }

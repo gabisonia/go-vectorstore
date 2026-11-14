@@ -116,6 +116,7 @@ a freshly reviewed no-op plan can be applied successfully.
 | Add/remove/change managed indexes | Ordered DROP/CREATE; matching existing requested indexes can be adopted |
 | Change a native type or property role | Manual conversion with backfill/data-loss flags; no guessed USING cast |
 | Change vector dimensions | Manual vector replacement with backfill/re-embedding/data-loss flags |
+| Change vector precision | Manual, potentially lossy storage conversion with backfill/re-embedding flags; rejected by additive application |
 | Change embedding source | Manual embedding regeneration or compatibility verification |
 | Change distance metric | Manual validation of existing vectors/search semantics, plus index changes |
 | Change identity generation | Manual sequence ownership/privilege/alignment review |

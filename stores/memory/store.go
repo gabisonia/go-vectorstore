@@ -369,7 +369,11 @@ func (c *Collection) Search(ctx context.Context, vector []float32, top int, opts
 	if err != nil {
 		return nil, err
 	}
-	if err := vectordata.ValidateModelSearch(vector, top, opts, p); err != nil {
+	if err := vectordata.ValidateModelSearchOptions(top, opts); err != nil {
+		return nil, err
+	}
+	vector, err = vectordata.NormalizeModelVector(vector, p)
+	if err != nil {
 		return nil, err
 	}
 	if opts.ProviderOptions != nil {

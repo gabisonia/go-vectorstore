@@ -13,6 +13,7 @@ func (*PostgresVectorStore) Capabilities() vectordata.ProviderCapabilities {
 		GeneratedKeyTypes:    []vectordata.KeyType{vectordata.KeyInt64},
 		DataTypes:            []vectordata.DataType{vectordata.TypeString, vectordata.TypeInt64, vectordata.TypeFloat64, vectordata.TypeBool, vectordata.TypeTime, vectordata.TypeStringArray, vectordata.TypeJSON},
 		DistanceMetrics:      []vectordata.DistanceMetric{vectordata.DistanceCosine, vectordata.DistanceL2, vectordata.DistanceInnerProduct},
+		VectorPrecisions:     []vectordata.VectorPrecision{vectordata.VectorFloat32, vectordata.VectorFloat16},
 		VectorIndexMethods:   []vectordata.IndexMethod{vectordata.IndexMethodHNSW, vectordata.IndexMethodIVFFlat},
 		IndexedDataTypes:     []vectordata.DataType{vectordata.TypeString, vectordata.TypeInt64, vectordata.TypeFloat64, vectordata.TypeBool, vectordata.TypeTime, vectordata.TypeStringArray},
 		FullTextIndexing:     true,
