@@ -208,57 +208,103 @@ func (c *ModelCollection) runSearch(ctx context.Context, sql string, args []any,
 		report(err)
 	}
 }
-func (c *ModelCollection) HybridSearchText(ctx context.Context, text, keywords string, top int, opts vectordata.HybridSearchOptions) ([]vectordata.ModelSearchResult, error) {
+
+type hybridSearchConfig struct {
+	vector               vectordata.VectorProperty
+	textProperty         string
+	candidates, constant int
+}
+
+// validateHybridOptions must run before calling an embedder or accessing storage.
+func (c *ModelCollection) validateHybridOptions(keywords string, top int, opts vectordata.HybridSearchOptions) (hybridSearchConfig, error) {
+	var config hybridSearchConfig
 	p, err := c.definition.Vector(opts.VectorProperty)
+	if err != nil {
+		return config, err
+	}
+	config.vector = p
+	if err := vectordata.ValidateModelSearchOptions(top, opts.ModelSearchOptions); err != nil {
+		return config, err
+	}
+	for _, d := range c.definition.Data {
+		if d.IsFullTextIndexed && (opts.TextProperty == d.Name || opts.TextProperty == "") {
+			if config.textProperty != "" && opts.TextProperty == "" {
+				return config, fmt.Errorf("%w: specify a full-text property", vectordata.ErrInvalidSearchOptions)
+			}
+			config.textProperty = d.StorageName
+		}
+	}
+	if config.textProperty == "" || strings.TrimSpace(keywords) == "" {
+		return config, fmt.Errorf("%w: indexed text property and keywords required", vectordata.ErrInvalidSearchOptions)
+	}
+	config.candidates = opts.CandidateLimit
+	if config.candidates == 0 {
+		config.candidates = max(100, top+opts.Skip)
+	}
+	if config.candidates < top+opts.Skip {
+		return config, fmt.Errorf("%w: candidate limit must cover top and skip", vectordata.ErrInvalidSearchOptions)
+	}
+	config.constant = opts.RRFConstant
+	if config.constant == 0 {
+		config.constant = 60
+	}
+	if config.constant < 1 {
+		return config, fmt.Errorf("%w: RRF constant must be positive", vectordata.ErrInvalidSearchOptions)
+	}
+	if err := vectordata.ValidateModelFilter(opts.Filter, c.definition); err != nil {
+		return config, err
+	}
+	if _, _, _, err := modelTuning(opts.ProviderOptions); err != nil {
+		return config, err
+	}
+	return config, nil
+}
+func (c *ModelCollection) HybridSearchText(ctx context.Context, text, keywords string, top int, opts vectordata.HybridSearchOptions) ([]vectordata.ModelSearchResult, error) {
+	config, err := c.validateHybridOptions(keywords, top, opts)
 	if err != nil {
 		return nil, err
 	}
-	vector, err := vectordata.EmbedQuery(ctx, text, p, c.options)
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	vector, err := vectordata.EmbedQuery(ctx, text, config.vector, c.options)
 	if err != nil {
 		return nil, c.operation("embed_query", err)
 	}
 	return c.HybridSearch(ctx, vector, keywords, top, opts)
 }
 func (c *ModelCollection) HybridSearch(ctx context.Context, vector []float32, keywords string, top int, opts vectordata.HybridSearchOptions) ([]vectordata.ModelSearchResult, error) {
-	p, err := c.definition.Vector(opts.VectorProperty)
+	sql, args, p, err := c.hybridPlan(vector, keywords, top, opts)
 	if err != nil {
 		return nil, err
 	}
-	if err := vectordata.ValidateModelSearch(vector, top, opts.ModelSearchOptions, p); err != nil {
-		return nil, err
-	}
-	textProperty := ""
-	for _, d := range c.definition.Data {
-		if d.IsFullTextIndexed && (opts.TextProperty == d.Name || opts.TextProperty == "") {
-			if textProperty != "" && opts.TextProperty == "" {
-				return nil, fmt.Errorf("%w: specify a full-text property", vectordata.ErrInvalidSearchOptions)
-			}
-			textProperty = d.StorageName
+	out := []vectordata.ModelSearchResult{}
+	var failure error
+	c.runSearch(ctx, sql, args, p, opts.ModelSearchOptions, true, func(r vectordata.ModelSearchResult, err error) bool {
+		if err != nil {
+			failure = err
+			return false
 		}
+		out = append(out, r)
+		return true
+	})
+	if failure != nil {
+		return nil, failure
 	}
-	if textProperty == "" || strings.TrimSpace(keywords) == "" {
-		return nil, fmt.Errorf("%w: indexed text property and keywords required", vectordata.ErrInvalidSearchOptions)
+	return out, nil
+}
+func (c *ModelCollection) hybridPlan(vector []float32, keywords string, top int, opts vectordata.HybridSearchOptions) (string, []any, vectordata.VectorProperty, error) {
+	config, err := c.validateHybridOptions(keywords, top, opts)
+	p := config.vector
+	if err != nil {
+		return "", nil, p, err
 	}
-	candidates := opts.CandidateLimit
-	if candidates == 0 {
-		candidates = max(100, top+opts.Skip)
-	}
-	if candidates < top+opts.Skip {
-		return nil, fmt.Errorf("%w: candidate limit must cover top and skip", vectordata.ErrInvalidSearchOptions)
-	}
-	constant := opts.RRFConstant
-	if constant == 0 {
-		constant = 60
-	}
-	if constant < 1 {
-		return nil, fmt.Errorf("%w: RRF constant must be positive", vectordata.ErrInvalidSearchOptions)
-	}
-	if err := vectordata.ValidateModelFilter(opts.Filter, c.definition); err != nil {
-		return nil, err
+	if err := vectordata.ValidateModelVector(vector, p); err != nil {
+		return "", nil, p, err
 	}
 	where, filterArgs, next, err := filtersql.CompileFilterSQL(opts.Filter, c.filterConfig(), 3)
 	if err != nil {
-		return nil, err
+		return "", nil, p, err
 	}
 	args := append([]any{vectorLiteral(vector), keywords}, filterArgs...)
 	bind := func(value any) string { ph := fmt.Sprintf("$%d", next); next++; args = append(args, value); return ph }
@@ -269,10 +315,10 @@ func (c *ModelCollection) HybridSearch(ctx context.Context, vector []float32, ke
 	if where != "" {
 		predicate = where
 	}
-	text := ftsExpr("t." + quoteIdent(textProperty))
+	text := ftsExpr("t." + quoteIdent(config.textProperty))
 	query := "plainto_tsquery('simple'::regconfig,$2)"
-	limit := bind(candidates)
-	rrf := bind(constant)
+	limit := bind(config.candidates)
+	rrf := bind(config.constant)
 	sql := `WITH __vs_vector AS MATERIALIZED (SELECT ` + key + ` AS __vs_key, ` + distance + ` AS __vs_distance FROM ` + c.table() + ` t WHERE ` + predicate + ` ORDER BY __vs_distance ASC LIMIT ` + limit + `),
  __vs_text AS MATERIALIZED (SELECT ` + key + ` AS __vs_key, ts_rank_cd(` + text + `,` + query + `) AS __vs_rank FROM ` + c.table() + ` t WHERE (` + predicate + `) AND ` + text + ` @@ ` + query + ` ORDER BY __vs_rank DESC, ` + key + ` LIMIT ` + limit + `),
  __vs_ranks AS (SELECT __vs_key, row_number() OVER (ORDER BY __vs_distance, __vs_key) AS __vs_rank FROM __vs_vector UNION ALL SELECT __vs_key, row_number() OVER (ORDER BY __vs_rank DESC, __vs_key) FROM __vs_text),
@@ -289,18 +335,5 @@ func (c *ModelCollection) HybridSearch(ctx context.Context, vector []float32, ke
 		sql += " WHERE " + strings.Join(thresholds, " AND ")
 	}
 	sql += " ORDER BY f.__vs_score DESC, " + key + " LIMIT " + bind(top) + " OFFSET " + bind(opts.Skip)
-	out := []vectordata.ModelSearchResult{}
-	var failure error
-	c.runSearch(ctx, sql, args, p, opts.ModelSearchOptions, true, func(r vectordata.ModelSearchResult, err error) bool {
-		if err != nil {
-			failure = err
-			return false
-		}
-		out = append(out, r)
-		return true
-	})
-	if failure != nil {
-		return nil, failure
-	}
-	return out, nil
+	return sql, args, p, nil
 }

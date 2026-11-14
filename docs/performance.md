@@ -55,6 +55,60 @@ buffers. Further work should compare binary vector encoding and COPY against
 this baseline, including connection setup, duplicate handling, and transaction
 rollback behavior.
 
+## Model API benchmarks
+
+Model mapping and record preparation run without a database:
+
+```sh
+go test -run '^$' -bench 'BenchmarkStructCodec|BenchmarkPrepareModelRecords' \
+  -benchmem -benchtime=200ms -count=3 ./vectordata
+```
+
+Native model writes and searches use the same Testcontainers/`PGVECTOR_TEST_DSN`
+setup as the ingestion benchmark:
+
+```sh
+go test -tags=integration -run '^$' -bench 'BenchmarkModelWrite|BenchmarkModelSearch' \
+  -benchmem -benchtime=200ms -count=3 -timeout=5m ./stores/postgres
+```
+
+`BenchmarkModelWrite` covers 100/1,000 rows at 128/1,536 dimensions without indexes.
+Insert starts with an empty table; `upsert_existing` updates preloaded records.
+Truncation and preloading run outside the timed region; both modes verify the
+final row count. Timings include validation, SQL construction, driver encoding,
+network traffic and transaction commit. Schema creation is excluded.
+
+`BenchmarkModelSearch` uses 5,000 indexed, 128-dimensional records and requests
+20 results. It compares vector search, a category filter, and full-text/vector
+fusion, with and without returning vectors. Search benchmarks include result
+mapping but exclude schema creation, ingestion, statistics collection and external
+embedding calls. Approximate filtering can return fewer than 20 results.
+
+The following baseline was measured on Apple M3 Pro, darwin/arm64, Go 1.27.4,
+PostgreSQL 18.7 / pgvector 0.8.7 in Docker. Values are medians of three 200 ms
+samples. These are local fixtures, not production latency or recall guarantees;
+short samples and the Docker transport introduce timing variation.
+
+| Operation | Time/op | Bytes/op |
+| --- | ---: | ---: |
+| Encode a typed model, 128 dimensions | 299 ns | 1,360 |
+| Decode a typed model, 128 dimensions | 193 ns | 216 |
+| Prepare 100 model records, 128 dimensions | 157 µs | 248,055 |
+| Prepare 100 model records, 1,536 dimensions | 320 µs | 813,095 |
+| Insert 1,000 records, 128 dimensions | 31.8 ms | 15,326,721 |
+| Update 1,000 existing records, 128 dimensions | 32.4 ms | 16,030,165 |
+| Insert 1,000 records, 1,536 dimensions | 200 ms | 128,202,760 |
+| Vector search, vectors excluded | 0.505 ms | 36,719 |
+| Vector search, vectors included | 1.621 ms | 129,374 |
+| Filtered vector search, vectors excluded | 0.522 ms | 37,072 |
+| Hybrid search, vectors excluded | 1.229 ms | 39,508 |
+
+Codec timings measure mapping alone; they do not include storage validation or
+JSON serialization during writes. The projection comparison supports keeping
+vectors excluded by default. Large-vector writes still allocate substantially
+more than their raw payload: binary vector encoding/COPY remain candidates for a
+separate measured optimization, as in the original ingestion profile above.
+
 ## Index and recall verification
 
 ```sh
@@ -76,3 +130,22 @@ restore all request-scoped search settings after successful and failed queries.
 Iterative scans and their work limits require pgvector 0.8+. Numeric filter input
 validation uses PostgreSQL 16's `pg_input_is_valid`, consistent with the project's
 PostgreSQL 16+ requirement.
+
+Model query-plan tests analyze a deterministic 5,000-record fixture, then explain
+the actual retrieval, vector and hybrid SQL. With the default planner settings,
+the fixture uses HNSW for vector candidates, B-tree for selective category filters,
+GIN for array membership, and full-text GIN for keyword candidates. These tests
+check index names rather than brittle cost estimates or complete plan trees;
+production index selection still depends on statistics and selectivity.
+
+Filter parity tests compare Query/Count results between memory and PostgreSQL
+using three fixed seeds, 120 generated nested trees per seed, and a set of base
+operator cases over 48 records. A subset also compares Search results without an
+approximate index. Separate expected-result cases cover JSON number/string/null
+distinctions, typed nil values, literal object keys, array indexing and SQL null
+behavior under negation. Run these checks explicitly with:
+
+```sh
+go test -tags=integration -run 'TestIntegrationModelQueryIndexes|TestIntegrationModelFilterParity|TestIntegrationModelContract/filter_edges' \
+  -timeout=3m ./stores/postgres
+```
