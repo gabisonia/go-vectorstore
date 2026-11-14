@@ -1,11 +1,36 @@
 package postgres
 
 import (
+	"encoding/json"
 	"reflect"
 	"testing"
 
 	"github.com/gabisonia/go-vectorstore/vectordata"
 )
+
+func TestMetadataNumbersRoundTripWithoutPrecisionLoss(t *testing.T) {
+	input := []byte(`{"integer":9007199254740993,"decimal":0.1234567890123456789,"nested":{"values":[18446744073709551615,1e999]}}`)
+	parsed, err := parseMetadata(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if parsed["integer"] != json.Number("9007199254740993") || parsed["decimal"] != json.Number("0.1234567890123456789") {
+		t.Fatalf("metadata numbers lost precision: %#v", parsed)
+	}
+	encoded, err := metadataJSON(parsed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Parsing the encoded metadata must preserve nested numbers too.
+	roundTrip, err := parseMetadata(encoded)
+	if err != nil || !reflect.DeepEqual(parsed, roundTrip) {
+		t.Fatalf("metadata changed on round trip: %#v, %v", roundTrip, err)
+	}
+	values := parsed["nested"].(map[string]any)["values"].([]any)
+	if !reflect.DeepEqual(values, []any{json.Number("18446744073709551615"), json.Number("1e999")}) {
+		t.Fatalf("nested numbers lost precision: %#v", values)
+	}
+}
 
 func TestQuoteAndQualifiedTableEscapeIdentifiers(t *testing.T) {
 	if got := quoteIdent(`weird"name`); got != `"weird""name"` {
@@ -118,7 +143,7 @@ func TestMetadataJSONAndParseMetadata(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parseMetadata object: %v", err)
 	}
-	if parsed["category"] != "news" || parsed["rank"] != float64(2) {
+	if parsed["category"] != "news" || parsed["rank"] != json.Number("2") {
 		t.Fatalf("unexpected metadata: %#v", parsed)
 	}
 
@@ -132,8 +157,10 @@ func TestMetadataJSONAndParseMetadata(t *testing.T) {
 		}
 	}
 
-	if _, err := parseMetadata([]byte(`{"bad"`)); err == nil {
-		t.Fatal("expected parseMetadata error")
+	for _, raw := range []string{`{"bad"`, `{} {}`, `{} trailing`} {
+		if _, err := parseMetadata([]byte(raw)); err == nil {
+			t.Fatalf("expected parseMetadata error for %q", raw)
+		}
 	}
 }
 

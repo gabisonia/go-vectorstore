@@ -20,6 +20,11 @@ The base record type is `vectordata.Record`:
 - `Metadata` (`map[string]any`): structured JSON metadata
 - `Content` (`*string`): optional text payload
 
+The Postgres backend decodes metadata numbers as `json.Number`, including nested
+objects and arrays, to preserve integer and decimal precision. Use `Int64()` or
+`Float64()` when an application needs a Go numeric value; `Float64()` can lose
+precision. This replaces the previous `float64` decoding behavior.
+
 Search returns `vectordata.SearchResult`:
 
 - `Record`: matched item
@@ -144,6 +149,8 @@ Behavior details:
 - metadata `Eq`/`In` compares JSONB values (`::jsonb`), so value types matter
 - column `Eq` with a nil value matches SQL NULL; metadata `Eq` with nil matches JSON null, excluding missing paths
 - metadata `Gt`/`Lt` uses numeric comparison when the input is numeric, otherwise text comparison
+- numeric comparisons use PostgreSQL `numeric` and accept Go numeric values and `json.Number` without converting through `float64`
+- numeric-looking metadata strings are compared numerically; malformed or out-of-range strings do not match numeric comparisons
 - column filters are whitelist-based (`id`, `content` in the postgres backend)
 
 JSON path extraction behavior comes from PostgreSQL [JSON/JSONB functions and operators](https://www.postgresql.org/docs/current/functions-json.html).

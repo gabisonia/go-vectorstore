@@ -140,7 +140,9 @@ func (c *filterCompiler) compileGt(node GtFilter) (string, error) {
 	if !isMetadata {
 		return fmt.Sprintf("(%s > %s)", fieldExpr, c.bind(node.Value)), nil
 	}
-	if num, ok := toFloat64(node.Value); ok {
+	if num, ok, err := numericLiteral(node.Value); err != nil {
+		return "", err
+	} else if ok {
 		return c.compileMetadataNumericCompare(fieldExpr, path, ">", num), nil
 	}
 	return fmt.Sprintf("(%s > %s)", metadataPathTextExpr(fieldExpr, path), c.bind(fmt.Sprint(node.Value))), nil
@@ -154,18 +156,23 @@ func (c *filterCompiler) compileLt(node LtFilter) (string, error) {
 	if !isMetadata {
 		return fmt.Sprintf("(%s < %s)", fieldExpr, c.bind(node.Value)), nil
 	}
-	if num, ok := toFloat64(node.Value); ok {
+	if num, ok, err := numericLiteral(node.Value); err != nil {
+		return "", err
+	} else if ok {
 		return c.compileMetadataNumericCompare(fieldExpr, path, "<", num), nil
 	}
 	return fmt.Sprintf("(%s < %s)", metadataPathTextExpr(fieldExpr, path), c.bind(fmt.Sprint(node.Value))), nil
 }
 
-func (c *filterCompiler) compileMetadataNumericCompare(metadataExpr string, path []string, op string, value float64) string {
+func (c *filterCompiler) compileMetadataNumericCompare(metadataExpr string, path []string, op string, value string) string {
 	textExpr := metadataPathTextExpr(metadataExpr, path)
+	// A numeric-looking string can exceed even PostgreSQL numeric's range.
+	// Keep the cast inside CASE so malformed metadata never aborts the query.
 	return fmt.Sprintf(
-		"(CASE WHEN (%s) ~ %s THEN ((%s)::double precision %s %s) ELSE FALSE END)",
+		"(CASE WHEN (%s) ~ %s AND pg_input_is_valid(%s, 'numeric') THEN ((%s)::numeric %s %s::text::numeric) ELSE FALSE END)",
 		textExpr,
 		singleQuoted(numericTextPattern),
+		textExpr,
 		textExpr,
 		op,
 		c.bind(value),
@@ -271,33 +278,17 @@ func singleQuoted(v string) string {
 	return "'" + strings.ReplaceAll(v, "'", "''") + "'"
 }
 
-func toFloat64(v any) (float64, bool) {
-	switch n := v.(type) {
-	case int:
-		return float64(n), true
-	case int8:
-		return float64(n), true
-	case int16:
-		return float64(n), true
-	case int32:
-		return float64(n), true
-	case int64:
-		return float64(n), true
-	case uint:
-		return float64(n), true
-	case uint8:
-		return float64(n), true
-	case uint16:
-		return float64(n), true
-	case uint32:
-		return float64(n), true
-	case uint64:
-		return float64(n), true
-	case float32:
-		return float64(n), true
-	case float64:
-		return n, true
+func numericLiteral(v any) (string, bool, error) {
+	switch v.(type) {
+	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, float32, float64, json.Number:
+		// JSON encoding preserves integer and decimal precision and rejects
+		// non-finite floats and malformed json.Number values.
+		encoded, err := json.Marshal(v)
+		if err != nil {
+			return "", true, fmt.Errorf("%w: invalid numeric value: %v", ErrInvalidFilter, err)
+		}
+		return string(encoded), true, nil
 	default:
-		return 0, false
+		return "", false, nil
 	}
 }

@@ -4,6 +4,7 @@ package postgres
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -17,6 +18,71 @@ import (
 	testcontainers "github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 )
+
+func TestIntegrationMetadataNumericPrecisionAndOverflow(t *testing.T) {
+	pool := integrationPool(t)
+	store := newTestStore(t, pool)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	collection, err := store.EnsureCollection(ctx, vectordata.CollectionSpec{Name: "numbers", Dimension: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	records := []vectordata.Record{
+		{ID: "large", Vector: []float32{1, 0}, Metadata: map[string]any{"value": int64(9007199254740993)}},
+		{ID: "decimal", Vector: []float32{1, 0}, Metadata: map[string]any{"value": json.Number("0.1234567890123456789")}},
+		{ID: "unsigned", Vector: []float32{1, 0}, Metadata: map[string]any{"value": uint64(18446744073709551615)}},
+		{ID: "large-exponent", Vector: []float32{1, 0}, Metadata: map[string]any{"value": "1e999"}},
+		{ID: "overflow", Vector: []float32{1, 0}, Metadata: map[string]any{"value": "1e999999999"}},
+		{ID: "underflow", Vector: []float32{1, 0}, Metadata: map[string]any{"value": "1e-999999999"}},
+		{ID: "text", Vector: []float32{1, 0}, Metadata: map[string]any{"value": "not a number"}},
+		{ID: "special", Vector: []float32{1, 0}, Metadata: map[string]any{"value": "NaN"}},
+		{ID: "null", Vector: []float32{1, 0}, Metadata: map[string]any{"value": nil}},
+		{ID: "missing", Vector: []float32{1, 0}},
+	}
+	if err := collection.Upsert(ctx, records); err != nil {
+		t.Fatal(err)
+	}
+	for _, tt := range []struct {
+		name   string
+		filter vectordata.Filter
+		want   int64
+	}{
+		{"large integer", vectordata.And(vectordata.Eq(vectordata.Column("id"), "large"), vectordata.Gt(vectordata.Metadata("value"), int64(9007199254740992))), 1},
+		{"large argument", vectordata.And(vectordata.Eq(vectordata.Column("id"), "large"), vectordata.Lt(vectordata.Metadata("value"), int64(9007199254740994))), 1},
+		{"decimal", vectordata.And(vectordata.Eq(vectordata.Column("id"), "decimal"), vectordata.Gt(vectordata.Metadata("value"), json.Number("0.1234567890123456788"))), 1},
+		{"unsigned equality boundary", vectordata.And(vectordata.Eq(vectordata.Column("id"), "unsigned"), vectordata.Lt(vectordata.Metadata("value"), uint64(18446744073709551615))), 0},
+		{"mixed values", vectordata.Gt(vectordata.Metadata("value"), 0), 4},
+		{"negative comparison", vectordata.Lt(vectordata.Metadata("value"), 0), 0},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			count, err := collection.Count(ctx, tt.filter)
+			if err != nil || count != tt.want {
+				t.Fatalf("Count: got %d, want %d, error %v", count, tt.want, err)
+			}
+			results, err := collection.SearchByVector(ctx, []float32{1, 0}, 20, vectordata.SearchOptions{Filter: tt.filter})
+			if err != nil || int64(len(results)) != tt.want {
+				t.Fatalf("SearchByVector: got %d results, want %d, error %v", len(results), tt.want, err)
+			}
+		})
+	}
+	for _, tt := range []struct{ id, want string }{{"large", "9007199254740993"}, {"decimal", "0.1234567890123456789"}, {"unsigned", "18446744073709551615"}} {
+		record, err := collection.Get(ctx, tt.id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if record.Metadata["value"] != json.Number(tt.want) {
+			t.Fatalf("Get(%q) lost precision: %#v", tt.id, record.Metadata)
+		}
+		if err := collection.Upsert(ctx, []vectordata.Record{record}); err != nil {
+			t.Fatal(err)
+		}
+		results, err := collection.SearchByVector(ctx, []float32{1, 0}, 1, vectordata.SearchOptions{Filter: vectordata.Eq(vectordata.Column("id"), tt.id)})
+		if err != nil || len(results) != 1 || results[0].Record.Metadata["value"] != json.Number(tt.want) {
+			t.Fatalf("search after round trip lost precision: %#v, %v", results, err)
+		}
+	}
+}
 
 const (
 	integrationPostgresUser     = "postgres"

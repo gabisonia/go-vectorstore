@@ -1,8 +1,10 @@
 package postgres
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"strconv"
 	"strings"
 
@@ -121,8 +123,14 @@ func parseMetadata(raw []byte) (map[string]any, error) {
 		return map[string]any{}, nil
 	}
 	var out map[string]any
-	if err := json.Unmarshal(raw, &out); err != nil {
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	if err := decoder.Decode(&out); err != nil {
 		return nil, err
+	}
+	var extra any
+	if err := decoder.Decode(&extra); err != io.EOF {
+		return nil, fmt.Errorf("invalid trailing metadata JSON")
 	}
 	if out == nil {
 		return map[string]any{}, nil

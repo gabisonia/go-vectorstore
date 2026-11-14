@@ -167,6 +167,18 @@ results, err := collection.SearchByVector(ctx, queryVector, 10, vectordata.Searc
 If `Projection` is `nil`, the default projection includes `Metadata` and `Content`, but not `Vector`.
 `Threshold` is compared to the backend distance value, so lower is stricter. It is not a normalized score cutoff.
 
+The Postgres backend returns numeric metadata as `json.Number` (including nested
+values) to preserve precision. Code that previously asserted `float64` should use
+`json.Number` instead, for example:
+
+```go
+rank, err := result.Record.Metadata["rank"].(json.Number).Int64()
+```
+
+Import `encoding/json` for `json.Number`. Numeric metadata filters accept Go
+numeric values and `json.Number`; numeric-looking strings outside PostgreSQL's
+`numeric` range are excluded from numeric comparisons.
+
 ## Store Options
 
 ```go

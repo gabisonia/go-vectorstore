@@ -1,10 +1,40 @@
 package vectordata
 
 import (
+	"encoding/json"
 	"errors"
+	"math"
 	"reflect"
 	"testing"
 )
+
+func TestCompileFilterSQL_NumericArgumentsPreservePrecision(t *testing.T) {
+	for _, value := range []any{int64(9007199254740993), int64(math.MinInt64), uint64(math.MaxUint64), float32(0.1), float64(-0.25), json.Number("9007199254740993.125")} {
+		for _, filter := range []Filter{Gt(Metadata("rank"), value), Lt(Metadata("rank"), value)} {
+			_, args, _, err := CompileFilterSQL(filter, testFilterConfig(), 1)
+			if err != nil {
+				t.Fatal(err)
+			}
+			encoded, err := json.Marshal(value)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(args, []any{string(encoded)}) {
+				t.Fatalf("numeric value %v lost precision: %#v", value, args)
+			}
+		}
+	}
+}
+
+func TestCompileFilterSQL_RejectsInvalidNumericArguments(t *testing.T) {
+	for _, value := range []any{math.NaN(), math.Inf(1), math.Inf(-1), json.Number("invalid")} {
+		for _, filter := range []Filter{Gt(Metadata("rank"), value), Lt(Metadata("rank"), value)} {
+			if _, _, _, err := CompileFilterSQL(filter, testFilterConfig(), 1); !errors.Is(err, ErrInvalidFilter) {
+				t.Fatalf("value %v: expected ErrInvalidFilter, got %v", value, err)
+			}
+		}
+	}
+}
 
 type unsupportedFilter struct{}
 
@@ -38,12 +68,12 @@ func TestCompileFilterSQL_Complex(t *testing.T) {
 		t.Fatalf("CompileFilterSQL error: %v", err)
 	}
 
-	expectedSQL := `(("id" = $1) AND ((CASE WHEN (jsonb_extract_path_text("metadata", 'rank')) ~ '^[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)([eE][+-]?[0-9]+)?$' THEN ((jsonb_extract_path_text("metadata", 'rank'))::double precision > $2) ELSE FALSE END) OR (("metadata" #> ARRAY['flags', 'pinned']) IS NOT NULL)))`
+	expectedSQL := `(("id" = $1) AND ((CASE WHEN (jsonb_extract_path_text("metadata", 'rank')) ~ '^[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)([eE][+-]?[0-9]+)?$' AND pg_input_is_valid(jsonb_extract_path_text("metadata", 'rank'), 'numeric') THEN ((jsonb_extract_path_text("metadata", 'rank'))::numeric > $2::text::numeric) ELSE FALSE END) OR (("metadata" #> ARRAY['flags', 'pinned']) IS NOT NULL)))`
 	if sql != expectedSQL {
 		t.Fatalf("unexpected SQL\nwant: %s\n got: %s", expectedSQL, sql)
 	}
 
-	expectedArgs := []any{"r1", float64(10)}
+	expectedArgs := []any{"r1", "10"}
 	if !reflect.DeepEqual(args, expectedArgs) {
 		t.Fatalf("unexpected args\nwant: %#v\n got: %#v", expectedArgs, args)
 	}
@@ -64,11 +94,11 @@ func TestCompileFilterSQL_MetadataGtNumericUsesSafeCast(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CompileFilterSQL error: %v", err)
 	}
-	expectedSQL := `(CASE WHEN (jsonb_extract_path_text("metadata", 'rank')) ~ '^[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)([eE][+-]?[0-9]+)?$' THEN ((jsonb_extract_path_text("metadata", 'rank'))::double precision > $1) ELSE FALSE END)`
+	expectedSQL := `(CASE WHEN (jsonb_extract_path_text("metadata", 'rank')) ~ '^[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)([eE][+-]?[0-9]+)?$' AND pg_input_is_valid(jsonb_extract_path_text("metadata", 'rank'), 'numeric') THEN ((jsonb_extract_path_text("metadata", 'rank'))::numeric > $1::text::numeric) ELSE FALSE END)`
 	if sql != expectedSQL {
 		t.Fatalf("unexpected SQL\nwant: %s\n got: %s", expectedSQL, sql)
 	}
-	expectedArgs := []any{float64(10)}
+	expectedArgs := []any{"10"}
 	if !reflect.DeepEqual(args, expectedArgs) {
 		t.Fatalf("unexpected args\nwant: %#v\n got: %#v", expectedArgs, args)
 	}
@@ -211,11 +241,11 @@ func TestCompileFilterSQL_MetadataLtNumericUsesSafeCast(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CompileFilterSQL error: %v", err)
 	}
-	expectedSQL := `(CASE WHEN (jsonb_extract_path_text("metadata", 'rank')) ~ '^[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)([eE][+-]?[0-9]+)?$' THEN ((jsonb_extract_path_text("metadata", 'rank'))::double precision < $1) ELSE FALSE END)`
+	expectedSQL := `(CASE WHEN (jsonb_extract_path_text("metadata", 'rank')) ~ '^[+-]?([0-9]+([.][0-9]*)?|[.][0-9]+)([eE][+-]?[0-9]+)?$' AND pg_input_is_valid(jsonb_extract_path_text("metadata", 'rank'), 'numeric') THEN ((jsonb_extract_path_text("metadata", 'rank'))::numeric < $1::text::numeric) ELSE FALSE END)`
 	if sql != expectedSQL {
 		t.Fatalf("unexpected SQL\nwant: %s\n got: %s", expectedSQL, sql)
 	}
-	if !reflect.DeepEqual(args, []any{float64(10)}) {
+	if !reflect.DeepEqual(args, []any{"10"}) {
 		t.Fatalf("unexpected args: %#v", args)
 	}
 	if next != 2 {
