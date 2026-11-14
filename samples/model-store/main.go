@@ -26,22 +26,10 @@ type Hotel struct {
 
 func run() error {
 	dsn := flag.String("dsn", "", "Optional PostgreSQL connection string; defaults to in-memory storage")
+	batchSize := flag.Int("embedding-batch-size", 2, "Maximum texts per embedding request (0 uses one request per property)")
 	flag.Parse()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	var store vectordata.ModelStore = memory.New()
-	if *dsn != "" {
-		pool, err := pgxpool.New(ctx, *dsn)
-		if err != nil {
-			return err
-		}
-		defer pool.Close()
-		provider, err := postgres.NewVectorStore(pool, postgres.DefaultStoreOptions())
-		if err != nil {
-			return err
-		}
-		store = provider
-	}
 	embedder := vectordata.EmbeddingFunc(func(ctx context.Context, inputs []string) ([][]float32, error) {
 		vectors := make([][]float32, len(inputs))
 		for i, text := range inputs {
@@ -59,7 +47,30 @@ func run() error {
 		}
 		return vectors, nil
 	})
-	hotels, err := vectordata.EnsureTypedModelCollection[int64, Hotel](ctx, store, "model_hotels", nil, vectordata.ModelCollectionOptions{Embedder: embedder})
+	// Configure once on the store; collections can override either setting.
+	var store vectordata.ModelStore
+	if *dsn != "" {
+		pool, err := pgxpool.New(ctx, *dsn)
+		if err != nil {
+			return err
+		}
+		defer pool.Close()
+		opts := postgres.DefaultStoreOptions()
+		opts.Embedder = embedder
+		opts.EmbeddingBatchSize = *batchSize
+		provider, err := postgres.NewVectorStore(pool, opts)
+		if err != nil {
+			return err
+		}
+		store = provider
+	} else {
+		provider, err := memory.NewWithOptions(memory.StoreOptions{Embedder: embedder, EmbeddingBatchSize: *batchSize})
+		if err != nil {
+			return err
+		}
+		store = provider
+	}
+	hotels, err := vectordata.EnsureTypedModelCollection[int64, Hotel](ctx, store, "model_hotels", nil, vectordata.ModelCollectionOptions{})
 	if err != nil {
 		return err
 	}

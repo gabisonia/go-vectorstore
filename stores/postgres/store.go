@@ -14,6 +14,10 @@ type StoreOptions struct {
 	Schema          string
 	EnsureExtension bool
 	StrictByDefault bool
+	// Embedder is the default for model collections without their own embedder.
+	Embedder vectordata.Embedder
+	// EmbeddingBatchSize bounds model embedding requests; zero leaves them unbounded.
+	EmbeddingBatchSize int
 }
 
 // DefaultStoreOptions returns production-safe defaults.
@@ -121,5 +125,6 @@ func (o StoreOptions) validate() error {
 	if strings.TrimSpace(o.Schema) == "" {
 		return fmt.Errorf("%w: schema is empty", vectordata.ErrSchemaMismatch)
 	}
-	return nil
+	_, err := (vectordata.ModelCollectionOptions{Embedder: o.Embedder, EmbeddingBatchSize: o.EmbeddingBatchSize}).WithDefaults(vectordata.ModelCollectionOptions{})
+	return err
 }

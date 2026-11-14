@@ -114,6 +114,10 @@ func (s *PostgresVectorStore) DeleteCollection(ctx context.Context, name string)
 	return tx.Commit(ctx)
 }
 func (s *PostgresVectorStore) GetModelCollection(name string, definition vectordata.CollectionDefinition, opts vectordata.ModelCollectionOptions) (vectordata.ModelCollection, error) {
+	opts, err := opts.WithDefaults(vectordata.ModelCollectionOptions{Embedder: s.opts.Embedder, EmbeddingBatchSize: s.opts.EmbeddingBatchSize})
+	if err != nil {
+		return nil, err
+	}
 	if err := validCollectionName(name); err != nil {
 		return nil, err
 	}
