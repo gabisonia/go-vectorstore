@@ -106,6 +106,8 @@ Each record is validated before sending:
 
 - non-empty `ID`
 - vector dimension match
+- finite vector elements
+- nonzero cosine vectors (zero vectors remain valid for L2 and inner product)
 - metadata JSON serialization
 
 ### Postgres: Search
@@ -113,7 +115,7 @@ Each record is validated before sending:
 `SearchByVector` builds a query plan, then executes it:
 
 1. Validates `topK > 0`
-2. Validates query vector dimension
+2. Validates query vector dimension, finite elements, and nonzero norm for cosine
 3. Chooses operator by metric:
    - cosine: `<=>`
    - l2: `<->`
@@ -136,7 +138,7 @@ Filters are represented as an AST in `vectordata`:
 Fields can target:
 
 - fixed columns (`Column("id")`, `Column("content")`)
-- metadata JSON paths (`Metadata("category")`, `Metadata("a", "b")`)
+- metadata JSON paths (`Metadata("category")`, `Metadata("a", "b")`); each segment is preserved exactly, including empty and whitespace-only keys
 
 `CompileFilterSQL` converts AST to:
 
@@ -236,10 +238,13 @@ Common exported errors:
 
 - `ErrNotFound`
 - `ErrDimensionMismatch`
+- `ErrInvalidVector`
 - `ErrSchemaMismatch`
 - `ErrInvalidFilter`
 
 Errors are wrapped with context so callers can use `errors.Is(...)` against base error types.
+Vector write validation also matches `ErrInvalidRecord`, while preserving
+`ErrInvalidVector` or `ErrDimensionMismatch` as appropriate.
 
 ## 11) Sample App Flows
 

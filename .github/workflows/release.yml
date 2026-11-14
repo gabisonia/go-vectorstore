@@ -2,74 +2,70 @@ name: Release
 
 on:
   push:
-    tags:
-      - "v*.*.*"
+    tags: ['v*.*.*']
   workflow_dispatch:
     inputs:
       version:
-        description: "Version to release, with or without leading v"
+        description: Version to release, with or without leading v
         required: true
         type: string
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
-  release:
-    name: Publish release
+  resolve:
+    name: Validate release version and target
     runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.version.outputs.tag }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: go.mod
-          cache: true
-
-      - name: Test
-        run: go test ./...
-
       - name: Resolve version
         id: version
         shell: bash
+        env:
+          RAW_VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
         run: |
           set -euo pipefail
+          tag="$(bash .github/scripts/release.sh resolve "$RAW_VERSION")"
+          bash .github/scripts/release.sh verify-tag "$tag"
+          printf 'tag=%s\n' "$tag" >> "$GITHUB_OUTPUT"
 
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            raw="${{ inputs.version }}"
-            raw="${raw#v}"
-            if [[ ! "$raw" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]; then
-              echo "Invalid version: $raw"
-              exit 1
-            fi
-            tag="v${raw}"
-          else
-            tag="${GITHUB_REF_NAME}"
-          fi
-          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+  checks:
+    name: Release checks
+    needs: resolve
+    uses: ./.github/workflows/ci.yml
 
-      - name: Create tag for manual releases
-        if: github.event_name == 'workflow_dispatch'
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          tag="${{ steps.version.outputs.tag }}"
-          if ! git rev-parse "$tag" >/dev/null 2>&1; then
-            git tag "$tag"
-          fi
-          if ! git ls-remote --tags origin "refs/tags/$tag" | grep -q "$tag"; then
-            git push origin "$tag"
-          fi
-
+  release:
+    name: Publish release
+    needs: [resolve, checks]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Ensure tag points to the tested commit
+        env:
+          RELEASE_TAG: ${{ needs.resolve.outputs.tag }}
+        run: bash .github/scripts/release.sh publish-tag "$RELEASE_TAG"
       - name: Create GitHub release
+        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "${{ steps.version.outputs.tag }}" --generate-notes --verify-tag
+          RELEASE_TAG: ${{ needs.resolve.outputs.tag }}
+        run: |
+          set -euo pipefail
+          args=("$RELEASE_TAG" --generate-notes --verify-tag --target "$GITHUB_SHA")
+          if [[ "${RELEASE_TAG%%+*}" == *-* ]]; then
+            args+=(--prerelease)
+          fi
+          gh release create "${args[@]}"

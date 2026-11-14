@@ -379,19 +379,19 @@ func TestCompileFilterSQL_TrimsColumnFieldName(t *testing.T) {
 	}
 }
 
-func TestCompileFilterSQL_MetadataPathRejectsWhitespaceSegment(t *testing.T) {
+func TestCompileFilterSQL_MetadataPathPreservesWhitespaceSegment(t *testing.T) {
 	// Arrange
 	filter := Eq(Metadata("rank", "   "), 1)
 
 	// Act
-	_, _, _, err := CompileFilterSQL(filter, testFilterConfig(), 1)
+	sql, _, _, err := CompileFilterSQL(filter, testFilterConfig(), 1)
 
 	// Assert
-	if err == nil {
-		t.Fatal("expected error")
+	if err != nil {
+		t.Fatal(err)
 	}
-	if !errors.Is(err, ErrInvalidFilter) {
-		t.Fatalf("expected ErrInvalidFilter, got %v", err)
+	if sql != `(("metadata" #> ARRAY['rank', '   ']) = $1::jsonb)` {
+		t.Fatalf("metadata key changed: %s", sql)
 	}
 }
 

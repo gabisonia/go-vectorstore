@@ -3,11 +3,50 @@ package postgres
 import (
 	"context"
 	"errors"
+	"math"
 	"reflect"
 	"testing"
 
 	"github.com/gabisonia/go-vectorstore/vectordata"
 )
+
+func TestVectorsRejectNonFiniteValues(t *testing.T) {
+	for _, value := range []float32{float32(math.NaN()), float32(math.Inf(1)), float32(math.Inf(-1))} {
+		for _, metric := range []vectordata.DistanceMetric{vectordata.DistanceCosine, vectordata.DistanceL2, vectordata.DistanceInnerProduct} {
+			collection := testCollection()
+			collection.metric = metric
+			vector := []float32{1, value, 0}
+			if _, err := collection.buildSearchPlan(vector, 1, vectordata.SearchOptions{}); !errors.Is(err, vectordata.ErrInvalidVector) {
+				t.Fatalf("metric %s: expected ErrInvalidVector, got %v", metric, err)
+			}
+			_, _, err := collection.buildWriteBatch([]vectordata.Record{{ID: "bad", Vector: vector}}, writeModeInsert)
+			if !errors.Is(err, vectordata.ErrInvalidVector) || !errors.Is(err, vectordata.ErrInvalidRecord) {
+				t.Fatalf("metric %s: expected invalid record/vector, got %v", metric, err)
+			}
+		}
+	}
+}
+
+func TestZeroVectorsDependOnMetric(t *testing.T) {
+	for _, metric := range []vectordata.DistanceMetric{"", vectordata.DistanceCosine, vectordata.DistanceL2, vectordata.DistanceInnerProduct} {
+		collection := testCollection()
+		collection.metric = metric
+		vector := []float32{0, float32(math.Copysign(0, -1)), 0}
+		_, searchErr := collection.buildSearchPlan(vector, 1, vectordata.SearchOptions{})
+		_, _, writeErr := collection.buildWriteBatch([]vectordata.Record{{ID: "zero", Vector: vector}}, writeModeUpsert)
+		if metric == "" || metric == vectordata.DistanceCosine {
+			if !errors.Is(searchErr, vectordata.ErrInvalidVector) || !errors.Is(writeErr, vectordata.ErrInvalidVector) {
+				t.Fatalf("zero cosine vector accepted: %v, %v", searchErr, writeErr)
+			}
+		} else if searchErr != nil || writeErr != nil {
+			t.Fatalf("valid zero vector rejected for %s: %v, %v", metric, searchErr, writeErr)
+		}
+	}
+	collection := testCollection()
+	if err := collection.validateVector([]float32{math.SmallestNonzeroFloat32, 0, 0}); err != nil {
+		t.Fatalf("small finite vector rejected: %v", err)
+	}
+}
 
 func testCollection() *PostgresCollection {
 	return &PostgresCollection{
