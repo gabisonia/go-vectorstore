@@ -6,6 +6,8 @@ import (
 )
 
 var (
+	ErrMigrationConflict    = errors.New("vectordata: migration review is stale or invalid")
+	ErrMigrationNotAdditive = errors.New("vectordata: migration is not additive")
 	ErrCollectionNotFound   = errors.New("vectordata: collection not found")
 	ErrUnsupported          = errors.New("vectordata: unsupported capability")
 	ErrNotFound             = errors.New("vectordata: record not found")

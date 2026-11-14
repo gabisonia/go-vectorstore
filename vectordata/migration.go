@@ -8,6 +8,12 @@ type MigrationPlanner interface {
 	PlanMigration(context.Context, string, CollectionDefinition) (MigrationPlan, error)
 }
 
+// MigrationApplier optionally applies reviewed additive model plans. Implementations
+// must regenerate SQL, reject stale/non-additive reviews, and commit atomically.
+type MigrationApplier interface {
+	ApplyMigration(context.Context, MigrationPlan) error
+}
+
 type MigrationKind string
 
 const (
@@ -47,11 +53,14 @@ type MigrationIssue struct {
 // Issues suppress all SQL; finalization stays separate from storage/manual steps.
 type MigrationPlan struct {
 	Backend, Namespace, Collection string
-	StorageExists                  bool
-	Registered                     *CollectionDefinition
-	Desired                        CollectionDefinition
-	Issues                         []MigrationIssue
-	Steps                          []MigrationStep
+	// Revision binds a review to provider storage identity and registration state.
+	// It is an opaque staleness token, not an authorization signature.
+	Revision      string
+	StorageExists bool
+	Registered    *CollectionDefinition
+	Desired       CollectionDefinition
+	Issues        []MigrationIssue
+	Steps         []MigrationStep
 	// Finalization updates the registry only after every preceding step is complete.
 	// Its Manual flag mirrors unresolved manual work; issues leave it nil.
 	Finalization *MigrationStep

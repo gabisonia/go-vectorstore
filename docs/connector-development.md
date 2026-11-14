@@ -185,4 +185,10 @@ planning. Advertise `MigrationPlanning` only when it is implemented. Planning mu
 be read-only and return provider SQL/arguments for review; classify manual work,
 data removal, backfills and embedding changes explicitly. Keep registry
 finalization separate and do not infer support for execution from planning.
+Advertise `MigrationApplication` only with `vectordata.MigrationApplier` and
+planning support. Application must reject stale/edited reviews and non-additive
+changes, regenerate SQL from locked live state, validate the resulting model and
+commit storage/index/registration changes atomically. Preserve provider errors and
+support context cancellation. The conformance suite exercises optional-property
+application and preserved records for each advertised native key type.
 See [migrations.md](migrations.md) for the PostgreSQL implementation and limits.

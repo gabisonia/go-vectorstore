@@ -25,4 +25,6 @@ type ProviderCapabilities struct {
 	HybridSearch     bool
 	// MigrationPlanning describes plan generation, not migration execution.
 	MigrationPlanning bool
+	// MigrationApplication supports optional-property and index additions only.
+	MigrationApplication bool
 }

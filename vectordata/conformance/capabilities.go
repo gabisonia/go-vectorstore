@@ -77,6 +77,28 @@ func runCapabilities(t *testing.T, factory Factory) {
 					t.Fatalf("planning the registered model should be a no-op: %+v, %v", plan, err)
 				}
 			}
+			if caps.MigrationApplication {
+				applier, ok := store.(vectordata.MigrationApplier)
+				if !ok || !caps.MigrationPlanning {
+					t.Fatal("advertised migration application lacks the required interfaces")
+				}
+				desired := c.Definition()
+				desired.Data = append(desired.Data, vectordata.DataProperty{Name: "MigrationAdded", Type: vectordata.TypeString, Optional: true})
+				plan, err := store.(vectordata.MigrationPlanner).PlanMigration(ctx, c.Name(), desired)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := applier.ApplyMigration(ctx, plan); err != nil {
+					t.Fatalf("advertised additive migration failed: %v", err)
+				}
+				updated, err := store.EnsureModelCollection(ctx, c.Name(), desired, vectordata.ModelCollectionOptions{})
+				if err != nil {
+					t.Fatal(err)
+				}
+				if row, err := updated.Get(ctx, key, vectordata.RetrievalOptions{}); err != nil || row.Data["MigrationAdded"] != nil {
+					t.Fatalf("migrated row: %+v, %v", row, err)
+				}
+			}
 			if caps.HybridSearch {
 				hybrid, ok := c.(vectordata.HybridSearcher)
 				if !ok {

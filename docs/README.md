@@ -9,4 +9,4 @@ This directory contains internal design and implementation notes for `go-vectors
 
 - [`model-api.md`](model-api.md): model definitions, typed/native keys, named vectors, retrieval, embeddings, and hybrid search
 
-- [`migrations.md`](migrations.md): read-only model migration planning, SQL/risk classifications, drift and registry finalization
+- [`migrations.md`](migrations.md): read-only planning, explicit additive application, SQL/risk classifications, drift and registry finalization
