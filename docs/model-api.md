@@ -95,12 +95,58 @@ table; runtime embedder objects are not persisted. Changing a registered model
 requires an explicit migration or a new collection. The original Record API's
 strict/auto-migrate modes are unchanged.
 
+## Provider capabilities
+
+Built-in stores implement the optional `vectordata.CapabilityProvider` interface.
+`Capabilities()` returns a local `ProviderCapabilities` snapshot for the model
+API. Applications can inspect supported keys, generated keys, data types,
+distance metrics and physical indexes before choosing a model or search flow:
+
+```go
+// store is a vectordata.ModelStore. Import fmt and slices from the standard library.
+if provider, ok := store.(vectordata.CapabilityProvider); ok {
+    caps := provider.Capabilities()
+    fmt.Printf("%s: UUID keys=%t, hybrid search=%t\n", caps.Backend,
+        slices.Contains(caps.KeyTypes, vectordata.KeyUUID), caps.HybridSearch)
+}
+```
+
+Both providers report string/int64/UUID keys, generated int64 keys, all seven
+portable data types, and cosine/L2/inner-product metrics.
+
+| Feature | Memory | PostgreSQL |
+| --- | --- | --- |
+| `VectorIndexMethods` | None | HNSW, IVFFlat |
+| `IndexedDataTypes` | None | String, int64, float64, bool, time, string array |
+| `FullTextIndexing` | False | True, for string properties |
+| `HybridSearch` | False | True |
+
+Index fields describe physical acceleration. Memory still accepts index hints
+for portability. Generic JSON indexing remains unsupported; provider-specific
+indexes are outside this metadata. Empty slices mean no support for that feature.
+
+Discovery does not access the database or check deployment versions, permissions,
+health, collection definitions or embedder configuration. A hybrid-capable
+provider still needs the relevant model properties and options. Operations retain
+their usual schema and deployment validation. Built-in stores return independent,
+caller-owned slices; changing a snapshot does not configure the provider.
+
+`ModelStore` remains unchanged. A third-party provider without
+`CapabilityProvider` has unavailable metadata; this does not imply its optional
+features are unsupported. Callers can still use the `HybridSearcher` interface
+and normal operation errors when metadata is unavailable.
+
 ## Lifecycle and retrieval
 
 Both providers implement `ModelStore` and `CollectionManager`. Stores can list
 collections, check existence, and delete collections idempotently. PostgreSQL
 listing includes registered models (even models without vectors) and existing
 vector tables in the configured schema. Ordinary unrelated tables are excluded.
+`CollectionExists` resolves only the requested, schema-qualified relation rather
+than listing every collection. Vector tables need one catalog query; registered
+models without vectors also check their registry entry. Views and missing/dropped
+relations are excluded even if a stale registry entry exists. Existence checks
+do not validate a collection's schema.
 
 | Operation | Behavior |
 | --- | --- |

@@ -92,7 +92,9 @@ array filtering, and generated keys. Use a real embedding model for semantic sea
 
 See [the model API guide](docs/model-api.md) for collection lifecycle, explicit
 schemas, native UUID/int64 keys, multiple vectors, iterator APIs, embeddings and
-PostgreSQL hybrid search. Original `Record`/`Collection` callers remain compatible.
+PostgreSQL hybrid search. Stores also expose optional `CapabilityProvider`
+metadata for supported keys, data types, metrics, indexes and hybrid search.
+Original `Record`/`Collection` callers remain compatible.
 
 ## Record API Walkthrough
 
