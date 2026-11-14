@@ -167,6 +167,43 @@ results, err := collection.SearchByVector(ctx, queryVector, 10, vectordata.Searc
 If `Projection` is `nil`, the default projection includes `Metadata` and `Content`, but not `Vector`.
 `Threshold` is compared to the backend distance value, so lower is stricter. It is not a normalized score cutoff.
 
+The Postgres backend returns numeric metadata as `json.Number` (including nested
+values) to preserve precision. Code that previously asserted `float64` should use
+`json.Number` instead, for example:
+
+```go
+rank, err := result.Record.Metadata["rank"].(json.Number).Int64()
+```
+
+Import `encoding/json` for `json.Number`. Numeric metadata filters accept Go
+numeric values and `json.Number`; numeric-looking strings outside PostgreSQL's
+`numeric` range are excluded from numeric comparisons.
+
+Approximate-search tuning can be set per request:
+
+```go
+results, err := collection.SearchByVector(ctx, queryVector, 10, vectordata.SearchOptions{
+    Filter: vectordata.Eq(vectordata.Metadata("category"), "backend"),
+    HNSW: &vectordata.HNSWSearchOptions{
+        EfSearch:      100,
+        IterativeScan: true,
+        MaxScanTuples: 20000,
+    },
+})
+```
+
+IVFFlat uses `IVFFlat: &vectordata.IVFFlatSearchOptions{Probes: 10,
+IterativeScan: true, MaxProbes: 100}`. Zero numeric values retain server defaults.
+Iterative scans and their work limits require pgvector 0.8+. Settings apply within
+the search transaction and do not leak to other pooled requests. Results remain
+sorted by distance; approximate indexes and bounded scans can still return fewer
+than `topK` matches.
+
+Metadata `Eq` and `In` filters can use the GIN metadata index. Numeric range
+comparisons, `Exists`, array-index paths, and negated filters need other indexing
+strategies. Existing indexes are checked for compatibility; a conflicting
+definition returns `ErrSchemaMismatch`.
+
 ## Store Options
 
 ```go
@@ -236,6 +273,7 @@ git push origin "v${VERSION}"
 - Docs index: [`docs/README.md`](docs/README.md)
 - Internals and architecture: [`docs/architecture.md`](docs/architecture.md)
 - Connector development guide: [`docs/connector-development.md`](docs/connector-development.md)
+- Benchmarks and performance notes: [`docs/performance.md`](docs/performance.md)
 
 ## License
 

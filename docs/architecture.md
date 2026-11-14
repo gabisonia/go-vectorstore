@@ -20,6 +20,11 @@ The base record type is `vectordata.Record`:
 - `Metadata` (`map[string]any`): structured JSON metadata
 - `Content` (`*string`): optional text payload
 
+The Postgres backend decodes metadata numbers as `json.Number`, including nested
+objects and arrays, to preserve integer and decimal precision. Use `Int64()` or
+`Float64()` when an application needs a Go numeric value; `Float64()` can lose
+precision. This replaces the previous `float64` decoding behavior.
+
 Search returns `vectordata.SearchResult`:
 
 - `Record`: matched item
@@ -66,7 +71,7 @@ Collection defaults:
 
 Other operational defaults:
 
-- Writes are chunked at `maxRowsPerStatement=500`
+- Writes are encoded and executed one batch at a time (`maxRowsPerStatement=500`) in a single transaction
 - Search default projection includes `Metadata` and `Content`, but not `Vector`
 
 ## 5) Request Flow
@@ -144,6 +149,8 @@ Behavior details:
 - metadata `Eq`/`In` compares JSONB values (`::jsonb`), so value types matter
 - column `Eq` with a nil value matches SQL NULL; metadata `Eq` with nil matches JSON null, excluding missing paths
 - metadata `Gt`/`Lt` uses numeric comparison when the input is numeric, otherwise text comparison
+- numeric comparisons use PostgreSQL `numeric` and accept Go numeric values and `json.Number` without converting through `float64`
+- numeric-looking metadata strings are compared numerically; malformed or out-of-range strings do not match numeric comparisons
 - column filters are whitelist-based (`id`, `content` in the postgres backend)
 
 JSON path extraction behavior comes from PostgreSQL [JSON/JSONB functions and operators](https://www.postgresql.org/docs/current/functions-json.html).
@@ -158,6 +165,9 @@ JSON path extraction behavior comes from PostgreSQL [JSON/JSONB functions and op
   - can add missing optional columns (`metadata`, `content`)
 
 Dimension is always validated against `vector(n)` and must match.
+`id`, `vector`, and existing `metadata` columns must be `NOT NULL`; `content`
+must allow NULL. Both ensure modes reject incompatible nullability before adding
+optional columns, without altering existing constraints.
 The primary key must be non-deferrable and contain only `id`, as required by upserts.
 Existing column types and dimensions are checked before auto-migration adds optional columns.
 
@@ -172,7 +182,19 @@ Existing column types and dimensions are checked before auto-migration adds opti
   - GIN on `metadata` JSONB
   - optional `jsonb_path_ops`
 
-Metadata indexes accelerate JSONB containment/path-style workloads. Current filters use JSONB extraction plus text or numeric comparisons, so PostgreSQL planner choices depend on the exact predicate.
+Ensure verifies existing indexes by table, method, column, operator class,
+validity, predicate, and requested vector build options. Conflicts return
+`ErrSchemaMismatch`; indexes are never silently replaced. An explicitly requested
+index metric must match the collection metric.
+Generated names over PostgreSQL's 63-byte limit use a shortened prefix and hash;
+explicit index names must fit within that limit.
+
+Metadata `Eq` and `In` filters add JSONB containment predicates that can use either
+GIN operator class, alongside exact extraction comparisons. The exact checks keep
+object and array equality semantics. Paths that may traverse array indexes, and
+filters beneath `Not`, retain extraction-only predicates to preserve their
+matching behavior. Range comparisons and `Exists` still require other indexing
+strategies; the whole-column GIN index does not accelerate them.
 
 Defaults when index options are omitted:
 

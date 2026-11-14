@@ -15,6 +15,9 @@ type FilterSQLConfig struct {
 	ColumnExpr map[string]string
 	// MetadataExpr is the SQL expression of the metadata JSONB column.
 	MetadataExpr string
+	// UseMetadataContainment adds GIN-compatible prefilters to metadata Eq/In.
+	// Exact extraction comparisons remain in place to preserve equality semantics.
+	UseMetadataContainment bool
 }
 
 // CompileFilterSQL compiles a Filter tree into SQL WHERE fragment and args.
@@ -64,7 +67,12 @@ func (c *filterCompiler) compile(f Filter) (string, error) {
 		if node.Child == nil {
 			return "", fmt.Errorf("%w: NOT requires a child", ErrInvalidFilter)
 		}
+		// Containment can turn SQL UNKNOWN for a missing path into FALSE.
+		// Disable prefilters below NOT so missing/null behavior stays intact.
+		useContainment := c.cfg.UseMetadataContainment
+		c.cfg.UseMetadataContainment = false
 		childSQL, err := c.compile(node.Child)
+		c.cfg.UseMetadataContainment = useContainment
 		if err != nil {
 			return "", err
 		}
@@ -90,7 +98,8 @@ func (c *filterCompiler) compileEq(node EqFilter) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("(%s = %s::jsonb)", metadataPathJSONBExpr(fieldExpr, path), ph), nil
+	exact := fmt.Sprintf("(%s = %s::jsonb)", metadataPathJSONBExpr(fieldExpr, path), ph)
+	return c.withMetadataContainment(exact, fieldExpr, path, []any{node.Value})
 }
 
 func isNilValue(value any) bool {
@@ -129,7 +138,34 @@ func (c *filterCompiler) compileIn(node InFilter) (string, error) {
 	if !isMetadata {
 		return fmt.Sprintf("(%s IN (%s))", fieldExpr, strings.Join(parts, ", ")), nil
 	}
-	return fmt.Sprintf("(%s IN (%s))", metadataPathJSONBExpr(fieldExpr, path), strings.Join(parts, ", ")), nil
+	exact := fmt.Sprintf("(%s IN (%s))", metadataPathJSONBExpr(fieldExpr, path), strings.Join(parts, ", "))
+	return c.withMetadataContainment(exact, fieldExpr, path, node.Values)
+}
+
+func (c *filterCompiler) withMetadataContainment(exact, metadataExpr string, path []string, values []any) (string, error) {
+	if !c.cfg.UseMetadataContainment {
+		return exact, nil
+	}
+	for _, segment := range path {
+		// #> accepts array indexes as well as object keys. A JSON object
+		// containment predicate cannot represent array traversal safely.
+		digits := strings.TrimPrefix(strings.TrimPrefix(segment, "+"), "-")
+		if digits != "" && strings.Trim(digits, "0123456789") == "" {
+			return exact, nil
+		}
+	}
+	predicates := make([]string, 0, len(values))
+	for _, value := range values {
+		for i := len(path) - 1; i >= 0; i-- {
+			value = map[string]any{path[i]: value}
+		}
+		ph, err := c.bindJSONB(value)
+		if err != nil {
+			return "", err
+		}
+		predicates = append(predicates, fmt.Sprintf("%s @> %s::jsonb", metadataExpr, ph))
+	}
+	return fmt.Sprintf("((%s) AND %s)", strings.Join(predicates, " OR "), exact), nil
 }
 
 func (c *filterCompiler) compileGt(node GtFilter) (string, error) {
@@ -140,7 +176,9 @@ func (c *filterCompiler) compileGt(node GtFilter) (string, error) {
 	if !isMetadata {
 		return fmt.Sprintf("(%s > %s)", fieldExpr, c.bind(node.Value)), nil
 	}
-	if num, ok := toFloat64(node.Value); ok {
+	if num, ok, err := numericLiteral(node.Value); err != nil {
+		return "", err
+	} else if ok {
 		return c.compileMetadataNumericCompare(fieldExpr, path, ">", num), nil
 	}
 	return fmt.Sprintf("(%s > %s)", metadataPathTextExpr(fieldExpr, path), c.bind(fmt.Sprint(node.Value))), nil
@@ -154,18 +192,23 @@ func (c *filterCompiler) compileLt(node LtFilter) (string, error) {
 	if !isMetadata {
 		return fmt.Sprintf("(%s < %s)", fieldExpr, c.bind(node.Value)), nil
 	}
-	if num, ok := toFloat64(node.Value); ok {
+	if num, ok, err := numericLiteral(node.Value); err != nil {
+		return "", err
+	} else if ok {
 		return c.compileMetadataNumericCompare(fieldExpr, path, "<", num), nil
 	}
 	return fmt.Sprintf("(%s < %s)", metadataPathTextExpr(fieldExpr, path), c.bind(fmt.Sprint(node.Value))), nil
 }
 
-func (c *filterCompiler) compileMetadataNumericCompare(metadataExpr string, path []string, op string, value float64) string {
+func (c *filterCompiler) compileMetadataNumericCompare(metadataExpr string, path []string, op string, value string) string {
 	textExpr := metadataPathTextExpr(metadataExpr, path)
+	// A numeric-looking string can exceed even PostgreSQL numeric's range.
+	// Keep the cast inside CASE so malformed metadata never aborts the query.
 	return fmt.Sprintf(
-		"(CASE WHEN (%s) ~ %s THEN ((%s)::double precision %s %s) ELSE FALSE END)",
+		"(CASE WHEN (%s) ~ %s AND pg_input_is_valid(%s, 'numeric') THEN ((%s)::numeric %s %s::text::numeric) ELSE FALSE END)",
 		textExpr,
 		singleQuoted(numericTextPattern),
+		textExpr,
 		textExpr,
 		op,
 		c.bind(value),
@@ -271,33 +314,17 @@ func singleQuoted(v string) string {
 	return "'" + strings.ReplaceAll(v, "'", "''") + "'"
 }
 
-func toFloat64(v any) (float64, bool) {
-	switch n := v.(type) {
-	case int:
-		return float64(n), true
-	case int8:
-		return float64(n), true
-	case int16:
-		return float64(n), true
-	case int32:
-		return float64(n), true
-	case int64:
-		return float64(n), true
-	case uint:
-		return float64(n), true
-	case uint8:
-		return float64(n), true
-	case uint16:
-		return float64(n), true
-	case uint32:
-		return float64(n), true
-	case uint64:
-		return float64(n), true
-	case float32:
-		return float64(n), true
-	case float64:
-		return n, true
+func numericLiteral(v any) (string, bool, error) {
+	switch v.(type) {
+	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, float32, float64, json.Number:
+		// JSON encoding preserves integer and decimal precision and rejects
+		// non-finite floats and malformed json.Number values.
+		encoded, err := json.Marshal(v)
+		if err != nil {
+			return "", true, fmt.Errorf("%w: invalid numeric value: %v", ErrInvalidFilter, err)
+		}
+		return string(encoded), true, nil
 	default:
-		return 0, false
+		return "", false, nil
 	}
 }

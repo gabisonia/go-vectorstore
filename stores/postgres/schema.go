@@ -64,10 +64,11 @@ func (s *PostgresVectorStore) validateCollectionSchema(ctx context.Context, tabl
 	type columnInfo struct {
 		dataType string
 		udtName  string
+		nullable string
 	}
 
 	rows, err := s.pool.Query(ctx,
-		`SELECT column_name, data_type, udt_name
+		`SELECT column_name, data_type, udt_name, is_nullable
 		 FROM information_schema.columns
 		 WHERE table_schema = $1 AND table_name = $2`,
 		s.opts.Schema,
@@ -82,7 +83,7 @@ func (s *PostgresVectorStore) validateCollectionSchema(ctx context.Context, tabl
 	for rows.Next() {
 		var name string
 		var info columnInfo
-		if err := rows.Scan(&name, &info.dataType, &info.udtName); err != nil {
+		if err := rows.Scan(&name, &info.dataType, &info.udtName, &info.nullable); err != nil {
 			return fmt.Errorf("scan schema columns: %w", err)
 		}
 		cols[name] = info
@@ -131,6 +132,14 @@ func (s *PostgresVectorStore) validateCollectionSchema(ctx context.Context, tabl
 	}
 	if dimension != expectedDimension {
 		return fmt.Errorf("%w: expected vector dimension %d, got %d", vectordata.ErrSchemaMismatch, expectedDimension, dimension)
+	}
+	for _, name := range []string{idColumn, vectorColumn, metadataColumn} {
+		if info, ok := cols[name]; ok && info.nullable != "NO" {
+			return fmt.Errorf("%w: column %q must be NOT NULL", vectordata.ErrSchemaMismatch, name)
+		}
+	}
+	if info, ok := cols[contentColumn]; ok && info.nullable != "YES" {
+		return fmt.Errorf("%w: column %q must allow NULL", vectordata.ErrSchemaMismatch, contentColumn)
 	}
 
 	// Check all existing columns before making optional schema changes.
