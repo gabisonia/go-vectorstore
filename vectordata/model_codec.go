@@ -68,7 +68,7 @@ func inferDataType(t reflect.Type) DataType {
 
 // DefinitionFor reads vectordata tags. Roles are key, data, or vector. Options:
 // name=<storage name>, type=<type>, generated, optional, index, fulltext,
-// dimensions=<n>, metric=<metric>, source=<data field>, method=hnsw|ivfflat.
+// dimensions=<n>, precision=float32|float16, metric=<metric>, source=<data field>, method=hnsw|ivfflat.
 func DefinitionFor[T any]() (CollectionDefinition, error) {
 	t, _, err := modelType[T]()
 	if err != nil {
@@ -91,7 +91,7 @@ func DefinitionFor[T any]() (CollectionDefinition, error) {
 			key, value, hasValue := strings.Cut(option, "=")
 			if hasValue {
 				switch key {
-				case "name", "type", "dimensions", "metric", "source", "method":
+				case "name", "type", "dimensions", "precision", "metric", "source", "method":
 				default:
 					return d, fmt.Errorf("%w: unknown tag option %q", ErrSchemaMismatch, key)
 				}
@@ -120,7 +120,7 @@ func DefinitionFor[T any]() (CollectionDefinition, error) {
 			allowedValues["type"] = true
 		case "vector":
 			allowedFlags["index"] = true
-			for _, key := range []string{"dimensions", "metric", "source", "method"} {
+			for _, key := range []string{"dimensions", "precision", "metric", "source", "method"} {
 				allowedValues[key] = true
 			}
 		}
@@ -159,7 +159,7 @@ func DefinitionFor[T any]() (CollectionDefinition, error) {
 			if err != nil {
 				return d, fmt.Errorf("%w: vector %q requires dimensions", ErrSchemaMismatch, f.Name)
 			}
-			p := VectorProperty{Name: f.Name, StorageName: values["name"], Dimensions: dimensions, Metric: DistanceMetric(values["metric"]), SourceProperty: values["source"]}
+			p := VectorProperty{Name: f.Name, StorageName: values["name"], Dimensions: dimensions, Precision: VectorPrecision(values["precision"]), Metric: DistanceMetric(values["metric"]), SourceProperty: values["source"]}
 			if flags["index"] || values["method"] != "" {
 				p.Index = &VectorIndexOptions{Method: IndexMethod(values["method"])}
 			}

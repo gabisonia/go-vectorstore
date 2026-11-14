@@ -1,5 +1,36 @@
 # Performance and verification
 
+## Half-precision vector verification
+
+Run the precision checks against a disposable PostgreSQL instance:
+
+```sh
+go test -race -tags=integration -run 'Float16|HalfVector|VectorPrecision|ModelContract/capabilities/vector_precisions' \
+  -v -timeout=3m ./stores/postgres
+go test -race -run 'Float16|VectorPrecision' ./vectordata
+```
+
+Unit checks cover every finite binary16 value, midpoint ties and adjacent float32
+values, subnormals, overflow and cosine vectors that round to zero. Integration
+checks compare deterministic float32 values directly with PostgreSQL casts, test
+mixed-precision text/binary writes and typed reads, and create/search a
+3,072-dimension halfvec HNSW index. Shared conformance checks exercise both memory
+and PostgreSQL for all supported metrics, embeddings and text/hybrid queries.
+
+The storage/recall fixture contains 1,000 vectors with 32 dimensions and ten query
+vectors from fixed seeds. It compares halfvec HNSW/IVFFlat results with exact
+float32 search, requires aggregate recall@10 of at least 0.90, and verifies the
+generated search SQL uses the halfvec index. HNSW uses `ef_search=100`; IVFFlat
+uses ten lists and nine probes. A local PostgreSQL 18 run achieved recall of 1.00
+and 0.98 respectively. These small, synthetic checks are regression tests, not a
+prediction of production recall or latency.
+
+The same run measured stored vector columns at 136 bytes for float32 and 69 bytes
+for float16 (`pg_column_size`); the smaller value benefits from PostgreSQL's short
+varlena header. The underlying formats use four versus two bytes per component,
+plus headers. This does not measure total row, table or index size. Writes still
+use the existing float32 wire encoding followed by an explicit halfvec cast.
+
 ## Reproducing benchmarks
 
 Encoding and SQL batch construction do not require PostgreSQL:

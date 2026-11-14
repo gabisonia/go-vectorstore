@@ -47,8 +47,11 @@ type DataProperty struct {
 type VectorProperty struct {
 	Name, StorageName string
 	Dimensions        int
-	Metric            DistanceMetric
-	Index             *VectorIndexOptions
+	// Precision defaults to float32. Its canonical default stays empty so existing
+	// serialized model registrations remain unchanged.
+	Precision VectorPrecision `json:",omitempty"`
+	Metric    DistanceMetric
+	Index     *VectorIndexOptions
 	// SourceProperty names a string data property used for automatic embedding.
 	SourceProperty string
 	Embedder       Embedder `json:"-"`
@@ -262,6 +265,13 @@ func (d CollectionDefinition) Normalize() (CollectionDefinition, error) {
 		if p.Metric == "" {
 			p.Metric = DistanceCosine
 		}
+		switch p.Precision {
+		case "", VectorFloat32:
+			p.Precision = ""
+		case VectorFloat16:
+		default:
+			return fail("unsupported vector precision")
+		}
 		if !add(p.Name, p.StorageName) || p.Dimensions <= 0 {
 			return fail("invalid vector property")
 		}
@@ -336,20 +346,8 @@ func (d CollectionDefinition) Vector(name string) (VectorProperty, error) {
 	return VectorProperty{}, fmt.Errorf("%w: specify a vector property from the collection definition", ErrInvalidSearchOptions)
 }
 func ValidateModelVector(vector []float32, p VectorProperty) error {
-	if len(vector) != p.Dimensions {
-		return fmt.Errorf("%w: property %q expects %d, got %d", ErrDimensionMismatch, p.Name, p.Dimensions, len(vector))
-	}
-	nonzero := false
-	for _, x := range vector {
-		if math.IsNaN(float64(x)) || math.IsInf(float64(x), 0) {
-			return fmt.Errorf("%w: non-finite element in %q", ErrInvalidVector, p.Name)
-		}
-		nonzero = nonzero || x != 0
-	}
-	if !nonzero && (p.Metric == "" || p.Metric == DistanceCosine) {
-		return fmt.Errorf("%w: zero cosine vector in %q", ErrInvalidVector, p.Name)
-	}
-	return nil
+	_, err := modelVector(vector, p, false)
+	return err
 }
 func (d CollectionDefinition) NormalizeKey(key any) (any, error) {
 	if isNilValue(key) {
@@ -529,8 +527,12 @@ func PrepareModelRecords(ctx context.Context, d CollectionDefinition, opts Model
 				}
 				positions = append(positions, i)
 				inputs = append(inputs, value)
-			} else if err := ValidateModelVector(out[i].Vectors[p.Name], p); err != nil {
-				return nil, fmt.Errorf("%w: record %d: %w", ErrInvalidRecord, i, err)
+			} else {
+				vector, err := NormalizeModelVector(out[i].Vectors[p.Name], p)
+				if err != nil {
+					return nil, fmt.Errorf("%w: record %d: %w", ErrInvalidRecord, i, err)
+				}
+				out[i].Vectors[p.Name] = vector
 			}
 		}
 		if len(inputs) > 0 {
@@ -562,11 +564,15 @@ func PrepareModelRecords(ctx context.Context, d CollectionDefinition, opts Model
 				}
 				for j, vector := range vectors {
 					i := positions[start+j]
-					if err := ValidateModelVector(vector, p); err != nil {
+					vector, err := NormalizeModelVector(vector, p)
+					if err != nil {
 						return nil, fmt.Errorf("%w: record %d: %w", ErrInvalidRecord, i, err)
 					}
 					// Embedders may reuse their output buffers on the next call.
-					out[i].Vectors[p.Name] = append([]float32(nil), vector...)
+					if p.Precision != VectorFloat16 {
+						vector = append([]float32(nil), vector...)
+					}
+					out[i].Vectors[p.Name] = vector
 				}
 				start = end
 			}
@@ -598,10 +604,7 @@ func EmbedQuery(ctx context.Context, text string, p VectorProperty, opts ModelCo
 	if len(vectors) != 1 {
 		return nil, fmt.Errorf("%w: expected one query embedding", ErrInvalidVector)
 	}
-	if err := ValidateModelVector(vectors[0], p); err != nil {
-		return nil, err
-	}
-	return vectors[0], nil
+	return NormalizeModelVector(vectors[0], p)
 }
 func ValidateModelSearchOptions(top int, opts ModelSearchOptions) error {
 	if top <= 0 || opts.Skip < 0 || top > int(^uint(0)>>1)-opts.Skip {

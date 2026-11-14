@@ -62,7 +62,7 @@ names, names over 63 bytes, and the reserved `__vs_` prefix are rejected.
 | --- | --- |
 | `key` | `name=<storage name>`, `type=string|int64|uuid`, `generated` |
 | `data` | `name=<storage name>`, `type=<data type>`, `optional`, `index`, `fulltext` |
-| `vector` | `name=<storage name>`, `dimensions=<n>`, `metric=cosine|l2|inner_product`, `index`, `method=hnsw|ivfflat`, `source=<data field>` |
+| `vector` | `name=<storage name>`, `dimensions=<n>`, `precision=float32|float16`, `metric=cosine|l2|inner_product`, `index`, `method=hnsw|ivfflat`, `source=<data field>` |
 | `-` | Ignore the field |
 
 Untagged fields are ignored when inferring a definition. Exported fields and
@@ -115,6 +115,8 @@ if provider, ok := store.(vectordata.CapabilityProvider); ok {
 
 Both providers report string/int64/UUID keys, generated int64 keys, all seven
 portable data types, and cosine/L2/inner-product metrics.
+`VectorPrecisions` reports `VectorFloat32` and `VectorFloat16` on both providers;
+PostgreSQL float16 storage requires pgvector 0.7+ and a visible `halfvec` type.
 
 | Feature | Memory | PostgreSQL |
 | --- | --- | --- |
@@ -229,6 +231,51 @@ score threshold. HNSW/IVFFlat tuning is passed as
 `postgres.SearchTuning` through `ProviderOptions`; unknown provider options are
 rejected. Transaction-local settings do not leak to other pooled requests.
 
+## Vector storage precision
+
+Vector inputs and outputs remain `[]float32`. Select half-precision storage with a
+tag or explicit definition:
+
+```go
+type CompactProduct struct {
+    ID        string    `vectordata:"key"`
+    Embedding []float32 `vectordata:"vector,dimensions=3072,precision=float16,index"`
+}
+
+vector := vectordata.VectorProperty{
+    Name: "Embedding", Dimensions: 3072, Precision: vectordata.VectorFloat16,
+    Index: &vectordata.VectorIndexOptions{Method: vectordata.IndexMethodHNSW},
+}
+_ = vector
+```
+
+PostgreSQL maps float16 properties to `halfvec(n)` and selects `halfvec_*_ops` for
+HNSW/IVFFlat indexes. Both storage types allow up to 16,000 dimensions; indexed
+float32 properties allow up to 2,000 and indexed float16 properties up to 4,000.
+Invalid PostgreSQL dimensions fail while constructing the collection handle.
+These limits follow [pgvector's supported types](https://github.com/pgvector/pgvector#hnsw).
+Memory accepts index hints without building physical indexes.
+
+Writes, embeddings and search queries round float16 components to IEEE binary16
+using nearest, ties to even. Reads expose those rounded values as float32.
+Memory uses the same conversion, so it models precision loss as well as schema
+validation. Non-finite values, values that overflow after rounding and cosine
+vectors that become all-zero are rejected with `ErrInvalidVector` before storage
+writes. Small components can round to zero; rounding can change distances, scores,
+threshold matches and result ordering. Measure recall with your own embeddings.
+
+Empty precision and explicit `VectorFloat32` preserve existing float32 behavior.
+Normalization keeps that default empty and omits it from serialized registrations,
+so models registered before precision support do not need metadata changes.
+Precision changes on registered properties require a manual, potentially lossy
+conversion; the migration planner flags them and additive `ApplyMigration` rejects
+them. Index additions on existing half-precision properties can be applied.
+
+The original Record API remains float32. Model writes reuse the existing float32
+wire encoding and explicitly cast to halfvec; storage precision does not imply
+16-bit wire transport. See [precision verification](performance.md#half-precision-vector-verification)
+for rounding, storage and recall checks.
+
 ## Automatic embeddings
 
 Implement `Embedder.Embed(ctx, inputs []string) ([][]float32,error)` and configure
@@ -305,7 +352,7 @@ measurements and model index-plan checks. Keep production database integration
 tests even when using memory for development.
 
 This is a Go adaptation of the main model-driven workflows, not binary or full
-feature parity with every .NET provider. Half/binary/sparse vectors, additional
+feature parity with every .NET provider. Binary/sparse vectors, additional
 metrics, server-side embedding generation, and automatic model migrations remain
 outside the initial model API. Existing Record API callers can adopt models
 collection by collection.

@@ -18,6 +18,7 @@ func runCapabilities(t *testing.T, factory Factory) {
 		t.Skip("provider does not expose optional capability metadata")
 	}
 	caps := provider.Capabilities()
+	t.Run("vector_precisions", func(t *testing.T) { runVectorPrecisions(t, factory, caps) })
 	if caps.Backend == "" || len(caps.KeyTypes) == 0 {
 		t.Fatal("capabilities must identify the backend and supported keys")
 	}

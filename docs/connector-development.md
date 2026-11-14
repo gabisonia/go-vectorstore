@@ -180,6 +180,14 @@ interface is present, including native keys/data, generated keys, metrics, index
 and hybrid search. Providers without metadata continue to run the other contract
 checks.
 
+Advertise supported `VectorPrecisions` explicitly. The Go vector API stays float32;
+`NormalizeModelVector` validates and rounds float16 values. It returns a new slice
+for float16 and the original slice for float32, so copy float32 inputs before
+retaining them. Use it for both stored vectors and search queries. The capability
+conformance tests verify mixed precision, embedding generation, query rounding,
+text/hybrid search and atomic rejection of invalid values. Persist precision and
+validate matching column/index types; classify changes as manual conversions.
+
 `vectordata.MigrationPlanner` is a separate optional capability for model schema
 planning. Advertise `MigrationPlanning` only when it is implemented. Planning must
 be read-only and return provider SQL/arguments for review; classify manual work,

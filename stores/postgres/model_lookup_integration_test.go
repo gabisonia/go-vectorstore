@@ -36,6 +36,7 @@ func TestIntegrationCollectionExistsMatchesListing(t *testing.T) {
 	}
 	table := func(name string) string { return qualifiedTable(store.opts.Schema, name) }
 	exec("CREATE TABLE " + table("legacy") + " (v vector(2))")
+	exec("CREATE TABLE " + table("legacy_half") + " (v halfvec(2))")
 	exec("CREATE TABLE " + table("partitioned") + " (id int, v vector(2)) PARTITION BY RANGE(id)")
 	exec("CREATE TABLE " + table(`quoted.name"x`) + " (v vector(2))")
 	exec("CREATE TABLE " + table("ordinary") + " (id int)")
@@ -62,6 +63,7 @@ func TestIntegrationCollectionExistsMatchesListing(t *testing.T) {
 			}
 		}
 	}
+	expected["legacy_half"] = true
 	// Legacy collections are discoverable before the registry has been created.
 	check()
 	d := vectordata.CollectionDefinition{Key: vectordata.KeyProperty{Name: "ID"}}

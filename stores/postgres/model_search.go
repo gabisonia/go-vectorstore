@@ -49,7 +49,11 @@ func (c *ModelCollection) searchPlan(vector []float32, top int, opts vectordata.
 	if err != nil {
 		return "", nil, p, err
 	}
-	if err := vectordata.ValidateModelSearch(vector, top, opts, p); err != nil {
+	if err := vectordata.ValidateModelSearchOptions(top, opts); err != nil {
+		return "", nil, p, err
+	}
+	vector, err = vectordata.NormalizeModelVector(vector, p)
+	if err != nil {
 		return "", nil, p, err
 	}
 	_, _, relaxed, err := modelTuning(opts.ProviderOptions)
@@ -60,7 +64,7 @@ func (c *ModelCollection) searchPlan(vector []float32, top int, opts vectordata.
 	if err != nil {
 		return "", nil, p, err
 	}
-	distance := "(t." + quoteIdent(p.StorageName) + " " + op + " $1::vector)"
+	distance := "(t." + quoteIdent(p.StorageName) + " " + op + " $1::" + vectorSQLType(p) + ")"
 	if err := vectordata.ValidateModelFilter(opts.Filter, c.definition); err != nil {
 		return "", nil, p, err
 	}
@@ -299,7 +303,8 @@ func (c *ModelCollection) hybridPlan(vector []float32, keywords string, top int,
 	if err != nil {
 		return "", nil, p, err
 	}
-	if err := vectordata.ValidateModelVector(vector, p); err != nil {
+	vector, err = vectordata.NormalizeModelVector(vector, p)
+	if err != nil {
 		return "", nil, p, err
 	}
 	where, filterArgs, next, err := filtersql.CompileFilterSQL(opts.Filter, c.filterConfig(), 3)
@@ -309,7 +314,7 @@ func (c *ModelCollection) hybridPlan(vector []float32, keywords string, top int,
 	args := append([]any{vectorLiteral(vector), keywords}, filterArgs...)
 	bind := func(value any) string { ph := fmt.Sprintf("$%d", next); next++; args = append(args, value); return ph }
 	op, _ := metricOperator(p.Metric)
-	distance := "(t." + quoteIdent(p.StorageName) + " " + op + " $1::vector)"
+	distance := "(t." + quoteIdent(p.StorageName) + " " + op + " $1::" + vectorSQLType(p) + ")"
 	key := "t." + quoteIdent(c.definition.Key.StorageName)
 	predicate := "TRUE"
 	if where != "" {
