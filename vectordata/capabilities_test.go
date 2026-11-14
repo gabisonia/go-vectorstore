@@ -22,7 +22,7 @@ func TestBuiltInCapabilitiesAreLocalSnapshots(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			before := tt.provider.Capabilities()
-			if before.Backend != tt.name || before.FullTextIndexing != tt.indexed || before.HybridSearch != tt.indexed || before.MigrationPlanning != tt.indexed {
+			if before.Backend != tt.name || before.FullTextIndexing != tt.indexed || before.HybridSearch != tt.indexed || before.MigrationPlanning != tt.indexed || before.MigrationApplication != tt.indexed {
 				t.Fatalf("unexpected features: %+v", before)
 			}
 			if !slices.Equal(before.GeneratedKeyTypes, []vectordata.KeyType{vectordata.KeyInt64}) {

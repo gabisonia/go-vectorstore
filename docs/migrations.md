@@ -1,8 +1,9 @@
-# Model migration planning
+# Model migrations
 
-PostgreSQL implements the optional `vectordata.MigrationPlanner` interface and
-reports `Capabilities().MigrationPlanning=true`. Memory reports false. Existing
-`ModelStore` and collection interfaces do not require migration support.
+PostgreSQL implements the optional `vectordata.MigrationPlanner` and
+`vectordata.MigrationApplier` interfaces, reporting `MigrationPlanning=true` and
+`MigrationApplication=true`. Memory reports both false. Existing `ModelStore` and
+collection interfaces do not require migration support.
 
 `PlanMigration(ctx, name, desired)` compares the registered model with live
 storage and the desired normalized definition. It returns a report and SQL; it
@@ -44,11 +45,61 @@ For a typed model, pass the result of `vectordata.DefinitionFor[ProductV2]()` as
 `vectordata.MigrationPlanner`; unavailable metadata or interfaces do not imply
 migration support in a third-party provider.
 
-The plan includes `Backend`, `Namespace`, `Collection`, `StorageExists`, the
+The plan includes `Backend`, `Namespace`, `Collection`, `Revision`, `StorageExists`, the
 registered/desired definitions, ordered `Steps`, blocking `Issues`, and a separate
 registry `Finalization`. Runtime embedder instances are omitted from plan
 snapshots and metadata SQL. Mutating a returned plan does not configure the store.
 Bound SQL arguments remain separate; do not interpolate them into SQL strings.
+
+## Applying additive changes
+
+After reviewing the plan above, apply it explicitly:
+
+```go
+if err := pgStore.ApplyMigration(ctx, plan); err != nil {
+    return err
+}
+// Obtain a collection handle for the new definition. Existing handles keep their
+// original definitions; they do not acquire new fields automatically.
+products, err := pgStore.GetModelCollection("products", desired, vectordata.ModelCollectionOptions{})
+if err != nil {
+    return err
+}
+_ = products
+```
+
+Through `ModelStore`, check `MigrationApplication` and assert
+`vectordata.MigrationApplier`. Application accepts optional scalar/JSON/array data
+additions and new data, full-text or vector indexes. Existing property names,
+storage mappings, types, nullability, keys and vector settings must stay unchanged.
+Removing/rebuilding indexes, renames, required fields, new vectors, conversions,
+backfills and re-embedding require a separate migration procedure. A plan with
+`HasManualWork()==false` can still fall outside this additive subset.
+
+Pass the complete, unedited plan from this provider version and database. JSON
+round-trips are supported; runtime embedders are excluded. Application regenerates
+the plan and compares the entire review, including its SQL and risk flags. It
+executes only regenerated SQL. `Revision` binds the review to database/schema/table
+identities and the registered definition; it is a staleness token, not an approval
+signature. Plans from older versions without a revision must be regenerated.
+
+Application uses one transaction and connection. It serializes with collection
+lifecycle operations, locks the target table and registry row, then revalidates
+live storage and registration before executing any migration SQL. It validates the
+desired storage and final registration before commit. DDL, indexes and registration
+roll back together on errors or cancellation. The target table uses an exclusive
+lock and ordinary index builds, so application blocks reads and writes until the
+transaction ends; budget a maintenance window and context deadline accordingly.
+See PostgreSQL's [explicit locking documentation](https://www.postgresql.org/docs/16/explicit-locking.html).
+The connection needs table ownership/DDL rights and registry SELECT/UPDATE rights,
+plus privileges required by the generated statements and row locks.
+
+Use `errors.Is(err, vectordata.ErrMigrationConflict)` for edited/stale reviews or
+drift, and `errors.Is(err, vectordata.ErrMigrationNotAdditive)` for unsupported
+changes on otherwise valid plans. Drift can also match `ErrSchemaMismatch`;
+database errors remain available through `errors.As`. After a successful apply,
+the old review is stale. Replan after conflicts or an uncertain commit outcome;
+a freshly reviewed no-op plan can be applied successfully.
 
 ## Supported changes and classifications
 
@@ -103,7 +154,7 @@ Other database dependencies, custom constraints, triggers, permissions, table
 contents and deployment limits need separate review. Generated index SQL uses
 ordinary blocking builds; online/concurrent migration design is outside this API.
 
-## Registry finalization and explicit application
+## Registry finalization and manual migrations
 
 Storage and application work must finish before updating the registered model.
 `Finalization` is separate from `Steps` and is marked manual whenever preceding
@@ -113,15 +164,15 @@ rows means the registration changed or disappeared; stop and reassess the plan.
 Known older JSON representations can yield metadata-only finalization even when
 normalization produces the same logical model.
 
-The library provides no Apply/Execute migration API. Plans do not reserve locks or
-promise that a later execution sees the same schema. Revalidate live storage and
-registration before explicit application, coordinate with other schema writers,
-use an appropriate transaction/deployment strategy, check finalization's affected
-row count, and validate the final model with `EnsureModelCollection`. A manual
+Planning does not reserve locks or promise that later execution sees the same
+schema. For changes outside `ApplyMigration`'s additive subset, revalidate live
+storage and registration, coordinate with other schema writers, use an appropriate
+transaction/deployment strategy, check finalization's affected row count, and
+validate the final model with `EnsureModelCollection`. A manual
 multi-stage migration can produce intermediate drift until its storage work and
 registry finalization are completed.
 
-Integration tests execute generated SQL only against disposable fixtures. They
-verify additions, renames, nullability/backfills, index rebuild/adoption, removals,
-identifier quoting, drift blocking, stale finalization and read-only privileges
-on PostgreSQL 16/18.
+Integration tests use disposable fixtures on PostgreSQL 16/18. They verify planning
+classifications and read-only privileges, additive application with native keys,
+data preservation, quoting, rejection of unsupported/edited/stale plans, concurrent
+reviews, cancellation and rollback when finalization fails or rewrites metadata.

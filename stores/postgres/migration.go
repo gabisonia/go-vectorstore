@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -31,17 +32,33 @@ func (s *PostgresVectorStore) PlanMigration(ctx context.Context, name string, de
 	if err != nil {
 		return plan, err
 	}
-	plan = vectordata.MigrationPlan{Backend: "postgres", Namespace: s.opts.Schema, Collection: name, Desired: definitionForPlan(c.definition)}
 	tx, err := s.pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.RepeatableRead, AccessMode: pgx.ReadOnly})
 	if err != nil {
 		return plan, err
 	}
 	defer rollbackTx(ctx, tx)
+	plan, err = c.planMigrationTx(ctx, tx, indexes)
+	if err != nil {
+		return plan, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return plan, err
+	}
+	return plan, nil
+}
+
+// planMigrationTx never begins/commits or acquires a second connection.
+func (c *ModelCollection) planMigrationTx(ctx context.Context, tx pgx.Tx, indexes []modelIndexSpec) (plan vectordata.MigrationPlan, err error) {
+	s, name := c.store, c.name
+	plan = vectordata.MigrationPlan{Backend: "postgres", Namespace: s.opts.Schema, Collection: name, Desired: definitionForPlan(c.definition)}
 	var schema, registry, vector bool
-	var kind string
+	var kind, database, databaseID, namespaceID, storageID, registryID string
 	err = tx.QueryRow(ctx, `SELECT EXISTS (SELECT 1 FROM pg_namespace WHERE nspname=$1),
  to_regclass($2) IS NOT NULL, to_regtype('vector') IS NOT NULL,
- coalesce((SELECT relkind::text FROM pg_class WHERE oid=to_regclass($3)),'')`, s.opts.Schema, qualifiedTable(s.opts.Schema, modelRegistry), c.table()).Scan(&schema, &registry, &vector, &kind)
+ coalesce((SELECT relkind::text FROM pg_class WHERE oid=to_regclass($3)),''),
+ current_database(),(SELECT oid::text FROM pg_database WHERE datname=current_database()),
+ coalesce((SELECT oid::text FROM pg_namespace WHERE nspname=$1),''),
+ coalesce(to_regclass($3)::oid::text,''),coalesce(to_regclass($2)::oid::text,'')`, s.opts.Schema, qualifiedTable(s.opts.Schema, modelRegistry), c.table()).Scan(&schema, &registry, &vector, &kind, &database, &databaseID, &namespaceID, &storageID, &registryID)
 	if err != nil {
 		return plan, err
 	}
@@ -87,6 +104,8 @@ func (s *PostgresVectorStore) PlanMigration(ctx context.Context, name string, de
 			}
 		}
 	}
+	identity, _ := json.Marshal([]string{database, databaseID, namespaceID, storageID, registryID, registeredJSON})
+	plan.Revision = fmt.Sprintf("%x", sha256.Sum256(identity))
 	if kind != "" && kind != "r" {
 		plan.Issues = append(plan.Issues, vectordata.MigrationIssue{Kind: "unsupported_relation", Description: "migration planning supports ordinary model tables; views and partitioned/inherited tables need manual migration design"})
 	}
@@ -159,9 +178,6 @@ func (s *PostgresVectorStore) PlanMigration(ctx context.Context, name string, de
 		if !same {
 			plan.Finalization = &vectordata.MigrationStep{Kind: vectordata.MigrationUpdateDefinition, Description: "register the desired model only after every storage/manual step is complete; require one affected row", ExpectedRows: 1, Manual: plan.HasManualWork(), SQL: "UPDATE " + qualifiedTable(s.opts.Schema, modelRegistry) + " SET definition=$2::jsonb WHERE name=$1 AND definition=$3::jsonb", Args: []any{name, string(payload), registeredJSON}}
 		}
-	}
-	if err := tx.Commit(ctx); err != nil {
-		return plan, err
 	}
 	return plan, nil
 }
