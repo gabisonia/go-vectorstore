@@ -157,3 +157,15 @@ func (s *VectorStore) Collection(name string, dimension int, metric vectordata.D
 	return nil
 }
 ```
+
+## Model API providers
+
+New providers can implement `vectordata.ModelStore` and `ModelCollection` without
+implementing the original Record API. Normalize definitions once, call
+`PrepareModelRecords` before writes, preserve native key types and data values,
+and run `vectordata/conformance.Run` against the provider. Return `ErrUnsupported`
+for unknown provider options; implement `HybridSearcher` only when supported.
+Use provider-specific filter translation or `MatchModelFilter` for an in-memory
+implementation. The PostgreSQL compiler is in `stores/postgres/filtersql`.
+See [model-api.md](model-api.md) for null, projection, key, score and iterator
+semantics, and keep integration tests against the real production database.

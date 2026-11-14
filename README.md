@@ -7,10 +7,12 @@
 
 A lightweight Go vector-store library inspired by `Microsoft.Extensions.VectorData`.
 
-MVP scope:
+Scope:
 - Go 1.25+
 - Postgres + `pgvector`
-- Record-based core API with optional typed codec wrapper
+- Model-driven collections with typed/native keys, named vectors, struct tags, and optional embeddings
+- PostgreSQL provider plus an in-memory model provider
+- Original Record API and custom codecs remain supported
 
 This library can be used to build retrieval systems such as:
 - semantic search
@@ -60,7 +62,39 @@ go run ./samples/semantic-search -q "how can I reduce cloud costs?"
 docker compose down
 ```
 
-## Core API Walkthrough
+## Model-driven API
+
+The model API follows the key/data/vector-property design of
+`Microsoft.Extensions.VectorData`. Define Go structs with `vectordata` tags or
+provide an explicit `CollectionDefinition`, then use
+`EnsureTypedModelCollection[K,T]` for typed CRUD, filtered retrieval and search.
+PostgreSQL stores model fields in native columns and creates the declared indexes.
+
+```go
+type Hotel struct {
+    ID          int64     `vectordata:"key,generated,name=hotel_id"`
+    Name        string    `vectordata:"data,index"`
+    Description string    `vectordata:"data,fulltext"`
+    Tags        []string  `vectordata:"data,index"`
+    Embedding   []float32 `vectordata:"vector,dimensions=3,index,source=Description"`
+}
+```
+
+Run a complete example without an API key:
+
+```sh
+go run ./samples/model-store
+```
+
+The same sample accepts `-dsn` to use PostgreSQL. It demonstrates automatic
+embedding generation with a deterministic instructional embedder, typed reads,
+array filtering, and generated keys. Use a real embedding model for semantic search.
+
+See [the model API guide](docs/model-api.md) for collection lifecycle, explicit
+schemas, native UUID/int64 keys, multiple vectors, iterator APIs, embeddings and
+PostgreSQL hybrid search. Original `Record`/`Collection` callers remain compatible.
+
+## Record API Walkthrough
 
 ```go
 package main
@@ -283,6 +317,7 @@ git push origin "v${VERSION}"
 ## Samples
 
 - Overview and entry points: [`samples/README.md`](samples/README.md)
+- Model-driven collections (no API key): `samples/model-store`
 - Semantic search sample app: `samples/semantic-search`
 - RAG sample app (`RAGrimosa`): `samples/ragrimosa`
 
@@ -291,6 +326,7 @@ git push origin "v${VERSION}"
 - Docs index: [`docs/README.md`](docs/README.md)
 - Internals and architecture: [`docs/architecture.md`](docs/architecture.md)
 - Connector development guide: [`docs/connector-development.md`](docs/connector-development.md)
+- Model-driven API: [`docs/model-api.md`](docs/model-api.md)
 - Benchmarks and performance notes: [`docs/performance.md`](docs/performance.md)
 
 ## License

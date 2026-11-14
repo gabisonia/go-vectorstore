@@ -10,17 +10,24 @@ import (
 )
 
 func (s *PostgresVectorStore) ensureBaseSchema(ctx context.Context) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer rollbackTx(ctx, tx)
+	// IF NOT EXISTS alone can race on PostgreSQL catalog rows during concurrent initialization.
+	if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock(hashtextextended('go-vectorstore:base-schema',0))"); err != nil {
+		return err
+	}
 	if s.opts.EnsureExtension {
-		if _, err := s.pool.Exec(ctx, `CREATE EXTENSION IF NOT EXISTS vector`); err != nil {
+		if _, err := tx.Exec(ctx, `CREATE EXTENSION IF NOT EXISTS vector`); err != nil {
 			return fmt.Errorf("ensure pgvector extension: %w", err)
 		}
 	}
-
-	query := fmt.Sprintf(`CREATE SCHEMA IF NOT EXISTS %s`, quoteIdent(s.opts.Schema))
-	if _, err := s.pool.Exec(ctx, query); err != nil {
+	if _, err := tx.Exec(ctx, "CREATE SCHEMA IF NOT EXISTS "+quoteIdent(s.opts.Schema)); err != nil {
 		return fmt.Errorf("ensure schema %q: %w", s.opts.Schema, err)
 	}
-	return nil
+	return tx.Commit(ctx)
 }
 
 func (s *PostgresVectorStore) tableExists(ctx context.Context, table string) (bool, error) {
