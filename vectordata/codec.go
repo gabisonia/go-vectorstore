@@ -82,3 +82,84 @@ func (c *TypedCollection[T]) encodeMany(values []T) ([]Record, error) {
 	}
 	return records, nil
 }
+
+func (c *TypedCollection[T]) Name() string           { return c.base.Name() }
+func (c *TypedCollection[T]) Dimension() int         { return c.base.Dimension() }
+func (c *TypedCollection[T]) Metric() DistanceMetric { return c.base.Metric() }
+func (c *TypedCollection[T]) Delete(ctx context.Context, ids []string) (int64, error) {
+	return c.base.Delete(ctx, ids)
+}
+func (c *TypedCollection[T]) Count(ctx context.Context, filter Filter) (int64, error) {
+	return c.base.Count(ctx, filter)
+}
+func (c *TypedCollection[T]) EnsureIndexes(ctx context.Context, opts IndexOptions) error {
+	return c.base.EnsureIndexes(ctx, opts)
+}
+
+func (c *TypedCollection[T]) Exists(ctx context.Context) (bool, error) {
+	l, ok := c.base.(CollectionLifecycle)
+	if !ok {
+		return false, ErrUnsupported
+	}
+	return l.Exists(ctx)
+}
+func (c *TypedCollection[T]) EnsureExists(ctx context.Context) error {
+	l, ok := c.base.(CollectionLifecycle)
+	if !ok {
+		return ErrUnsupported
+	}
+	return l.EnsureExists(ctx)
+}
+func (c *TypedCollection[T]) EnsureDeleted(ctx context.Context) error {
+	l, ok := c.base.(CollectionLifecycle)
+	if !ok {
+		return ErrUnsupported
+	}
+	return l.EnsureDeleted(ctx)
+}
+func (c *TypedCollection[T]) GetWithOptions(ctx context.Context, id string, opts RetrievalOptions) (T, error) {
+	q, ok := c.base.(RecordQueryer)
+	if !ok {
+		var zero T
+		return zero, ErrUnsupported
+	}
+	r, err := q.GetWithOptions(ctx, id, opts)
+	if err != nil {
+		var zero T
+		return zero, err
+	}
+	return c.codec.Decode(r)
+}
+func (c *TypedCollection[T]) GetMany(ctx context.Context, ids []string, opts RetrievalOptions) ([]T, error) {
+	q, ok := c.base.(RecordQueryer)
+	if !ok {
+		return nil, ErrUnsupported
+	}
+	records, err := q.GetMany(ctx, ids, opts)
+	if err != nil {
+		return nil, err
+	}
+	return c.decodeRecords(records)
+}
+func (c *TypedCollection[T]) Query(ctx context.Context, filter Filter, top int, opts QueryOptions) ([]T, error) {
+	q, ok := c.base.(RecordQueryer)
+	if !ok {
+		return nil, ErrUnsupported
+	}
+	records, err := q.Query(ctx, filter, top, opts)
+	if err != nil {
+		return nil, err
+	}
+	return c.decodeRecords(records)
+}
+func (c *TypedCollection[T]) decodeRecords(records []Record) ([]T, error) {
+	out := make([]T, len(records))
+	for i, r := range records {
+		v, err := c.codec.Decode(r)
+		if err != nil {
+			return nil, err
+		}
+		out[i] = v
+	}
+	return out, nil
+}

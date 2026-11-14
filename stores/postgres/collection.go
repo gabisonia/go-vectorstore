@@ -7,6 +7,7 @@ import (
 	"math"
 	"strings"
 
+	"github.com/gabisonia/go-vectorstore/stores/postgres/filtersql"
 	"github.com/gabisonia/go-vectorstore/vectordata"
 	"github.com/jackc/pgx/v5"
 )
@@ -109,7 +110,7 @@ func (c *PostgresCollection) Delete(ctx context.Context, ids []string) (int64, e
 
 func (c *PostgresCollection) Count(ctx context.Context, filter vectordata.Filter) (int64, error) {
 	query := fmt.Sprintf(`SELECT COUNT(*) FROM %s`, c.tableName())
-	whereSQL, args, _, err := vectordata.CompileFilterSQL(filter, c.filterConfig(), 1)
+	whereSQL, args, _, err := filtersql.CompileFilterSQL(filter, c.filterConfig(), 1)
 	if err != nil {
 		return 0, err
 	}
@@ -182,7 +183,7 @@ func (c *PostgresCollection) buildSearchPlan(vector []float32, topK int, opts ve
 	whereParts := make([]string, 0, 2)
 
 	if opts.Filter != nil {
-		whereSQL, filterArgs, next, err := vectordata.CompileFilterSQL(opts.Filter, c.filterConfig(), nextArg)
+		whereSQL, filterArgs, next, err := filtersql.CompileFilterSQL(opts.Filter, c.filterConfig(), nextArg)
 		if err != nil {
 			return searchPlan{}, err
 		}
@@ -412,8 +413,8 @@ func (c *PostgresCollection) buildWriteBatch(records []vectordata.Record, mode w
 	return b.String(), args, nil
 }
 
-func (c *PostgresCollection) filterConfig() vectordata.FilterSQLConfig {
-	return vectordata.FilterSQLConfig{
+func (c *PostgresCollection) filterConfig() filtersql.FilterSQLConfig {
+	return filtersql.FilterSQLConfig{
 		ColumnExpr: map[string]string{
 			idColumn:      quoteIdent(idColumn),
 			contentColumn: quoteIdent(contentColumn),

@@ -1,0 +1,306 @@
+package postgres
+
+import (
+	"context"
+	"fmt"
+	"iter"
+	"strings"
+
+	"github.com/gabisonia/go-vectorstore/stores/postgres/filtersql"
+	"github.com/gabisonia/go-vectorstore/vectordata"
+	"github.com/jackc/pgx/v5"
+)
+
+// SearchTuning contains pgvector-specific settings for the model API.
+// Set ModelSearchOptions.ProviderOptions to this value (or a pointer to it).
+type SearchTuning struct {
+	HNSW    *vectordata.HNSWSearchOptions
+	IVFFlat *vectordata.IVFFlatSearchOptions
+}
+
+func modelTuning(value any) ([]searchSetting, bool, bool, error) {
+	var t SearchTuning
+	switch v := value.(type) {
+	case nil:
+	case SearchTuning:
+		t = v
+	case *SearchTuning:
+		if v != nil {
+			t = *v
+		}
+	default:
+		return nil, false, false, fmt.Errorf("%w: unknown PostgreSQL search tuning %T", vectordata.ErrUnsupported, value)
+	}
+	settings, iterative, err := searchSettings(vectordata.SearchOptions{HNSW: t.HNSW, IVFFlat: t.IVFFlat})
+	return settings, iterative, t.IVFFlat != nil && t.IVFFlat.IterativeScan, err
+}
+func scoreSQL(distance string, metric vectordata.DistanceMetric) string {
+	switch metric {
+	case vectordata.DistanceCosine:
+		return "(1 - " + distance + ")"
+	case vectordata.DistanceL2:
+		return "(1 / (1 + " + distance + "))"
+	default:
+		return "(-" + distance + ")"
+	}
+}
+func (c *ModelCollection) searchPlan(vector []float32, top int, opts vectordata.ModelSearchOptions) (string, []any, vectordata.VectorProperty, error) {
+	p, err := c.definition.Vector(opts.VectorProperty)
+	if err != nil {
+		return "", nil, p, err
+	}
+	if err := vectordata.ValidateModelSearch(vector, top, opts, p); err != nil {
+		return "", nil, p, err
+	}
+	_, _, relaxed, err := modelTuning(opts.ProviderOptions)
+	if err != nil {
+		return "", nil, p, err
+	}
+	op, err := metricOperator(p.Metric)
+	if err != nil {
+		return "", nil, p, err
+	}
+	distance := "(t." + quoteIdent(p.StorageName) + " " + op + " $1::vector)"
+	if err := vectordata.ValidateModelFilter(opts.Filter, c.definition); err != nil {
+		return "", nil, p, err
+	}
+	where, args, next, err := filtersql.CompileFilterSQL(opts.Filter, c.filterConfig(), 2)
+	if err != nil {
+		return "", nil, p, err
+	}
+	args = append([]any{vectorLiteral(vector)}, args...)
+	predicates := []string{}
+	if where != "" {
+		predicates = append(predicates, where)
+	}
+	if opts.DistanceThreshold != nil {
+		predicates = append(predicates, fmt.Sprintf("%s <= $%d", distance, next))
+		next++
+		args = append(args, *opts.DistanceThreshold)
+	}
+	if opts.ScoreThreshold != nil {
+		predicates = append(predicates, fmt.Sprintf("%s >= $%d", scoreSQL(distance, p.Metric), next))
+		next++
+		args = append(args, *opts.ScoreThreshold)
+	}
+	columns := append(c.columns("t", opts.IncludeVectors), distance+" AS __vs_distance")
+	query := "SELECT " + strings.Join(columns, ",") + " FROM " + c.table() + " t"
+	if len(predicates) > 0 {
+		query += " WHERE " + strings.Join(predicates, " AND ")
+	}
+	query += " ORDER BY __vs_distance ASC" + fmt.Sprintf(" LIMIT $%d OFFSET $%d", next, next+1)
+	args = append(args, top, opts.Skip)
+	if relaxed {
+		query = "SELECT * FROM (" + query + ") AS __vs_nearest ORDER BY __vs_distance + 0 ASC"
+	}
+	return query, args, p, nil
+}
+func (c *ModelCollection) SearchIter(ctx context.Context, vector []float32, top int, opts vectordata.ModelSearchOptions) iter.Seq2[vectordata.ModelSearchResult, error] {
+	return func(yield func(vectordata.ModelSearchResult, error) bool) {
+		sql, args, p, err := c.searchPlan(vector, top, opts)
+		if err != nil {
+			yield(vectordata.ModelSearchResult{}, c.operation("search", err))
+			return
+		}
+		c.runSearch(ctx, sql, args, p, opts, false, yield)
+	}
+}
+func (c *ModelCollection) Search(ctx context.Context, vector []float32, top int, opts vectordata.ModelSearchOptions) ([]vectordata.ModelSearchResult, error) {
+	results := []vectordata.ModelSearchResult{}
+	for r, err := range c.SearchIter(ctx, vector, top, opts) {
+		if err != nil {
+			return nil, err
+		}
+		results = append(results, r)
+	}
+	return results, nil
+}
+func (c *ModelCollection) SearchText(ctx context.Context, text string, top int, opts vectordata.ModelSearchOptions) ([]vectordata.ModelSearchResult, error) {
+	p, err := c.definition.Vector(opts.VectorProperty)
+	if err != nil {
+		return nil, err
+	}
+	if err := vectordata.ValidateModelSearchOptions(top, opts); err != nil {
+		return nil, err
+	}
+	if err := vectordata.ValidateModelFilter(opts.Filter, c.definition); err != nil {
+		return nil, err
+	}
+	if _, _, _, err := modelTuning(opts.ProviderOptions); err != nil {
+		return nil, err
+	}
+	vector, err := vectordata.EmbedQuery(ctx, text, p, c.options)
+	if err != nil {
+		return nil, c.operation("embed_query", err)
+	}
+	return c.Search(ctx, vector, top, opts)
+}
+
+type scoreScanner struct {
+	row   modelScanner
+	score *float64
+}
+
+func (s scoreScanner) Scan(targets ...any) error { return s.row.Scan(append(targets, s.score)...) }
+func (c *ModelCollection) runSearch(ctx context.Context, sql string, args []any, p vectordata.VectorProperty, opts vectordata.ModelSearchOptions, fusion bool, yield func(vectordata.ModelSearchResult, error) bool) {
+	report := func(err error) { yield(vectordata.ModelSearchResult{}, c.operation("search", err)) }
+	settings, iterative, _, err := modelTuning(opts.ProviderOptions)
+	if err != nil {
+		report(err)
+		return
+	}
+	var conn searchQueryer = c.store.pool
+	var tx pgx.Tx
+	if len(settings) > 0 {
+		tx, err = c.store.pool.Begin(ctx)
+		if err != nil {
+			report(err)
+			return
+		}
+		defer rollbackTx(ctx, tx)
+		conn = tx
+		if iterative {
+			var version string
+			if err := tx.QueryRow(ctx, "SELECT extversion FROM pg_extension WHERE extname='vector'").Scan(&version); err != nil {
+				report(err)
+				return
+			}
+			if !supportsIterativeScans(version) {
+				report(fmt.Errorf("%w: iterative scans require pgvector 0.8+", vectordata.ErrInvalidSearchOptions))
+				return
+			}
+		}
+		for _, s := range settings {
+			if _, err := tx.Exec(ctx, "SELECT pg_catalog.set_config($1,$2,true)", s.name, s.value); err != nil {
+				report(err)
+				return
+			}
+		}
+	}
+	rows, err := conn.Query(ctx, sql, args...)
+	if err != nil {
+		report(err)
+		return
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var scanner modelScanner = rows
+		var score float64
+		if fusion {
+			scanner = scoreScanner{rows, &score}
+		}
+		r, distance, err := c.scan(scanner, opts.IncludeVectors, true)
+		if err != nil {
+			report(err)
+			return
+		}
+		kind := vectordata.ScoreSimilarity
+		if fusion {
+			kind = vectordata.ScoreRRF
+		} else {
+			score = vectordata.ScoreFromDistance(p.Metric, distance)
+		}
+		if !yield(vectordata.ModelSearchResult{Record: r, Distance: distance, Score: score, ScoreKind: kind}, nil) {
+			return
+		}
+	}
+	if err := rows.Err(); err != nil {
+		report(err)
+	}
+}
+func (c *ModelCollection) HybridSearchText(ctx context.Context, text, keywords string, top int, opts vectordata.HybridSearchOptions) ([]vectordata.ModelSearchResult, error) {
+	p, err := c.definition.Vector(opts.VectorProperty)
+	if err != nil {
+		return nil, err
+	}
+	vector, err := vectordata.EmbedQuery(ctx, text, p, c.options)
+	if err != nil {
+		return nil, c.operation("embed_query", err)
+	}
+	return c.HybridSearch(ctx, vector, keywords, top, opts)
+}
+func (c *ModelCollection) HybridSearch(ctx context.Context, vector []float32, keywords string, top int, opts vectordata.HybridSearchOptions) ([]vectordata.ModelSearchResult, error) {
+	p, err := c.definition.Vector(opts.VectorProperty)
+	if err != nil {
+		return nil, err
+	}
+	if err := vectordata.ValidateModelSearch(vector, top, opts.ModelSearchOptions, p); err != nil {
+		return nil, err
+	}
+	textProperty := ""
+	for _, d := range c.definition.Data {
+		if d.IsFullTextIndexed && (opts.TextProperty == d.Name || opts.TextProperty == "") {
+			if textProperty != "" && opts.TextProperty == "" {
+				return nil, fmt.Errorf("%w: specify a full-text property", vectordata.ErrInvalidSearchOptions)
+			}
+			textProperty = d.StorageName
+		}
+	}
+	if textProperty == "" || strings.TrimSpace(keywords) == "" {
+		return nil, fmt.Errorf("%w: indexed text property and keywords required", vectordata.ErrInvalidSearchOptions)
+	}
+	candidates := opts.CandidateLimit
+	if candidates == 0 {
+		candidates = max(100, top+opts.Skip)
+	}
+	if candidates < top+opts.Skip {
+		return nil, fmt.Errorf("%w: candidate limit must cover top and skip", vectordata.ErrInvalidSearchOptions)
+	}
+	constant := opts.RRFConstant
+	if constant == 0 {
+		constant = 60
+	}
+	if constant < 1 {
+		return nil, fmt.Errorf("%w: RRF constant must be positive", vectordata.ErrInvalidSearchOptions)
+	}
+	if err := vectordata.ValidateModelFilter(opts.Filter, c.definition); err != nil {
+		return nil, err
+	}
+	where, filterArgs, next, err := filtersql.CompileFilterSQL(opts.Filter, c.filterConfig(), 3)
+	if err != nil {
+		return nil, err
+	}
+	args := append([]any{vectorLiteral(vector), keywords}, filterArgs...)
+	bind := func(value any) string { ph := fmt.Sprintf("$%d", next); next++; args = append(args, value); return ph }
+	op, _ := metricOperator(p.Metric)
+	distance := "(t." + quoteIdent(p.StorageName) + " " + op + " $1::vector)"
+	key := "t." + quoteIdent(c.definition.Key.StorageName)
+	predicate := "TRUE"
+	if where != "" {
+		predicate = where
+	}
+	text := ftsExpr("t." + quoteIdent(textProperty))
+	query := "plainto_tsquery('simple'::regconfig,$2)"
+	limit := bind(candidates)
+	rrf := bind(constant)
+	sql := `WITH __vs_vector AS MATERIALIZED (SELECT ` + key + ` AS __vs_key, ` + distance + ` AS __vs_distance FROM ` + c.table() + ` t WHERE ` + predicate + ` ORDER BY __vs_distance ASC LIMIT ` + limit + `),
+ __vs_text AS MATERIALIZED (SELECT ` + key + ` AS __vs_key, ts_rank_cd(` + text + `,` + query + `) AS __vs_rank FROM ` + c.table() + ` t WHERE (` + predicate + `) AND ` + text + ` @@ ` + query + ` ORDER BY __vs_rank DESC, ` + key + ` LIMIT ` + limit + `),
+ __vs_ranks AS (SELECT __vs_key, row_number() OVER (ORDER BY __vs_distance, __vs_key) AS __vs_rank FROM __vs_vector UNION ALL SELECT __vs_key, row_number() OVER (ORDER BY __vs_rank DESC, __vs_key) FROM __vs_text),
+ __vs_fused AS (SELECT __vs_key, sum(1.0 / (` + rrf + `::float8 + __vs_rank)) AS __vs_score FROM __vs_ranks GROUP BY __vs_key)
+ SELECT ` + strings.Join(c.columns("t", opts.IncludeVectors), ",") + `,` + distance + `, f.__vs_score FROM __vs_fused f JOIN ` + c.table() + ` t ON ` + key + `=f.__vs_key`
+	thresholds := []string{}
+	if opts.DistanceThreshold != nil {
+		thresholds = append(thresholds, distance+" <= "+bind(*opts.DistanceThreshold))
+	}
+	if opts.ScoreThreshold != nil {
+		thresholds = append(thresholds, "f.__vs_score >= "+bind(*opts.ScoreThreshold))
+	}
+	if len(thresholds) > 0 {
+		sql += " WHERE " + strings.Join(thresholds, " AND ")
+	}
+	sql += " ORDER BY f.__vs_score DESC, " + key + " LIMIT " + bind(top) + " OFFSET " + bind(opts.Skip)
+	out := []vectordata.ModelSearchResult{}
+	var failure error
+	c.runSearch(ctx, sql, args, p, opts.ModelSearchOptions, true, func(r vectordata.ModelSearchResult, err error) bool {
+		if err != nil {
+			failure = err
+			return false
+		}
+		out = append(out, r)
+		return true
+	})
+	if failure != nil {
+		return nil, failure
+	}
+	return out, nil
+}

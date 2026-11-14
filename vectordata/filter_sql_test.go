@@ -36,10 +36,6 @@ func TestCompileFilterSQL_RejectsInvalidNumericArguments(t *testing.T) {
 	}
 }
 
-type unsupportedFilter struct{}
-
-func (unsupportedFilter) isFilter() {}
-
 func testFilterConfig() FilterSQLConfig {
 	return FilterSQLConfig{
 		ColumnExpr: map[string]string{
@@ -308,7 +304,7 @@ func TestCompileFilterSQL_InvalidFilterTrees(t *testing.T) {
 		{name: "and nil child", filter: And(Eq(Column("id"), "a"), nil)},
 		{name: "or nil child", filter: Or(nil)},
 		{name: "not nil child", filter: Not(nil)},
-		{name: "unsupported node", filter: unsupportedFilter{}},
+		{name: "unsupported node", filter: (*EqFilter)(nil)},
 		{name: "json marshal error", filter: Eq(Metadata("bad"), func() {})},
 	}
 

@@ -271,7 +271,9 @@ Vector write validation also matches `ErrInvalidRecord`, while preserving
 Current MVP scope:
 
 - Postgres + pgvector backend
-- single-vector column per collection
+- original Record API: one vector per collection
+- model API: native keys, data properties, and multiple named vectors
+- in-memory model provider for development and shared contract tests
 - metadata filtering through a focused AST
 
 Future extension points:
@@ -284,3 +286,22 @@ Future extension points:
 
 - pgvector project docs: https://github.com/pgvector/pgvector
 - PostgreSQL docs: https://www.postgresql.org/docs/current/index.html
+
+## Model-driven API
+
+The original Record API is complemented by `ModelStore` and `ModelCollection`.
+`CollectionDefinition` describes a native key, data fields, named vector fields,
+and their storage/index mappings. `StructCodec[T]` resolves tagged or explicit
+mappings once; `TypedModelCollection[K,T]` exposes the full model API.
+
+`stores/postgres` maps definitions to native columns and registers them in
+`__vectorstore_models`. Creation validates schemas and indexes transactionally;
+concurrent schema/registry initialization and per-collection creation use advisory
+locks. `stores/memory` implements the same model contracts with exact search and
+atomic in-memory writes. Shared provider tests live in `vectordata/conformance`.
+
+Portable filter nodes live in `vectordata/filterast`; PostgreSQL compilation is
+in `stores/postgres/filtersql`. The original compiler entry point remains a
+compatibility shim. Embedding generation is optional and batched per property;
+PostgreSQL hybrid search combines full-text and vector candidates with RRF.
+See [model-api.md](model-api.md) for the contract and current feature scope.

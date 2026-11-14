@@ -1,139 +1,40 @@
 package vectordata
 
-// FieldKind determines whether filter field references a fixed column or metadata JSON path.
-type FieldKind string
+import "github.com/gabisonia/go-vectorstore/vectordata/filterast"
+
+type FieldRef = filterast.FieldRef
+type FieldKind = filterast.FieldKind
+type Filter = filterast.Filter
+type EqFilter = filterast.EqFilter
+type InFilter = filterast.InFilter
+type GtFilter = filterast.GtFilter
+type LtFilter = filterast.LtFilter
+type GteFilter = filterast.GteFilter
+type LteFilter = filterast.LteFilter
+type ContainsFilter = filterast.ContainsFilter
+type ExistsFilter = filterast.ExistsFilter
+type AndFilter = filterast.AndFilter
+type OrFilter = filterast.OrFilter
+type NotFilter = filterast.NotFilter
 
 const (
-	FieldColumn   FieldKind = "column"
-	FieldMetadata FieldKind = "metadata"
+	FieldColumn   = filterast.FieldColumn
+	FieldMetadata = filterast.FieldMetadata
+	FieldDataPath = filterast.FieldDataPath
 )
 
-// FieldRef references a queryable field.
-type FieldRef struct {
-	Kind FieldKind
-	Name string
-	Path []string
-}
-
-// Column builds a fixed-column field reference.
-func Column(name string) FieldRef {
-	return FieldRef{Kind: FieldColumn, Name: name}
-}
-
-// Metadata builds a metadata JSON path field reference.
-func Metadata(path ...string) FieldRef {
-	cp := make([]string, len(path))
-	copy(cp, path)
-	return FieldRef{Kind: FieldMetadata, Path: cp}
-}
-
-// Filter is the AST node interface.
-type Filter interface {
-	isFilter()
-}
-
-// EqFilter checks equality.
-type EqFilter struct {
-	Field FieldRef
-	Value any
-}
-
-func (EqFilter) isFilter() {}
-
-// InFilter checks membership.
-type InFilter struct {
-	Field  FieldRef
-	Values []any
-}
-
-func (InFilter) isFilter() {}
-
-// GtFilter checks greater-than.
-type GtFilter struct {
-	Field FieldRef
-	Value any
-}
-
-func (GtFilter) isFilter() {}
-
-// LtFilter checks less-than.
-type LtFilter struct {
-	Field FieldRef
-	Value any
-}
-
-func (LtFilter) isFilter() {}
-
-// ExistsFilter checks whether a field/path exists.
-type ExistsFilter struct {
-	Field FieldRef
-}
-
-func (ExistsFilter) isFilter() {}
-
-// AndFilter combines filters with AND.
-type AndFilter struct {
-	Children []Filter
-}
-
-func (AndFilter) isFilter() {}
-
-// OrFilter combines filters with OR.
-type OrFilter struct {
-	Children []Filter
-}
-
-func (OrFilter) isFilter() {}
-
-// NotFilter negates a child filter.
-type NotFilter struct {
-	Child Filter
-}
-
-func (NotFilter) isFilter() {}
-
-// Eq constructs an equality filter.
-func Eq(field FieldRef, value any) Filter {
-	return EqFilter{Field: field, Value: value}
-}
-
-// In constructs an IN filter.
-func In(field FieldRef, values ...any) Filter {
-	cp := make([]any, len(values))
-	copy(cp, values)
-	return InFilter{Field: field, Values: cp}
-}
-
-// Gt constructs a greater-than filter.
-func Gt(field FieldRef, value any) Filter {
-	return GtFilter{Field: field, Value: value}
-}
-
-// Lt constructs a less-than filter.
-func Lt(field FieldRef, value any) Filter {
-	return LtFilter{Field: field, Value: value}
-}
-
-// Exists constructs an exists filter.
-func Exists(field FieldRef) Filter {
-	return ExistsFilter{Field: field}
-}
-
-// And constructs an AND filter.
-func And(children ...Filter) Filter {
-	cp := make([]Filter, len(children))
-	copy(cp, children)
-	return AndFilter{Children: cp}
-}
-
-// Or constructs an OR filter.
-func Or(children ...Filter) Filter {
-	cp := make([]Filter, len(children))
-	copy(cp, children)
-	return OrFilter{Children: cp}
-}
-
-// Not constructs a NOT filter.
-func Not(child Filter) Filter {
-	return NotFilter{Child: child}
-}
+func Column(name string) FieldRef                       { return filterast.Column(name) }
+func Metadata(path ...string) FieldRef                  { return filterast.Metadata(path...) }
+func DataPath(property string, path ...string) FieldRef { return filterast.DataPath(property, path...) }
+func Eq(field FieldRef, value any) Filter               { return filterast.Eq(field, value) }
+func Ne(field FieldRef, value any) Filter               { return filterast.Ne(field, value) }
+func Gt(field FieldRef, value any) Filter               { return filterast.Gt(field, value) }
+func Lt(field FieldRef, value any) Filter               { return filterast.Lt(field, value) }
+func Gte(field FieldRef, value any) Filter              { return filterast.Gte(field, value) }
+func Lte(field FieldRef, value any) Filter              { return filterast.Lte(field, value) }
+func Contains(field FieldRef, value any) Filter         { return filterast.Contains(field, value) }
+func In(field FieldRef, values ...any) Filter           { return filterast.In(field, values...) }
+func Exists(field FieldRef) Filter                      { return filterast.Exists(field) }
+func And(children ...Filter) Filter                     { return filterast.And(children...) }
+func Or(children ...Filter) Filter                      { return filterast.Or(children...) }
+func Not(child Filter) Filter                           { return filterast.Not(child) }

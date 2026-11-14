@@ -176,3 +176,18 @@ To add a new store backend, follow the same contract shape:
 6. Add integration tests matching existing backend test coverage style
 
 For a practical checklist and repository wiring steps, see [`connector-development.md`](connector-development.md).
+
+## Model API implementation
+
+Model collections use a separate native schema defined by
+`vectordata.CollectionDefinition`. They support typed keys, data properties,
+named vectors, batched embeddings, projected and streaming retrieval, and
+PostgreSQL keyword/vector hybrid search. Model tables use native key/data/vector
+columns, rather than the legacy Record table shape. The original implementation
+and interfaces remain supported.
+
+The portable AST is in `vectordata/filterast`; PostgreSQL compilation is in
+`stores/postgres/filtersql`. `stores/memory` implements the model contract with
+exact search. Both providers run `vectordata/conformance.Run`; keep PostgreSQL
+integration tests for driver, schema, planner and transactional behavior. See
+[model-api.md](model-api.md) for details and current limits.
