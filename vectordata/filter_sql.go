@@ -15,6 +15,9 @@ type FilterSQLConfig struct {
 	ColumnExpr map[string]string
 	// MetadataExpr is the SQL expression of the metadata JSONB column.
 	MetadataExpr string
+	// UseMetadataContainment adds GIN-compatible prefilters to metadata Eq/In.
+	// Exact extraction comparisons remain in place to preserve equality semantics.
+	UseMetadataContainment bool
 }
 
 // CompileFilterSQL compiles a Filter tree into SQL WHERE fragment and args.
@@ -64,7 +67,12 @@ func (c *filterCompiler) compile(f Filter) (string, error) {
 		if node.Child == nil {
 			return "", fmt.Errorf("%w: NOT requires a child", ErrInvalidFilter)
 		}
+		// Containment can turn SQL UNKNOWN for a missing path into FALSE.
+		// Disable prefilters below NOT so missing/null behavior stays intact.
+		useContainment := c.cfg.UseMetadataContainment
+		c.cfg.UseMetadataContainment = false
 		childSQL, err := c.compile(node.Child)
+		c.cfg.UseMetadataContainment = useContainment
 		if err != nil {
 			return "", err
 		}
@@ -90,7 +98,8 @@ func (c *filterCompiler) compileEq(node EqFilter) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("(%s = %s::jsonb)", metadataPathJSONBExpr(fieldExpr, path), ph), nil
+	exact := fmt.Sprintf("(%s = %s::jsonb)", metadataPathJSONBExpr(fieldExpr, path), ph)
+	return c.withMetadataContainment(exact, fieldExpr, path, []any{node.Value})
 }
 
 func isNilValue(value any) bool {
@@ -129,7 +138,34 @@ func (c *filterCompiler) compileIn(node InFilter) (string, error) {
 	if !isMetadata {
 		return fmt.Sprintf("(%s IN (%s))", fieldExpr, strings.Join(parts, ", ")), nil
 	}
-	return fmt.Sprintf("(%s IN (%s))", metadataPathJSONBExpr(fieldExpr, path), strings.Join(parts, ", ")), nil
+	exact := fmt.Sprintf("(%s IN (%s))", metadataPathJSONBExpr(fieldExpr, path), strings.Join(parts, ", "))
+	return c.withMetadataContainment(exact, fieldExpr, path, node.Values)
+}
+
+func (c *filterCompiler) withMetadataContainment(exact, metadataExpr string, path []string, values []any) (string, error) {
+	if !c.cfg.UseMetadataContainment {
+		return exact, nil
+	}
+	for _, segment := range path {
+		// #> accepts array indexes as well as object keys. A JSON object
+		// containment predicate cannot represent array traversal safely.
+		digits := strings.TrimPrefix(strings.TrimPrefix(segment, "+"), "-")
+		if digits != "" && strings.Trim(digits, "0123456789") == "" {
+			return exact, nil
+		}
+	}
+	predicates := make([]string, 0, len(values))
+	for _, value := range values {
+		for i := len(path) - 1; i >= 0; i-- {
+			value = map[string]any{path[i]: value}
+		}
+		ph, err := c.bindJSONB(value)
+		if err != nil {
+			return "", err
+		}
+		predicates = append(predicates, fmt.Sprintf("%s @> %s::jsonb", metadataExpr, ph))
+	}
+	return fmt.Sprintf("((%s) AND %s)", strings.Join(predicates, " OR "), exact), nil
 }
 
 func (c *filterCompiler) compileGt(node GtFilter) (string, error) {

@@ -71,7 +71,7 @@ Collection defaults:
 
 Other operational defaults:
 
-- Writes are chunked at `maxRowsPerStatement=500`
+- Writes are encoded and executed one batch at a time (`maxRowsPerStatement=500`) in a single transaction
 - Search default projection includes `Metadata` and `Content`, but not `Vector`
 
 ## 5) Request Flow
@@ -165,6 +165,9 @@ JSON path extraction behavior comes from PostgreSQL [JSON/JSONB functions and op
   - can add missing optional columns (`metadata`, `content`)
 
 Dimension is always validated against `vector(n)` and must match.
+`id`, `vector`, and existing `metadata` columns must be `NOT NULL`; `content`
+must allow NULL. Both ensure modes reject incompatible nullability before adding
+optional columns, without altering existing constraints.
 The primary key must be non-deferrable and contain only `id`, as required by upserts.
 Existing column types and dimensions are checked before auto-migration adds optional columns.
 
@@ -179,7 +182,19 @@ Existing column types and dimensions are checked before auto-migration adds opti
   - GIN on `metadata` JSONB
   - optional `jsonb_path_ops`
 
-Metadata indexes accelerate JSONB containment/path-style workloads. Current filters use JSONB extraction plus text or numeric comparisons, so PostgreSQL planner choices depend on the exact predicate.
+Ensure verifies existing indexes by table, method, column, operator class,
+validity, predicate, and requested vector build options. Conflicts return
+`ErrSchemaMismatch`; indexes are never silently replaced. An explicitly requested
+index metric must match the collection metric.
+Generated names over PostgreSQL's 63-byte limit use a shortened prefix and hash;
+explicit index names must fit within that limit.
+
+Metadata `Eq` and `In` filters add JSONB containment predicates that can use either
+GIN operator class, alongside exact extraction comparisons. The exact checks keep
+object and array equality semantics. Paths that may traverse array indexes, and
+filters beneath `Not`, retain extraction-only predicates to preserve their
+matching behavior. Range comparisons and `Exists` still require other indexing
+strategies; the whole-column GIN index does not accelerate them.
 
 Defaults when index options are omitted:
 

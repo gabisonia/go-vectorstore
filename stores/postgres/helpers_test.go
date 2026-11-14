@@ -2,6 +2,7 @@ package postgres
 
 import (
 	"encoding/json"
+	"math"
 	"reflect"
 	"testing"
 
@@ -93,6 +94,14 @@ func TestMetricOperatorAndOpClass(t *testing.T) {
 func TestVectorLiteral(t *testing.T) {
 	if got := vectorLiteral([]float32{1, -2.5, 0.125}); got != "[1,-2.5,0.125]" {
 		t.Fatalf("unexpected vector literal: %s", got)
+	}
+}
+
+func TestVectorLiteralRoundTripsFloat32Extremes(t *testing.T) {
+	vector := []float32{math.SmallestNonzeroFloat32, -math.SmallestNonzeroFloat32, math.MaxFloat32, -math.MaxFloat32, 1e-10, -0.12345679}
+	parsed, err := parseVectorText(vectorLiteral(vector))
+	if err != nil || !reflect.DeepEqual(vector, parsed) {
+		t.Fatalf("vector round trip: got %v, want %v, error %v", parsed, vector, err)
 	}
 }
 

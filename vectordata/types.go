@@ -61,6 +61,24 @@ type SearchOptions struct {
 	Filter     Filter
 	Projection *Projection
 	Threshold  *float64
+	HNSW       *HNSWSearchOptions
+	IVFFlat    *IVFFlatSearchOptions
+}
+
+// HNSWSearchOptions tunes recall and work limits for a single search.
+// Zero numeric values retain server defaults. Iterative scans require pgvector 0.8+.
+type HNSWSearchOptions struct {
+	EfSearch      int
+	IterativeScan bool
+	MaxScanTuples int
+}
+
+// IVFFlatSearchOptions tunes recall and work limits for a single search.
+// Zero numeric values retain server defaults. Iterative scans require pgvector 0.8+.
+type IVFFlatSearchOptions struct {
+	Probes        int
+	IterativeScan bool
+	MaxProbes     int
 }
 
 // IndexMethod selects a vector index implementation.

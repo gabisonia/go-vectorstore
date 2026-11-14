@@ -23,11 +23,8 @@ type searchPlan struct {
 	query      string
 	args       []any
 	projection vectordata.Projection
-}
-
-type writeBatch struct {
-	query string
-	args  []any
+	settings   []searchSetting
+	iterative  bool
 }
 
 // PostgresCollection is a PostgreSQL-backed vector collection.
@@ -155,6 +152,10 @@ func (c *PostgresCollection) buildSearchPlan(vector []float32, topK int, opts ve
 	if err := c.validateVectorDimension(vector); err != nil {
 		return searchPlan{}, err
 	}
+	settings, iterative, err := searchSettings(opts)
+	if err != nil {
+		return searchPlan{}, err
+	}
 
 	operator, err := metricOperator(defaultMetric(c.metric))
 	if err != nil {
@@ -210,15 +211,60 @@ func (c *PostgresCollection) buildSearchPlan(vector []float32, topK int, opts ve
 	b.WriteString(fmt.Sprintf(" LIMIT $%d", nextArg))
 	args = append(args, topK)
 
+	query := b.String()
+	if opts.IVFFlat != nil && opts.IVFFlat.IterativeScan {
+		// IVFFlat only supports relaxed iterative ordering. Re-sort the
+		// candidate set to preserve SearchByVector's ascending-distance order.
+		query = "SELECT * FROM (" + query + ") AS nearest ORDER BY distance + 0 ASC"
+	}
 	return searchPlan{
-		query:      b.String(),
+		query:      query,
 		args:       args,
 		projection: projection,
+		settings:   settings,
+		iterative:  iterative,
 	}, nil
 }
 
 func (c *PostgresCollection) executeSearchPlan(ctx context.Context, plan searchPlan) ([]vectordata.SearchResult, error) {
-	rows, err := c.store.pool.Query(ctx, plan.query, plan.args...)
+	if len(plan.settings) == 0 {
+		return c.querySearchPlan(ctx, c.store.pool, plan)
+	}
+	tx, err := c.store.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer rollbackTx(ctx, tx)
+	if plan.iterative {
+		var version string
+		if err := tx.QueryRow(ctx, "SELECT extversion FROM pg_extension WHERE extname = 'vector'").Scan(&version); err != nil {
+			return nil, err
+		}
+		if !supportsIterativeScans(version) {
+			return nil, fmt.Errorf("%w: iterative scans require pgvector 0.8+, found %s", vectordata.ErrInvalidSearchOptions, version)
+		}
+	}
+	for _, setting := range plan.settings {
+		if _, err := tx.Exec(ctx, "SELECT pg_catalog.set_config($1, $2, true)", setting.name, setting.value); err != nil {
+			return nil, fmt.Errorf("set search option %s: %w", setting.name, err)
+		}
+	}
+	results, err := c.querySearchPlan(ctx, tx, plan)
+	if err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	return results, nil
+}
+
+type searchQueryer interface {
+	Query(context.Context, string, ...any) (pgx.Rows, error)
+}
+
+func (c *PostgresCollection) querySearchPlan(ctx context.Context, conn searchQueryer, plan searchPlan) ([]vectordata.SearchResult, error) {
+	rows, err := conn.Query(ctx, plan.query, plan.args...)
 	if err != nil {
 		return nil, err
 	}
@@ -291,8 +337,17 @@ func (c *PostgresCollection) writeRecords(ctx context.Context, records []vectord
 		return nil
 	}
 
-	batches := make([]writeBatch, 0, (len(records)+maxRowsPerStatement-1)/maxRowsPerStatement)
+	tx, err := c.store.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer rollbackTx(ctx, tx)
+	// Encode and execute one batch at a time so temporary memory does not
+	// grow with the entire input. A later error still rolls back every batch.
 	for start := 0; start < len(records); start += maxRowsPerStatement {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
 		end := start + maxRowsPerStatement
 		if end > len(records) {
 			end = len(records)
@@ -302,19 +357,7 @@ func (c *PostgresCollection) writeRecords(ctx context.Context, records []vectord
 		if err != nil {
 			return err
 		}
-		batches = append(batches, writeBatch{query: query, args: args})
-	}
-
-	tx, err := c.store.pool.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		_ = tx.Rollback(ctx)
-	}()
-
-	for _, batch := range batches {
-		if _, err := tx.Exec(ctx, batch.query, batch.args...); err != nil {
+		if _, err := tx.Exec(ctx, query, args...); err != nil {
 			return err
 		}
 	}
@@ -368,77 +411,14 @@ func (c *PostgresCollection) buildWriteBatch(records []vectordata.Record, mode w
 	return b.String(), args, nil
 }
 
-func (c *PostgresCollection) ensureVectorIndex(ctx context.Context, opts *vectordata.VectorIndexOptions) error {
-	method := vectordata.IndexMethodHNSW
-	if opts.Method != "" {
-		method = opts.Method
-	}
-
-	metric := defaultMetric(c.metric)
-	if opts.Metric != "" {
-		metric = opts.Metric
-	}
-
-	opClass, err := metricOpClass(metric)
-	if err != nil {
-		return err
-	}
-
-	indexName := opts.Name
-	if indexName == "" {
-		indexName = fmt.Sprintf("idx_%s_vector_%s", c.name, method)
-	}
-
-	withClause, err := buildVectorIndexWithClause(method, opts)
-	if err != nil {
-		return err
-	}
-
-	query := fmt.Sprintf(
-		"CREATE INDEX IF NOT EXISTS %s ON %s USING %s (%s %s)%s",
-		quoteIdent(indexName),
-		c.tableName(),
-		method,
-		quoteIdent(vectorColumn),
-		opClass,
-		withClause,
-	)
-	if _, err := c.store.pool.Exec(ctx, query); err != nil {
-		return fmt.Errorf("ensure vector index: %w", err)
-	}
-	return nil
-}
-
-func (c *PostgresCollection) ensureMetadataIndex(ctx context.Context, opts *vectordata.MetadataIndexOptions) error {
-	indexName := opts.Name
-	if indexName == "" {
-		indexName = fmt.Sprintf("idx_%s_metadata_gin", c.name)
-	}
-
-	metadataExpr := quoteIdent(metadataColumn)
-	if opts.UsePathOps {
-		metadataExpr += " jsonb_path_ops"
-	}
-
-	query := fmt.Sprintf(
-		"CREATE INDEX IF NOT EXISTS %s ON %s USING gin (%s)",
-		quoteIdent(indexName),
-		c.tableName(),
-		metadataExpr,
-	)
-	if _, err := c.store.pool.Exec(ctx, query); err != nil {
-		return fmt.Errorf("ensure metadata index: %w", err)
-	}
-	return nil
-}
-
 func (c *PostgresCollection) filterConfig() vectordata.FilterSQLConfig {
 	return vectordata.FilterSQLConfig{
 		ColumnExpr: map[string]string{
 			idColumn:      quoteIdent(idColumn),
 			contentColumn: quoteIdent(contentColumn),
 		},
-		MetadataExpr: quoteIdent(metadataColumn),
+		MetadataExpr:           quoteIdent(metadataColumn),
+		UseMetadataContainment: true,
 	}
 }
 

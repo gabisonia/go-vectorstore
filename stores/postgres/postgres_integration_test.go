@@ -487,6 +487,108 @@ func TestIntegrationMetadataFilter(t *testing.T) {
 	}
 }
 
+func TestIntegrationMetadataContainmentPreservesMatches(t *testing.T) {
+	pool := integrationPool(t)
+	store := newTestStore(t, pool)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	collection, err := store.EnsureCollection(ctx, vectordata.CollectionSpec{Name: "docs", Dimension: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for id, metadata := range map[string]map[string]any{
+		"exact":    {"nested": map[string]any{"value": []any{1, 2}}},
+		"superset": {"nested": map[string]any{"value": []any{1, 2, 3}}},
+		"array":    {"nested": []any{map[string]any{"value": 1}}},
+		"null":     {"nested": map[string]any{"value": nil}},
+		"missing":  {},
+	} {
+		if err := collection.Insert(ctx, []vectordata.Record{{ID: id, Vector: []float32{1, 0}, Metadata: metadata}}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, filter := range []vectordata.Filter{
+		vectordata.Eq(vectordata.Metadata("nested", "value"), []any{1, 2}),
+		vectordata.In(vectordata.Metadata("nested", "value"), []any{1, 2}, nil),
+		vectordata.Eq(vectordata.Metadata("nested", "0", "value"), 1),
+		vectordata.Not(vectordata.Eq(vectordata.Metadata("nested", "value"), nil)),
+		vectordata.Not(vectordata.Or(vectordata.Eq(vectordata.Metadata("nested", "value"), []any{1, 2}), vectordata.Eq(vectordata.Metadata("nested", "value"), nil))),
+	} {
+		baselineCfg := collection.(*PostgresCollection).filterConfig()
+		baselineCfg.UseMetadataContainment = false
+		predicate, args, _, err := vectordata.CompileFilterSQL(filter, baselineCfg, 1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var want int64
+		if err := pool.QueryRow(ctx, "SELECT count(*) FROM "+qualifiedTable(store.opts.Schema, "docs")+" WHERE "+predicate, args...).Scan(&want); err != nil {
+			t.Fatal(err)
+		}
+		got, err := collection.Count(ctx, filter)
+		if err != nil || got != want {
+			t.Fatalf("filter %#v: got %d, want %d, error %v", filter, got, want, err)
+		}
+	}
+}
+
+func TestIntegrationMetadataFilterUsesGIN(t *testing.T) {
+	pool := integrationPool(t)
+	for _, pathOps := range []bool{false, true} {
+		t.Run(fmt.Sprint(pathOps), func(t *testing.T) {
+			store := newTestStore(t, pool)
+			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+			defer cancel()
+			collection, err := store.EnsureCollection(ctx, vectordata.CollectionSpec{Name: "docs", Dimension: 2})
+			if err != nil {
+				t.Fatal(err)
+			}
+			table := qualifiedTable(store.opts.Schema, "docs")
+			if _, err := pool.Exec(ctx, "INSERT INTO "+table+" (id, vector, metadata) SELECT n::text, '[1,0]'::vector, jsonb_build_object('category', CASE WHEN n % 1000 = 0 THEN 'news' ELSE 'other' END) FROM generate_series(1,20000) n"); err != nil {
+				t.Fatal(err)
+			}
+			if err := collection.EnsureIndexes(ctx, vectordata.IndexOptions{Metadata: &vectordata.MetadataIndexOptions{Name: "metadata_filter", UsePathOps: pathOps}}); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := pool.Exec(ctx, "ANALYZE "+table); err != nil {
+				t.Fatal(err)
+			}
+			tx, err := pool.Begin(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer tx.Rollback(ctx)
+			if _, err := tx.Exec(ctx, "SET LOCAL enable_seqscan = off"); err != nil {
+				t.Fatal(err)
+			}
+			for _, filter := range []vectordata.Filter{vectordata.Eq(vectordata.Metadata("category"), "news"), vectordata.In(vectordata.Metadata("category"), "news", "absent")} {
+				predicate, args, _, err := vectordata.CompileFilterSQL(filter, collection.(*PostgresCollection).filterConfig(), 1)
+				if err != nil {
+					t.Fatal(err)
+				}
+				rows, err := tx.Query(ctx, "EXPLAIN SELECT id FROM "+table+" WHERE "+predicate, args...)
+				if err != nil {
+					t.Fatal(err)
+				}
+				var plan strings.Builder
+				for rows.Next() {
+					var line string
+					if err := rows.Scan(&line); err != nil {
+						t.Fatal(err)
+					}
+					plan.WriteString(line)
+				}
+				if err := rows.Err(); err != nil {
+					t.Fatal(err)
+				}
+				rows.Close()
+				if !strings.Contains(plan.String(), "metadata_filter") {
+					t.Fatalf("GIN index not usable: %s", plan.String())
+				}
+			}
+		})
+	}
+}
+
 func TestIntegrationGetNotFoundAndDelete(t *testing.T) {
 	// Arrange
 	pool := integrationPool(t)
@@ -659,6 +761,33 @@ func TestIntegrationMultiBatchInsertRollsBackOnLaterFailure(t *testing.T) {
 	}
 }
 
+func TestIntegrationMultiBatchValidationFailureRollsBack(t *testing.T) {
+	pool := integrationPool(t)
+	store := newTestStore(t, pool)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	collection, err := store.EnsureCollection(ctx, vectordata.CollectionSpec{Name: "docs", Dimension: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, upsert := range []bool{false, true} {
+		records := benchmarkRecords(maxRowsPerStatement+1, 2)
+		records[len(records)-1].Metadata = map[string]any{"bad": func() {}}
+		if upsert {
+			err = collection.Upsert(ctx, records)
+		} else {
+			err = collection.Insert(ctx, records)
+		}
+		if !errors.Is(err, vectordata.ErrInvalidRecord) {
+			t.Fatalf("expected ErrInvalidRecord, got %v", err)
+		}
+		count, err := collection.Count(ctx, nil)
+		if err != nil || count != 0 {
+			t.Fatalf("partial write after validation failure: count %d, error %v", count, err)
+		}
+	}
+}
+
 func TestIntegrationSchemaMismatchAndAutoMigrate(t *testing.T) {
 	// Arrange
 	pool := integrationPool(t)
@@ -738,6 +867,12 @@ func TestIntegrationEnsureIndexesCreatesIndexes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("EnsureIndexes: %v", err)
 	}
+	if err := collection.EnsureIndexes(ctx, vectordata.IndexOptions{
+		Vector:   &vectordata.VectorIndexOptions{Name: "docs_vec_hnsw", Method: vectordata.IndexMethodHNSW},
+		Metadata: &vectordata.MetadataIndexOptions{Name: "docs_metadata_gin"},
+	}); err != nil {
+		t.Fatalf("idempotent EnsureIndexes: %v", err)
+	}
 	for _, indexName := range []string{"docs_vec_hnsw", "docs_metadata_gin"} {
 		var exists bool
 		err := pool.QueryRow(ctx, `
@@ -754,6 +889,79 @@ func TestIntegrationEnsureIndexesCreatesIndexes(t *testing.T) {
 			t.Fatalf("expected index %s to exist", indexName)
 		}
 	}
+}
+
+func TestIntegrationLongCollectionIndexNames(t *testing.T) {
+	pool := integrationPool(t)
+	store := newTestStore(t, pool)
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+	defer cancel()
+	collection, err := store.EnsureCollection(ctx, vectordata.CollectionSpec{Name: strings.Repeat("d", 63), Dimension: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	opts := vectordata.IndexOptions{Vector: &vectordata.VectorIndexOptions{}, Metadata: &vectordata.MetadataIndexOptions{}}
+	for i := 0; i < 2; i++ {
+		if err := collection.EnsureIndexes(ctx, opts); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func TestIntegrationEnsureIndexesRejectsConflicts(t *testing.T) {
+	pool := integrationPool(t)
+	for _, tt := range []struct {
+		name, definition string
+		metadata         bool
+	}{
+		{"metric", "USING hnsw (vector vector_l2_ops)", false},
+		{"method", "USING ivfflat (vector vector_cosine_ops) WITH (lists=1)", false},
+		{"tuning", "USING hnsw (vector vector_cosine_ops) WITH (m=8)", false},
+		{"partial", "USING hnsw (vector vector_cosine_ops) WHERE id <> ''", false},
+		{"column", "USING btree (id)", false},
+		{"metadata operator class", "USING gin (metadata jsonb_path_ops)", true},
+		{"metadata expression", "USING gin ((metadata -> 'nested'))", true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			store := newTestStore(t, pool)
+			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			defer cancel()
+			collection, err := store.EnsureCollection(ctx, vectordata.CollectionSpec{Name: "docs", Dimension: 2})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if _, err := pool.Exec(ctx, fmt.Sprintf("CREATE INDEX conflict ON %s %s", qualifiedTable(store.opts.Schema, "docs"), tt.definition)); err != nil {
+				t.Fatal(err)
+			}
+			opts := vectordata.IndexOptions{Vector: &vectordata.VectorIndexOptions{Name: "conflict"}}
+			if tt.metadata {
+				opts = vectordata.IndexOptions{Metadata: &vectordata.MetadataIndexOptions{Name: "conflict"}}
+			}
+			if err := collection.EnsureIndexes(ctx, opts); !errors.Is(err, vectordata.ErrSchemaMismatch) {
+				t.Fatalf("expected ErrSchemaMismatch, got %v", err)
+			}
+		})
+	}
+	t.Run("different table", func(t *testing.T) {
+		store := newTestStore(t, pool)
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		first, err := store.EnsureCollection(ctx, vectordata.CollectionSpec{Name: "first", Dimension: 2})
+		if err != nil {
+			t.Fatal(err)
+		}
+		second, err := store.EnsureCollection(ctx, vectordata.CollectionSpec{Name: "second", Dimension: 2})
+		if err != nil {
+			t.Fatal(err)
+		}
+		opts := vectordata.IndexOptions{Vector: &vectordata.VectorIndexOptions{Name: "shared"}}
+		if err := first.EnsureIndexes(ctx, opts); err != nil {
+			t.Fatal(err)
+		}
+		if err := second.EnsureIndexes(ctx, opts); !errors.Is(err, vectordata.ErrSchemaMismatch) {
+			t.Fatalf("expected ErrSchemaMismatch, got %v", err)
+		}
+	})
 }
 
 func TestIntegrationRejectsIncompatiblePrimaryKeys(t *testing.T) {
@@ -792,6 +1000,8 @@ func TestIntegrationAutoMigrateValidatesBeforeAddingColumns(t *testing.T) {
 		"id text PRIMARY KEY, vector vector(3) NOT NULL",
 		"id text PRIMARY KEY, vector vector(2) NOT NULL, content integer",
 		"id text PRIMARY KEY, vector vector NOT NULL",
+		"id text PRIMARY KEY, vector vector(2)",
+		"id text PRIMARY KEY, vector vector(2) NOT NULL, content text NOT NULL",
 	} {
 		t.Run(columns, func(t *testing.T) {
 			store := newTestStore(t, pool)
@@ -820,6 +1030,33 @@ func TestIntegrationAutoMigrateValidatesBeforeAddingColumns(t *testing.T) {
 				t.Fatal("incompatible schema was modified before validation failed")
 			}
 		})
+	}
+}
+
+func TestIntegrationRejectsIncompatibleNullability(t *testing.T) {
+	pool := integrationPool(t)
+	for _, columns := range []string{
+		"id text PRIMARY KEY, vector vector(2), metadata jsonb NOT NULL, content text",
+		"id text PRIMARY KEY, vector vector(2) NOT NULL, metadata jsonb, content text",
+		"id text PRIMARY KEY, vector vector(2) NOT NULL, metadata jsonb NOT NULL, content text NOT NULL",
+	} {
+		for _, mode := range []vectordata.EnsureMode{vectordata.EnsureStrict, vectordata.EnsureAutoMigrate} {
+			t.Run(string(mode)+"/"+columns, func(t *testing.T) {
+				store := newTestStore(t, pool)
+				ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+				defer cancel()
+				if err := store.ensureBaseSchema(ctx); err != nil {
+					t.Fatal(err)
+				}
+				if _, err := pool.Exec(ctx, fmt.Sprintf("CREATE TABLE %s (%s)", qualifiedTable(store.opts.Schema, "docs"), columns)); err != nil {
+					t.Fatal(err)
+				}
+				_, err := store.EnsureCollection(ctx, vectordata.CollectionSpec{Name: "docs", Dimension: 2, Mode: mode})
+				if !errors.Is(err, vectordata.ErrSchemaMismatch) {
+					t.Fatalf("expected ErrSchemaMismatch, got %v", err)
+				}
+			})
+		}
 	}
 }
 

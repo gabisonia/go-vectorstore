@@ -71,13 +71,14 @@ func metricOpClass(metric vectordata.DistanceMetric) (string, error) {
 
 func vectorLiteral(v []float32) string {
 	var b strings.Builder
-	b.Grow(len(v) * 8)
+	b.Grow(len(v)*12 + 2)
+	var element [32]byte
 	b.WriteByte('[')
 	for i, n := range v {
 		if i > 0 {
 			b.WriteByte(',')
 		}
-		b.WriteString(strconv.FormatFloat(float64(n), 'f', -1, 32))
+		b.Write(strconv.AppendFloat(element[:0], float64(n), 'g', -1, 32))
 	}
 	b.WriteByte(']')
 	return b.String()

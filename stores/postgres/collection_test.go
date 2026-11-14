@@ -1,6 +1,7 @@
 package postgres
 
 import (
+	"context"
 	"errors"
 	"reflect"
 	"testing"
@@ -32,6 +33,15 @@ func TestBuildSearchPlanRejectsInvalidTopK(t *testing.T) {
 	}
 }
 
+func TestEnsureVectorIndexRejectsMetricMismatch(t *testing.T) {
+	err := testCollection().EnsureIndexes(context.Background(), vectordata.IndexOptions{
+		Vector: &vectordata.VectorIndexOptions{Metric: vectordata.DistanceL2},
+	})
+	if !errors.Is(err, vectordata.ErrSchemaMismatch) {
+		t.Fatalf("expected ErrSchemaMismatch, got %v", err)
+	}
+}
+
 func TestBuildSearchPlanHonorsProjectionThresholdAndFilter(t *testing.T) {
 	// Arrange
 	collection := testCollection()
@@ -49,11 +59,11 @@ func TestBuildSearchPlanHonorsProjectionThresholdAndFilter(t *testing.T) {
 	if err != nil {
 		t.Fatalf("buildSearchPlan: %v", err)
 	}
-	expectedQuery := `SELECT "id", "vector"::text, ("vector" <=> $1::vector) AS distance FROM "public"."docs" WHERE (("metadata" #> ARRAY['category']) = $2::jsonb) AND (("vector" <=> $1::vector) <= $3) ORDER BY distance ASC LIMIT $4`
+	expectedQuery := `SELECT "id", "vector"::text, ("vector" <=> $1::vector) AS distance FROM "public"."docs" WHERE (("metadata" @> $3::jsonb) AND (("metadata" #> ARRAY['category']) = $2::jsonb)) AND (("vector" <=> $1::vector) <= $4) ORDER BY distance ASC LIMIT $5`
 	if plan.query != expectedQuery {
 		t.Fatalf("unexpected query\nwant: %s\n got: %s", expectedQuery, plan.query)
 	}
-	if !reflect.DeepEqual(plan.args, []any{"[1,0,0]", []byte(`"news"`), threshold, 7}) {
+	if !reflect.DeepEqual(plan.args, []any{"[1,0,0]", []byte(`"news"`), []byte(`{"category":"news"}`), threshold, 7}) {
 		t.Fatalf("unexpected args: %#v", plan.args)
 	}
 	if plan.projection != projection {
