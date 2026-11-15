@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+- Add an isolated local documentation-agent sample using Microsoft Agent Framework
+  Go, go-vectorstore v0.4.1, SQLite and Ollama. Compose initializes local models;
+  typed search/read tools and source-ID checks demonstrate agent-driven retrieval
+  without cloud credentials. Add dedicated module CI and live smoke commands.
+
 ## v0.4.1
 
 ### Production hardening

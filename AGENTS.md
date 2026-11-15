@@ -77,3 +77,12 @@ behavior; normal tests use deterministic embedders and local HTTP stand-ins.
 [SECURITY.md](SECURITY.md) define operational, compatibility and reporting policy.
 `llms.txt` is a discovery index, not a second API specification. Keep its version
 and links aligned with VERSION, docs and executable examples.
+
+## Isolated local agent demo
+
+`samples/local-doc-agent` has its own Go module (Go 1.26+) pinned to the published
+library and Agent Framework versions. Root `go test ./...` does not traverse that
+module. Run `go test -race ./...` and `go vet ./...` inside it; its dedicated CI
+jobs cover minimum/current Go and dependency scanning. `smoke.sh` runs real local
+models through Docker Compose and can download several GB. Normal tests use local
+HTTP stand-ins. Keep framework dependencies out of the root library go.mod.

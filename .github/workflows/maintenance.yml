@@ -20,6 +20,9 @@ jobs:
           go-version: stable
           cache: true
       - run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 -test -tags=integration ./...
+      - name: Scan isolated local agent sample
+        working-directory: samples/local-doc-agent
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 -test ./...
 
   fuzz:
     name: Extended fuzz campaign

@@ -378,6 +378,7 @@ git push origin "v${RELEASE_VERSION}"
 ## Samples
 
 - Overview and entry points: [`samples/README.md`](samples/README.md)
+- Local agent with Ollama and SQLite: [`local-doc-agent`](samples/local-doc-agent/README.md) (Docker Compose, separate module)
 - Typed semantic search and RAG: [`typed-search`](samples/typed-search/README.md), [`typed-rag`](samples/typed-rag/README.md)
 - Focused model workflows: [`recipes`](samples/recipes/README.md)
 - Model-driven collections (no API key): [`samples/model-store`](samples/model-store/README.md)

@@ -62,6 +62,32 @@ jobs:
           PGVECTOR_TEST_IMAGE: pgvector/pgvector:pg${{ matrix.postgres }}
         run: go test -race -tags=integration -timeout=5m ./stores/postgres ./samples/recipes
 
+  local-doc-agent:
+    name: Local doc agent (Go ${{ matrix.go }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        go: ['1.26.x', stable]
+    defaults:
+      run:
+        working-directory: samples/local-doc-agent
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go }}
+          cache-dependency-path: samples/local-doc-agent/go.sum
+      - name: Test real framework tools with HTTP stand-ins
+        run: go test -race -timeout=2m ./...
+      - name: Vet
+        run: go vet ./...
+      - name: Validate Compose configuration
+        run: docker compose config --quiet
+      - name: Scan isolated demo dependencies
+        if: matrix.go == 'stable'
+        run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 -test ./...
+
   vulnerabilities:
     name: Vulnerability scan
     runs-on: ubuntu-latest
