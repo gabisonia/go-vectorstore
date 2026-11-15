@@ -8,7 +8,8 @@ type CapabilityProvider interface {
 }
 
 // VectorIndexCapability describes one physical index combination. Dense entries
-// use float32/float16 precision; binary entries omit it. MaxDimensions is positive.
+// use float32/float16 precision, sparse entries use float32, and binary entries
+// omit precision. MaxDimensions is positive; sparse entries also set MaxNonZero.
 type VectorIndexCapability struct {
 	// Kind defaults to dense for older providers; binary entries omit precision.
 	Kind          VectorKind
@@ -16,6 +17,8 @@ type VectorIndexCapability struct {
 	Metric        DistanceMetric
 	Precision     VectorPrecision
 	MaxDimensions int
+	// MaxNonZero limits stored nonzero components; zero means unreported.
+	MaxNonZero int
 }
 
 // ProviderCapabilities describes implemented model features, not whether a
@@ -29,7 +32,7 @@ type ProviderCapabilities struct {
 	DataTypes         []DataType
 	DistanceMetrics   []DistanceMetric
 	VectorPrecisions  []VectorPrecision
-	// VectorKinds reports dense/binary support. Nil means kinds are unreported.
+	// VectorKinds reports dense/binary/sparse support. Nil means kinds are unreported.
 	VectorKinds []VectorKind
 	// Index fields report physical indexes, rather than accepted schema hints.
 	VectorIndexMethods []IndexMethod

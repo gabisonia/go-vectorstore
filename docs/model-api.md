@@ -62,7 +62,7 @@ names, names over 63 bytes, and the reserved `__vs_` prefix are rejected.
 | --- | --- |
 | `key` | `name=<storage name>`, `type=string|int64|uuid`, `generated` |
 | `data` | `name=<storage name>`, `type=<data type>`, `optional`, `index`, `fulltext` |
-| `vector` | `name=<storage name>`, `dimensions=<n>`, `kind=dense|binary`, `precision=float32|float16`, `metric=cosine|l2|inner_product|l1|hamming`, `index`, `method=hnsw|ivfflat`, `source=<data field>` |
+| `vector` | `name=<storage name>`, `dimensions=<n>`, `kind=dense\|binary\|sparse`, `precision=float32\|float16`, `metric=cosine\|l2\|inner_product\|l1\|hamming`, `index`, `method=hnsw\|ivfflat`, `source=<data field>` |
 | `-` | Ignore the field |
 
 Untagged fields are ignored when inferring a definition. Exported fields and
@@ -298,8 +298,8 @@ if provider, ok := store.(vectordata.CapabilityProvider); ok {
 
 Both providers report string/int64/UUID keys, generated int64 keys, all twenty
 portable data types, and cosine/L2/inner-product/L1/Hamming metrics.
-`VectorKinds` reports dense and binary support. Hamming applies only to binary
-vectors; the other metrics apply to dense vectors.
+`VectorKinds` reports dense, binary and sparse support. Hamming applies only to
+binary vectors; the other metrics apply to dense and sparse vectors.
 `VectorPrecisions` reports `VectorFloat32` and `VectorFloat16` on both providers;
 PostgreSQL float16 storage requires pgvector 0.7+ and a visible `halfvec` type.
 
@@ -333,6 +333,10 @@ product, each with float32 (2,000 indexed dimensions) and float16 (4,000).
 Binary entries have `Kind=VectorBinary`, empty precision, and Hamming distance;
 HNSW and IVFFlat both support up to 64,000 bits. Empty kind in older entries means
 dense, and missing `VectorKinds` means the provider has not reported kinds.
+Sparse entries have `Kind=VectorSparse`, float32 precision, HNSW for all four
+non-Hamming metrics, `MaxDimensions=1000000000` and `MaxNonZero=1000`. Nonzero
+limits count stored components, separately from declared dimensions. A zero
+`MaxNonZero` means the provider has not reported that limit.
 Unsupported PostgreSQL combinations fail before database access. A third-party
 provider with a nil detailed list has not reported combinations; use its schema
 validation rather than assuming a cross product. Memory reports no physical
@@ -606,6 +610,64 @@ vectors requires manual backfill/re-embedding review. New compatible indexes can
 be applied through additive migrations. Prerequisite and schema checks validate
 operator/index availability and exact bit lengths.
 
+## Sparse vectors
+
+Sparse vectors store only nonzero coordinates and support cosine, L2, inner
+product and L1 distance in both providers:
+
+```go
+type Document struct {
+    ID       string                  `vectordata:"key"`
+    Body     string                  `vectordata:"data,fulltext"`
+    Features vectordata.SparseVector `vectordata:"vector,kind=sparse,dimensions=1000000,index"`
+}
+features, err := vectordata.NewSparseVector(1_000_000,
+    []int{0, 999_999}, []float32{1, 0.5})
+_ = features
+_ = err
+```
+
+`SparseVector{Dimensions, Indices, Values}` uses zero-based indices in strictly
+increasing order, with no duplicates. Coordinate slices must have equal lengths;
+values must be finite float32 numbers and indices must be within dimensions.
+`NewSparseVector` validates/copies input and removes explicit zeros. The maximum
+dimension count is 1 billion and input coordinate lists support up to 16,000
+entries. HNSW properties permit at most 1,000 nonzero values after removing zeros.
+Cosine rejects zero vectors; L2, L1 and inner product accept them.
+`NormalizeSparseVector` applies property/index validation; `SparseDistance`
+computes distances in O(nonzeros) time without allocating dense arrays.
+
+Explicit schemas set `VectorProperty.Kind=VectorSparse`. Cosine is the default
+metric and float32 is the only precision. Typed vector fields use `SparseVector`;
+dynamic records use `ModelRecord.SparseVectors`, alongside the existing dense and
+binary maps. Models can mix all three kinds and multiple sparse properties.
+Providers copy coordinate buffers on writes and reads, and `IncludeVectors`
+controls sparse projections along with other vectors. Omitted typed sparse
+fields stay zero-valued.
+
+Typed collections expose `SearchSparse(ctx, features, top, opts)`,
+`SearchSparseIter` and `HybridSearchSparse`. Dynamic collections use optional
+`SparseSearcher`/`SparseHybridSearcher` interfaces. Named-vector selection,
+filters, paging, thresholds, cancellation, similarity scores and iterators follow
+the existing model search contract. PostgreSQL supports sparse/keyword RRF hybrid
+search; memory provides exact sparse search. Floating-point arithmetic can differ
+slightly between providers, as with dense search.
+
+PostgreSQL uses `sparsevec(n)` with pgvector 0.7+ and visible type, distance
+operators and HNSW classes. The connector translates zero-based Go coordinates
+to one-based PostgreSQL text coordinates without expanding omitted dimensions.
+IVFFlat indexes/tuning and float16 precision are rejected for sparse properties.
+Sparse values are explicit: float `Embedder`/`source` mappings and text-query
+embedding are not used for a sparse property. Dense embedding generation still
+works in mixed models. Existing dense/binary APIs and registrations are unchanged.
+
+Adding sparse fields or converting representations requires manual backfill and
+re-embedding review. Compatible HNSW index additions are additive when existing
+rows meet the nonzero limit. Planning checks stored sparse serialization sizes;
+oversized rows add a manual backfill step. Application rechecks data under its
+existing locking/review rules and rejects a stale review if new data makes the
+index incompatible. See [migrations](migrations.md).
+
 ## Hybrid search
 
 PostgreSQL implements optional `HybridSearcher`. Declare a string data property
@@ -642,7 +704,7 @@ measurements and model index-plan checks. Keep production database integration
 tests even when using memory for development.
 
 This is a Go adaptation of the main model-driven workflows, not binary or full
-feature parity with every .NET provider. Sparse vectors, additional
-metrics, server-side embedding generation, and automatic model migrations remain
+feature parity with every .NET provider. Additional distance metrics,
+server-side embedding generation, and automatic model migrations remain
 outside the initial model API. Existing Record API callers can adopt models
 collection by collection.

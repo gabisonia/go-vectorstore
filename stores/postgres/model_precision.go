@@ -10,6 +10,9 @@ import (
 )
 
 func vectorSQLType(p vectordata.VectorProperty) string {
+	if p.Kind == vectordata.VectorSparse {
+		return "sparsevec"
+	}
 	if p.Kind == vectordata.VectorBinary {
 		return "bit"
 	}
@@ -36,7 +39,9 @@ func vectorOpClass(p vectordata.VectorProperty) (string, error) {
 		return "bit_hamming_ops", nil
 	}
 	op, err := metricOpClass(p.Metric)
-	if p.Precision == vectordata.VectorFloat16 {
+	if p.Kind == vectordata.VectorSparse {
+		op = "sparsevec_" + strings.TrimPrefix(op, "vector_")
+	} else if p.Precision == vectordata.VectorFloat16 {
 		op = "halfvec_" + strings.TrimPrefix(op, "vector_")
 	}
 	return op, err
@@ -53,7 +58,7 @@ func usesHalfVectors(d vectordata.CollectionDefinition) bool {
 
 func validateVectorDimensions(d vectordata.CollectionDefinition) error {
 	for _, p := range d.Vectors {
-		if p.Kind != vectordata.VectorBinary && p.Dimensions > 16000 {
+		if p.Kind != vectordata.VectorBinary && p.Kind != vectordata.VectorSparse && p.Dimensions > 16000 {
 			return fmt.Errorf("%w: PostgreSQL vector storage supports at most 16000 dimensions", vectordata.ErrSchemaMismatch)
 		}
 		if p.Index != nil {
@@ -94,6 +99,12 @@ func vectorIndexLimit(precision vectordata.VectorPrecision, metric vectordata.Di
 }
 
 func modelVectorIndexLimit(p vectordata.VectorProperty) (int, error) {
+	if p.Kind == vectordata.VectorSparse {
+		if p.Index == nil || p.Index.Method != vectordata.IndexMethodHNSW || p.Metric == vectordata.DistanceHamming || p.Precision != "" && p.Precision != vectordata.VectorFloat32 {
+			return 0, fmt.Errorf("%w: unsupported sparse index", vectordata.ErrSchemaMismatch)
+		}
+		return vectordata.MaxSparseDimensions, nil
+	}
 	if p.Kind == vectordata.VectorBinary {
 		if p.Metric != vectordata.DistanceHamming || p.Precision != "" || p.Index == nil || p.Index.Method != vectordata.IndexMethodHNSW && p.Index.Method != vectordata.IndexMethodIVFFlat {
 			return 0, fmt.Errorf("%w: unsupported binary index", vectordata.ErrSchemaMismatch)
@@ -122,6 +133,11 @@ func (c *ModelCollection) validateVectorTypes(ctx context.Context, tx pgx.Tx) er
 		return err
 	}
 	steps = append(steps, binary...)
+	sparse, err := sparseMigrationPrerequisites(ctx, tx, c.definition)
+	if err != nil {
+		return err
+	}
+	steps = append(steps, sparse...)
 	if len(steps) != 0 {
 		return fmt.Errorf("%w: %s", vectordata.ErrUnsupported, steps[0].Description)
 	}

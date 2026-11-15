@@ -13,7 +13,7 @@ func (*PostgresVectorStore) Capabilities() vectordata.ProviderCapabilities {
 		GeneratedKeyTypes:    []vectordata.KeyType{vectordata.KeyInt64},
 		DataTypes:            []vectordata.DataType{vectordata.TypeString, vectordata.TypeInt64, vectordata.TypeFloat64, vectordata.TypeBool, vectordata.TypeTime, vectordata.TypeStringArray, vectordata.TypeJSON, vectordata.TypeUUID, vectordata.TypeBytes, vectordata.TypeInt64Array, vectordata.TypeFloat64Array, vectordata.TypeBoolArray, vectordata.TypeUUIDArray, vectordata.TypeTimeArray, vectordata.TypeDateOnly, vectordata.TypeTimeOnly, vectordata.TypeDateOnlyArray, vectordata.TypeTimeOnlyArray, vectordata.TypeDecimal, vectordata.TypeDecimalArray},
 		DistanceMetrics:      []vectordata.DistanceMetric{vectordata.DistanceCosine, vectordata.DistanceL2, vectordata.DistanceInnerProduct, vectordata.DistanceL1, vectordata.DistanceHamming},
-		VectorKinds:          []vectordata.VectorKind{vectordata.VectorDense, vectordata.VectorBinary},
+		VectorKinds:          []vectordata.VectorKind{vectordata.VectorDense, vectordata.VectorBinary, vectordata.VectorSparse},
 		VectorPrecisions:     []vectordata.VectorPrecision{vectordata.VectorFloat32, vectordata.VectorFloat16},
 		VectorIndexMethods:   []vectordata.IndexMethod{vectordata.IndexMethodHNSW, vectordata.IndexMethodIVFFlat},
 		IndexedDataTypes:     []vectordata.DataType{vectordata.TypeString, vectordata.TypeInt64, vectordata.TypeFloat64, vectordata.TypeBool, vectordata.TypeTime, vectordata.TypeStringArray, vectordata.TypeUUID, vectordata.TypeBytes, vectordata.TypeInt64Array, vectordata.TypeFloat64Array, vectordata.TypeBoolArray, vectordata.TypeUUIDArray, vectordata.TypeTimeArray, vectordata.TypeDateOnly, vectordata.TypeTimeOnly, vectordata.TypeDateOnlyArray, vectordata.TypeTimeOnlyArray, vectordata.TypeDecimal, vectordata.TypeDecimalArray},
@@ -33,6 +33,12 @@ func (*PostgresVectorStore) Capabilities() vectordata.ProviderCapabilities {
 	}
 	for _, method := range caps.VectorIndexMethods {
 		caps.VectorIndexCapabilities = append(caps.VectorIndexCapabilities, vectordata.VectorIndexCapability{Kind: vectordata.VectorBinary, Method: method, Metric: vectordata.DistanceHamming, MaxDimensions: 64000})
+	}
+	for _, metric := range caps.DistanceMetrics {
+		if metric == vectordata.DistanceHamming {
+			continue
+		}
+		caps.VectorIndexCapabilities = append(caps.VectorIndexCapabilities, vectordata.VectorIndexCapability{Kind: vectordata.VectorSparse, Method: vectordata.IndexMethodHNSW, Metric: metric, Precision: vectordata.VectorFloat32, MaxDimensions: vectordata.MaxSparseDimensions, MaxNonZero: vectordata.MaxIndexedSparseNonZero})
 	}
 	return caps
 }

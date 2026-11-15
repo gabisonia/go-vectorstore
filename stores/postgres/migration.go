@@ -172,6 +172,18 @@ func (c *ModelCollection) planMigrationTx(ctx context.Context, tx pgx.Tx, indexe
 		return plan, err
 	}
 	plan.Steps = append(binary, plan.Steps...)
+	sparse, err := sparseMigrationPrerequisites(ctx, tx, c.definition)
+	if err != nil {
+		return plan, err
+	}
+	plan.Steps = append(sparse, plan.Steps...)
+	if len(sparse) == 0 && len(plan.Issues) == 0 && plan.Registered != nil {
+		bounds, err := c.sparseIndexBackfillSteps(ctx, tx, *plan.Registered)
+		if err != nil {
+			return plan, err
+		}
+		plan.Steps = append(bounds, plan.Steps...)
+	}
 	if len(plan.Issues) > 0 {
 		// Desired deltas remain visible as descriptions, without SQL against drifted storage.
 		for i := range plan.Steps {

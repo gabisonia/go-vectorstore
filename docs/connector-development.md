@@ -249,7 +249,7 @@ conformance tests verify mixed precision, embedding generation, query rounding,
 text/hybrid search and atomic rejection of invalid values. Persist precision and
 validate matching column/index types; classify changes as manual conversions.
 
-Advertise `VectorKinds` for dense/binary support. An empty schema kind stays dense
+Advertise `VectorKinds` for dense/binary/sparse support. An empty schema kind stays dense
 and is omitted from registrations for compatibility. Binary properties use
 `BinaryVector` with packed bytes and exact dimensions, `ModelRecord.BinaryVectors`,
 and Hamming distance. Use `NormalizeBinaryVector` and copy bytes on reads; reject
@@ -263,6 +263,22 @@ and iterators. PostgreSQL uses packed `pgtype.Bits` values and `bit(n)` paramete
 read projections use `varbit` to preserve exact length and a stable result type.
 Validate visible operators/opclasses and classify new fields/conversions as
 manual backfill work; compatible index additions remain additive.
+
+Sparse properties use `VectorSparse`, `SparseVector` and
+`ModelRecord.SparseVectors`, with optional `SparseSearcher` and
+`SparseHybridSearcher`. Use `NormalizeSparseVector` to validate dimensions,
+coordinate ordering/uniqueness, finite values, cosine norms and index nonzero
+limits. Remove explicit zeros, copy both coordinate buffers, and keep all
+operations proportional to coordinate counts. Go indices are zero-based;
+PostgreSQL text indices are one-based. Sparse float32 supports the four dense
+metrics, with HNSW only. Capability entries report both `MaxDimensions` and
+`MaxNonZero`. Reject invalid maps and sparse inputs before embedding/writes;
+text queries must not call a float embedder for a sparse property. Preserve
+projection/iterator/typed semantics across all vector maps. PostgreSQL validates
+visible sparse types/operators/opclasses and checks existing nonzero counts
+before planning an index addition; manual backfill and stale reviews remain
+explicit. Shared tests cover mixed models, all metrics and billion-dimensional
+values without dense allocation.
 
 `vectordata.MigrationPlanner` is a separate optional capability for model schema
 planning. Advertise `MigrationPlanning` only when it is implemented. Planning must
