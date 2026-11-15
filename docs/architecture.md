@@ -4,7 +4,7 @@ This page explains the internal design of `go-vectorstore` and how requests move
 
 ## 1) Layering
 
-The project is split into two layers:
+The shared core and provider implementations are:
 
 - `vectordata`: backend-agnostic contracts and primitives
 - `stores/postgres`: PostgreSQL + pgvector implementation
@@ -15,7 +15,13 @@ Providers share model contracts, portable filter evaluation, and a conformance s
 
 ## 2) Core Data Model
 
-The base record type is `vectordata.Record`:
+The model API uses CollectionDefinition to describe a native key, data properties
+and named vectors. ModelRecord holds Key, Data, Vectors, BinaryVectors and
+SparseVectors. All three providers implement it. TypedModelCollection[K,T] maps
+application structs through tags or a custom ModelCodec. See the
+[model guide](model-api.md) for native types, optional vectors and embeddings.
+
+The original PostgreSQL Record API uses `vectordata.Record`:
 
 - `ID` (`string`): primary key
 - `Vector` (`[]float32`): embedding values
@@ -36,17 +42,17 @@ Search returns `vectordata.SearchResult`:
 Score normalization:
 
 - cosine: `1 - distance`
-- l2: `1 / (1 + distance)`
+- L2/L1/Hamming: `1 / (1 + distance)` (Hamming applies to binary model vectors)
 - inner product: `-distance`
 
 ## 3) Public API Shape
 
-Main interfaces:
+Model interfaces are `ModelStore`, `CollectionManager` and `ModelCollection`.
+They provide lifecycle management, Insert/Upsert, Get/GetMany, Query/QueryIter,
+Delete/Count, Search/SearchIter and SearchText. Binary/sparse search, hybrid search,
+capability discovery and migrations use optional interfaces.
 
-- `vectordata.VectorStore`
-- `vectordata.Collection`
-
-Main operations:
+The original Record API uses `VectorStore` and `Collection`, with these operations:
 
 - `EnsureCollection`
 - `Insert`, `Upsert`
@@ -54,7 +60,8 @@ Main operations:
 - `SearchByVector`
 - `EnsureIndexes`
 
-All methods require `context.Context`.
+Storage operations take `context.Context`; handle constructors and local metadata
+accessors do not access storage.
 
 ## 4) Runtime Defaults and Configuration
 
@@ -64,14 +71,14 @@ All methods require `context.Context`.
 - `EnsureExtension`: `true`
 - `StrictByDefault`: `true`
 
-Collection defaults:
+Record API collection defaults:
 
 - Metric defaults to cosine when omitted
 - Ensure mode defaults to:
   - `EnsureStrict` if `StrictByDefault=true`
   - `EnsureAutoMigrate` if `StrictByDefault=false`
 
-Other operational defaults:
+PostgreSQL Record API operational defaults:
 
 - Writes are encoded and executed one batch at a time (`maxRowsPerStatement=500`) in a single transaction
 - Requests with at least 1,024 vector values use binary parameters; smaller writes use text
@@ -111,7 +118,7 @@ Each record is validated before sending:
 - non-empty `ID`
 - vector dimension match
 - finite vector elements
-- nonzero cosine vectors (zero vectors remain valid for L2 and inner product)
+- nonzero cosine vectors (zero vectors remain valid for L2, L1 and inner product)
 - metadata JSON serialization
 
 ### Postgres: Search
@@ -123,6 +130,7 @@ Each record is validated before sending:
 3. Chooses operator by metric:
    - cosine: `<=>`
    - l2: `<->`
+   - l1: `<+>`
    - inner product: `<#>`
 4. Builds `distance` expression (`"vector" <op> $1::vector`)
 5. Applies optional filter SQL
@@ -136,12 +144,13 @@ The pgvector operators are documented in the [pgvector README](https://github.co
 
 Filters are represented as an AST in `vectordata`:
 
-- `Eq`, `In`, `Gt`, `Lt`, `Exists`
-- `And`, `Or`, `Not`
+- `Eq`, `Ne`, `In`, `Gt`, `Gte`, `Lt`, `Lte`, `Exists`
+- `Contains`, `ContainsAny`, `ContainsAll`, `And`, `Or`, `Not`
 
 Fields can target:
 
-- fixed columns (`Column("id")`, `Column("content")`)
+- Record API columns (`Column("id")`, `Column("content")`)
+- model key/data properties (`Column("Category")`) and JSON properties (`DataPath("Details", "rating")`)
 - metadata JSON paths (`Metadata("category")`, `Metadata("a", "b")`); each segment is preserved exactly, including empty and whitespace-only keys
 
 `CompileFilterSQL` converts AST to:
@@ -157,7 +166,9 @@ Behavior details:
 - metadata `Gt`/`Lt` uses numeric comparison when the input is numeric, otherwise text comparison
 - numeric comparisons use PostgreSQL `numeric` and accept Go numeric values and `json.Number` without converting through `float64`
 - numeric-looking metadata strings are compared numerically; malformed or out-of-range strings do not match numeric comparisons
-- column filters are whitelist-based (`id`, `content` in the postgres backend)
+- column filters are whitelist-based (`id`, `content` for Record collections; registered key/data fields for models)
+- native array set filters use PostgreSQL `&&`/`@>` with normalized operands; JSON paths retain whole-element matching
+- memory and SQLite evaluate model filters through the shared in-process evaluator
 
 JSON path extraction behavior comes from PostgreSQL [JSON/JSONB functions and operators](https://www.postgresql.org/docs/current/functions-json.html).
 
@@ -227,14 +238,15 @@ For metadata indexing details:
 
 ## 9) Typed Extension
 
-MVP public API is record-based.
+The model API provides `StructCodec[T]`, custom `ModelCodec[T]` and
+`TypedModelCollection[K,T]` for native-key application models across all providers.
 
-An optional typed wrapper exists:
+The original Record API also supports:
 
 - `vectordata.Codec[T]`
 - `vectordata.TypedCollection[T]`
 
-This lets application code work with domain models while storage stays record-oriented.
+This wrapper retains the original Record storage shape.
 
 ## 10) Error Model
 
@@ -251,6 +263,14 @@ Vector write validation also matches `ErrInvalidRecord`, while preserving
 `ErrInvalidVector` or `ErrDimensionMismatch` as appropriate.
 
 ## 11) Sample App Flows
+
+### `samples/model-store` and `samples/sqlite-store`
+
+The model sample demonstrates tagged models, generated keys, store-wide embedding
+defaults and array filters. It supports memory, SQLite and PostgreSQL. The SQLite
+sample retains typed records, queries a draft with a missing vector, searches the
+record with a vector, and reopens the database to verify persistence. Both run
+without an API key. See [samples](../samples/README.md).
 
 ### `samples/semantic-search`
 

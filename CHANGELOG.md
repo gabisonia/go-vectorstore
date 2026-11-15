@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased — planned v0.4.0
+## v0.4.0 — 2026-11-15
+
+[Release notes](https://github.com/gabisonia/go-vectorstore/releases/tag/v0.4.0).
 
 ### Model-driven collections
 

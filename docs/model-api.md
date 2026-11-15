@@ -15,7 +15,7 @@ type Product struct {
     Embedding []float32 `vectordata:"vector,dimensions=3,index"`
 }
 
-store := memory.New() // Or a postgres.PostgresVectorStore.
+store := memory.New() // Or an opened SQLite store or postgres.PostgresVectorStore.
 products, err := vectordata.EnsureTypedModelCollection[string, Product](
     ctx, store, "products", nil, vectordata.ModelCollectionOptions{},
 )
@@ -162,7 +162,7 @@ types with value text formatting and pointer text decoding.
 `[]time.Time`. Typed fields accept `time.Time` or defined types convertible to it,
 including named slice types. Elements normalize to UTC and truncate sub-microsecond
 precision before storage and filtering, so timezone-equivalent instants compare
-identically in both providers. UTC years must be 1–9999; strings, infinities and
+identically in all three providers. UTC years must be 1–9999; strings, infinities and
 out-of-range instants are rejected. This normalization applies to timestamp arrays;
 scalar `TypeTime` behavior is unchanged.
 
@@ -271,14 +271,16 @@ numeric semantics and exact precision. Existing string, float and JSON inference
 Optional additions support additive migrations; required fields need backfill,
 and conversions from existing floats, strings or JSON require manual review.
 
-Models use strict schema validation: columns, types, nullability, identity and
-primary-key shape must match. Existing indexes are checked for conflicts.
-Definitions are registered in the provider's reserved `__vectorstore_models`
-table; runtime embedder objects are not persisted. Changing a registered model
-requires an explicit migration or a new collection. The original Record API's
+PostgreSQL model collections use strict schema validation: columns, types,
+nullability, identity and primary-key shape must match. Existing indexes are
+checked for conflicts. Definitions are registered in PostgreSQL's reserved
+`__vectorstore_models` table. SQLite registers definitions in
+`__vectorstore_collections` alongside internal record storage; memory keeps them
+in process. Runtime embedder objects are not persisted. Changing a registered
+model requires an explicit migration or a new collection. The original Record API's
 strict/auto-migrate modes are unchanged. PostgreSQL also exposes a
 [migration API](migrations.md) for read-only review and explicit, atomic application
-of optional data properties and new indexes.
+of new optional data/vector properties and new indexes.
 
 ## Provider capabilities
 
@@ -296,26 +298,28 @@ if provider, ok := store.(vectordata.CapabilityProvider); ok {
 }
 ```
 
-Both providers report string/int64/UUID keys, generated int64 keys, all twenty
+All three providers report string/int64/UUID keys, generated int64 keys, all twenty
 portable data types, and cosine/L2/inner-product/L1/Hamming metrics.
 `VectorKinds` reports dense, binary and sparse support. Hamming applies only to
 binary vectors; the other metrics apply to dense and sparse vectors.
-`VectorPrecisions` reports `VectorFloat32` and `VectorFloat16` on both providers;
+`VectorPrecisions` reports `VectorFloat32` and `VectorFloat16` on all three providers;
 PostgreSQL float16 storage requires pgvector 0.7+ and a visible `halfvec` type.
 
-| Feature | Memory | PostgreSQL |
-| --- | --- | --- |
-| `VectorIndexMethods` | None | HNSW, IVFFlat |
-| `VectorIndexCapabilities` | None | Supported method/metric/precision combinations and dimension limits |
-| `IndexedDataTypes` | None | String, int64, float64, bool, time, UUID, bytes, date-only/time-only values, decimals and native arrays |
-| `FullTextIndexing` | False | True, for string properties |
-| `HybridSearch` | False | True |
-| `MigrationPlanning` | False | True, plan-only |
-| `MigrationApplication` | False | True, additive changes only |
+| Feature | Memory | SQLite | PostgreSQL |
+| --- | --- | --- | --- |
+| `OptionalVectors` | True | True | True |
+| `VectorIndexMethods` | None | None | HNSW, IVFFlat |
+| `VectorIndexCapabilities` | None | None | Supported method/metric/precision combinations and dimension/nonzero limits |
+| `IndexedDataTypes` | None | None | String, int64, float64, bool, time, UUID, bytes, calendar values, decimals and native arrays |
+| `FullTextIndexing` | False | False | True, for string properties |
+| `HybridSearch` | False | False | True |
+| `MigrationPlanning` | False | False | True, plan-only |
+| `MigrationApplication` | False | False | True, additive changes only |
 
-Index fields describe physical acceleration. Memory still accepts index hints
-for portability. Generic JSON indexing remains unsupported; provider-specific
-indexes are outside this metadata. Except for the detailed combination list below,
+Index fields describe physical acceleration. Memory and SQLite accept index hints
+for portability without creating physical property or vector indexes. Generic
+JSON indexing remains unsupported; provider-specific indexes are outside this
+metadata. Except for the detailed combination list below,
 empty slices mean no support for that feature.
 
 The coarse method, metric and precision lists do not imply every combination is
@@ -339,8 +343,8 @@ limits count stored components, separately from declared dimensions. A zero
 `MaxNonZero` means the provider has not reported that limit.
 Unsupported PostgreSQL combinations fail before database access. A third-party
 provider with a nil detailed list has not reported combinations; use its schema
-validation rather than assuming a cross product. Memory reports no physical
-indexes and continues to accept index hints for portability.
+validation rather than assuming a cross product. Memory and SQLite report no
+physical indexes.
 
 Discovery does not access the database or check deployment versions, permissions,
 health, collection definitions or embedder configuration. A hybrid-capable
@@ -355,7 +359,7 @@ and normal operation errors when metadata is unavailable.
 
 ## Lifecycle and retrieval
 
-Both providers implement `ModelStore` and `CollectionManager`. Stores can list
+All three providers implement `ModelStore` and `CollectionManager`. Stores can list
 collections, check existence, and delete collections idempotently. PostgreSQL
 listing includes registered models (even models without vectors) and existing
 vector tables in the configured schema. Ordinary unrelated tables are excluded.
@@ -389,9 +393,12 @@ ordering is not part of the portable contract. Text collation can vary by provid
 
 `QueryIter` and `SearchIter` use Go iterators. PostgreSQL reads rows lazily and
 releases the connection on completion, error, cancellation, or early loop exit.
-The memory provider snapshots its data. Querying a deleted/missing collection
-returns `ErrCollectionNotFound`. PostgreSQL operation errors add backend,
-collection, and operation context through `OperationError`, preserving
+Memory and SQLite materialize collection snapshots before yielding. SQLite
+releases its SQL connection before evaluating the snapshot; its query/search
+costs are described in the [SQLite guide](sqlite.md#query-costs-and-provider-limits).
+Querying a deleted/missing collection returns `ErrCollectionNotFound`. PostgreSQL
+and SQLite operation errors add backend, collection, and operation context through
+`OperationError`, preserving
 `errors.Is`/`errors.As`.
 
 ## Filtering
@@ -401,7 +408,9 @@ for JSON properties. `Metadata(...)` remains the original Record API's JSON path
 syntax. Nested JSON keys, including empty/whitespace keys, are literal.
 
 Operators include `Eq`, `Ne`, `In`, `Gt`, `Gte`, `Lt`, `Lte`, `Contains`, `Exists`,
-`And`, `Or`, and `Not`. `Contains` means array membership, not substring matching.
+`ContainsAny`, `ContainsAll`, `And`, `Or`, and `Not`. `Contains` means array
+membership, not substring matching. See [array set filters](#array-set-filters)
+for overlap/containment and empty-operand semantics.
 Native-array membership uses a GIN-compatible PostgreSQL containment expression,
 with typed scalar parameters for native arrays, including exact decimals.
 
@@ -453,7 +462,7 @@ L1 distance is the sum of absolute component differences, and its similarity sco
 is `1 / (1 + distance)`. Zero vectors are valid. For example, distance 3 has score
 0.25, while identical vectors have distance 0 and score 1. Distance thresholds
 remain upper bounds on raw distance; score thresholds remain lower bounds on
-similarity. Memory and PostgreSQL support L1 with both precisions, including
+similarity. Memory, SQLite and PostgreSQL support L1 with both precisions, including
 text-generated queries and PostgreSQL hybrid search. Hybrid scores still use RRF.
 
 PostgreSQL uses `<+>` for L1 search and `vector_l1_ops`/`halfvec_l1_ops` for HNSW.

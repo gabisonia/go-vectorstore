@@ -1,5 +1,28 @@
 # Performance and verification
 
+## Shared provider and SQLite verification
+
+Run the complete model contract against both exact-search providers, then the
+PostgreSQL integration contract:
+
+```sh
+go test -race -run TestModelContract ./stores/memory ./stores/sqlite
+go test -race -tags=integration -run TestIntegrationModelContract -timeout=5m ./stores/postgres
+```
+
+This covers advertised native types, dense/float16/binary/sparse and optional
+vectors, array set filters, queries/searches, embeddings and lifecycle behavior.
+SQLite-specific persistence, transaction, concurrency and error checks run with:
+
+```sh
+go test -race ./stores/sqlite
+CGO_ENABLED=0 go test ./stores/sqlite
+```
+
+The CGO-disabled command verifies embedded storage can run without a C toolchain.
+SQLite queries/searches materialize the whole collection; these checks establish
+correctness, not an ANN throughput claim. See [SQLite costs](sqlite.md#query-costs-and-provider-limits).
+
 ## Sparse vector verification
 
 ```sh
@@ -92,8 +115,9 @@ go test -race -tags=integration -run 'L1|IndexCapability|ModelContract/capabilit
 
 Shared tests check known L1 distances and inverse-distance scores, thresholds,
 paging, filters, zero vectors, text queries and hybrid RRF semantics for float32
-and float16. Capability tests create and validate all fourteen advertised physical
-index combinations. Local validation rejects unsupported L1/IVFFlat choices,
+and float16. Capability tests create and validate all twenty advertised physical index
+combinations: fourteen dense, two binary and four sparse. Local validation rejects
+unsupported L1/IVFFlat choices,
 including text-search tuning before embedding.
 
 The HNSW fixture stores 1,000 four-dimensional vectors from a fixed seed, compares
@@ -121,8 +145,8 @@ Unit checks cover every finite binary16 value, midpoint ties and adjacent float3
 values, subnormals, overflow and cosine vectors that round to zero. Integration
 checks compare deterministic float32 values directly with PostgreSQL casts, test
 mixed-precision text/binary writes and typed reads, and create/search a
-3,072-dimension halfvec HNSW index. Shared conformance checks exercise both memory
-and PostgreSQL for all supported metrics, embeddings and text/hybrid queries.
+3,072-dimension halfvec HNSW index. Shared conformance checks exercise memory, SQLite and PostgreSQL for supported
+metrics, embeddings and text queries; hybrid checks run on PostgreSQL.
 
 The storage/recall fixture contains 1,000 vectors with 32 dimensions and ten query
 vectors from fixed seeds. It compares halfvec HNSW/IVFFlat results with exact
