@@ -41,11 +41,13 @@ require it. Use current stable Go for up-to-date standard-library security fixes
 ## Install
 
 ```bash
-go get github.com/gabisonia/go-vectorstore@v0.4.0
+go get github.com/gabisonia/go-vectorstore@latest
 ```
 
-The current release is [v0.4.0](https://github.com/gabisonia/go-vectorstore/releases/tag/v0.4.0).
-For adoption and compatibility details, see the [upgrade guide](docs/upgrading.md).
+Use the [release list](https://github.com/gabisonia/go-vectorstore/releases) to
+check available tags and pin the resolved version in go.mod. This checkout
+prepares v0.4.1; its tag becomes available after release publication. See the
+[upgrade guide](docs/upgrading.md) and [compatibility policy](docs/releases.md).
 
 ## Quick Start (Local)
 
@@ -56,8 +58,8 @@ go run ./samples/typed-search -category architecture
 go run ./samples/typed-rag
 ```
 
-These new commands are on master until the next release. Fixture mode uses an
-instructional deterministic embedder. See the [sample index](samples/README.md)
+These commands are on master and included in source versions from v0.4.1. Fixture
+mode uses an instructional deterministic embedder. See the [sample index](samples/README.md)
 for real OpenAI opt-in, provider selection, expected output, and cleanup.
 For coding-agent integrations, start with the [AI usage guide](docs/ai-guide.md)
 and [documentation discovery index](llms.txt).
@@ -357,9 +359,9 @@ any publishing job runs. Existing tags must point to the checked-out, tested
 commit; the workflow will not move a tag to another commit. Prerelease versions
 are published as GitHub prereleases.
 
-`VERSION` records the current release (`0.4.0`). For a future release, choose an
-unused version and update `VERSION` and the changelog in a reviewed PR before
-publishing from master. Published tags are immutable; documentation updates after
+`VERSION` selects the source version being prepared or tagged (`0.4.1`). It does
+not establish that the tag has been published. Choose an unused version and update
+`VERSION` and the changelog in a reviewed PR before publishing from master. Published tags are immutable; documentation updates after
 a release do not change the source stored under that tag.
 
 Release options for that new version:
@@ -384,6 +386,10 @@ git push origin "v${RELEASE_VERSION}"
 - RAG sample app (`RAGrimosa`): `samples/ragrimosa`
 
 ## Documentation
+
+- Production operation: [`docs/production.md`](docs/production.md)
+- Compatibility and release policy: [`docs/releases.md`](docs/releases.md)
+- Private vulnerability reporting and support: [`SECURITY.md`](SECURITY.md)
 
 - AI application usage: [`docs/ai-guide.md`](docs/ai-guide.md)
 - Repository agent instructions: [`AGENTS.md`](AGENTS.md)

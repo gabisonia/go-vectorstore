@@ -7,17 +7,20 @@ ensure that a tool reads its documentation or instruction files.
 
 ## Version and starting point
 
-The published release is **v0.4.0**. Install it with:
+The example API baseline is **v0.4.0**. This checkout prepares **v0.4.1**; check
+[GitHub releases](https://github.com/gabisonia/go-vectorstore/releases) for tags
+that have actually been published. Install the latest published version, then pin
+the resolved version in your application's go.mod:
 
 ```sh
-go get github.com/gabisonia/go-vectorstore@v0.4.0
+go get github.com/gabisonia/go-vectorstore@latest
 ```
 
 Go 1.25+ is required. Check your application's `go.mod` before choosing APIs.
-Master includes unreleased changes listed in [CHANGELOG.md](../CHANGELOG.md).
-The new typed-search, typed-rag and recipes commands are on master and will appear
-in the next tag; their library calls use v0.4.0 APIs. Run repository samples from a
-checkout of the matching source, rather than assuming they exist in every tag.
+Master may include unpublished changes listed in [CHANGELOG.md](../CHANGELOG.md).
+The typed-search, typed-rag and recipes commands are on master and included in
+source versions from v0.4.1; their library calls use v0.4.0 APIs. Run repository
+samples from a checkout of the matching source, rather than assuming they exist in every tag.
 [Versioned API reference](https://pkg.go.dev/github.com/gabisonia/go-vectorstore/vectordata@v0.4.0)
 and [upgrade notes](upgrading.md) describe the released contract.
 
@@ -146,7 +149,8 @@ it is not an importable public helper package.
 Copy this and fill in your application choices:
 
 ```text
-Use go-vectorstore v0.4.0 and the typed model API.
+Use the latest published go-vectorstore 0.4.x patch and the typed model API.
+Pin the resolved version in go.mod.
 Provider: SQLite. Key: string. Model: Document with Body and a 1536-dimensional vector.
 Embedder: my application's existing implementation; source property: Body.
 Read docs/ai-guide.md and the typed-search/SQLite examples first.

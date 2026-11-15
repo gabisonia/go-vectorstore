@@ -201,6 +201,10 @@ func (c *ModelCollection) runSearch(ctx context.Context, sql string, args []any,
 	}
 	defer rows.Close()
 	for rows.Next() {
+		if err := ctx.Err(); err != nil {
+			report(err)
+			return
+		}
 		var scanner modelScanner = rows
 		var score float64
 		if fusion {
@@ -222,6 +226,8 @@ func (c *ModelCollection) runSearch(ctx context.Context, sql string, args []any,
 		}
 	}
 	if err := rows.Err(); err != nil {
+		report(err)
+	} else if err := ctx.Err(); err != nil {
 		report(err)
 	}
 }

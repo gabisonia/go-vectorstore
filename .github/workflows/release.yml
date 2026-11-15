@@ -35,6 +35,7 @@ jobs:
         run: |
           set -euo pipefail
           tag="$(bash .github/scripts/release.sh resolve "$RAW_VERSION")"
+          bash .github/scripts/release.sh verify-source "$tag"
           bash .github/scripts/release.sh verify-tag "$tag"
           printf 'tag=%s\n' "$tag" >> "$GITHUB_OUTPUT"
 

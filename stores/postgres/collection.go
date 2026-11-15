@@ -277,6 +277,9 @@ func (c *PostgresCollection) querySearchPlan(ctx context.Context, conn searchQue
 
 	results := make([]vectordata.SearchResult, 0)
 	for rows.Next() {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		result, err := c.scanSearchResult(rows, plan.projection)
 		if err != nil {
 			return nil, err
@@ -284,6 +287,9 @@ func (c *PostgresCollection) querySearchPlan(ctx context.Context, conn searchQue
 		results = append(results, result)
 	}
 	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	return results, nil

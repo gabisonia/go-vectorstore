@@ -522,3 +522,32 @@ behavior under negation. Run these checks explicitly with:
 go test -tags=integration -run 'TestIntegrationModelQueryIndexes|TestIntegrationModelFilterParity|TestIntegrationModelContract/filter_edges' \
   -timeout=3m ./stores/postgres
 ```
+
+## Production hardening verification
+
+```sh
+go test -race -run 'TestWALRecoveryAfterProcessKill|TestReleasedFormat1Compatibility' ./stores/sqlite
+go test -race -tags=integration -run 'TestIntegrationBufferedIteratorCancellation|TestIntegrationConnectionLoss' -timeout=3m ./stores/postgres
+bash scripts/test-fuzz.sh 5s
+```
+
+SQLite tests kill a subprocess without cleanup after commit and before commit of
+an 8 MiB batch that has spilled WAL pages. Reopen checks integrity, committed data,
+rollback and sequence continuation. This tests process failure, not power loss or
+hardware durability. The compatibility fixture was generated in a separate module
+pinned to published v0.4.0; current tests copy the checked-in file and verify its
+canonical records, registrations and next generated key.
+
+PostgreSQL tests cancel query/search consumers after a buffered or final row,
+check one cancellation error and pool reuse, and terminate a blocked backend for
+reads and the second batch of a 501-record write. They verify native errors,
+rollback and subsequent reads/writes/searches on a replacement connection. These
+are controlled failure cases, not a complete failover/ambiguous-commit simulation.
+
+Seven fuzz targets exercise decimal exactness, float16 rounding against an
+independent finite-value oracle, sparse versus dense distances, canonical struct
+codec and SQLite payload round trips, null/precision filter truth and SQL operand
+binding. CI runs three seconds per target with two workers on each supported Go
+lane; the scheduled hardening workflow runs sixty seconds per target weekly.
+Fuzzing is bounded exploration, not an exhaustive input proof. Failing generated
+corpora are retained as workflow artifacts for reproduction and regression tests.

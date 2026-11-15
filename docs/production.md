@@ -1,0 +1,140 @@
+# Production operation
+
+The providers support different workloads. PostgreSQL provides server storage and
+ANN/full-text/hybrid capabilities; SQLite provides durable local exact scans;
+memory is transient. Use [capabilities](parity.md) and deployment-specific tests to
+choose. The verification below establishes specific failure/compatibility
+behavior, not a universal latency, recall or durability guarantee.
+
+## PostgreSQL connections and permissions
+
+Create one application-owned pgx pool per database/configuration and reuse it.
+Require TLS certificate/hostname verification for remote databases, with a trusted
+CA and `sslmode=verify-full`. The repository's `sslmode=disable` compose DSNs are
+local development examples. Keep credentials in your application's secret system;
+avoid logging connection strings, query arguments, embeddings or document bodies.
+
+Example pool settings inside application setup (imports: context, time, pgxpool):
+
+```go
+cfg, err := pgxpool.ParseConfig(dsn) // dsn supplies verify-full and a trusted CA
+if err != nil {
+    return err
+}
+cfg.MaxConns = 10 // Illustrative; size against the server budget and replica count.
+cfg.ConnConfig.ConnectTimeout = 5 * time.Second
+cfg.MaxConnLifetime = time.Hour
+cfg.MaxConnLifetimeJitter = 5 * time.Minute
+cfg.MaxConnIdleTime = 10 * time.Minute
+cfg.HealthCheckPeriod = time.Minute
+pool, err := pgxpool.NewWithConfig(ctx, cfg)
+if err != nil {
+    return err
+}
+// Keep pool for the application lifetime; close after requests/iterators stop.
+```
+
+Total pools across replicas, background jobs and administrative clients must fit
+the database connection budget. Bound application request concurrency as well as
+pool size. Set per-operation context deadlines covering pool acquisition,
+embedding and database work; configure server statement/lock timeouts appropriate
+to the workload. A context deadline is not a substitute for a server-side timeout
+when a client disappears. Separate migration/bootstrap timeout budgets from short
+request budgets. See the [pgxpool configuration reference](https://pkg.go.dev/github.com/jackc/pgx/v5@v5.9.2/pgxpool#Config).
+
+Have a deployment/admin role install pgvector, create/validate model collections
+and indexes, and apply reviewed migrations. Runtime roles should have only the
+data/schema/sequence/registry privileges needed by their actual operations. Set
+`EnsureExtension=false` when extensions are provisioned administratively. Obtain
+existing handles with GetModelCollection/GetTypedModelCollection rather than
+running Ensure on every request; Ensure can require DDL rights. Verify permissions
+with the real runtime role. Do not give a request-serving role superuser or
+migration ownership solely to simplify startup.
+
+## Contexts, iterators and shutdown
+
+Pass the request context through reads, writes and embeddings. Check every
+iterator error. PostgreSQL query/search iterators check cancellation between
+buffered rows and after exhaustion; cancellation during the final item is reported
+if iteration continues. Breaking the loop deliberately ends iteration and closes
+its resources. Consumers should also check ctx.Err before expensive per-item work.
+
+Release cursors by finishing/breaking the range before issuing another operation
+through a single-connection pool. Memory/SQLite materialize query results or
+search pages before application iteration. Stop new requests, finish/cancel
+in-flight operations and iterators, then close the owning pool/SQLite Store.
+
+## Failure outcomes and retries
+
+An operation error does not always establish the commit outcome: a connection can
+be lost after the database commits but before the caller receives confirmation.
+Inspect errors with errors.Is/errors.As; OperationError preserves provider context
+and the native cause. Reconcile uncertain outcomes by stable record keys or an
+application idempotency protocol before retrying writes. Blindly repeating Insert
+with generated keys can create duplicates. Upsert can overwrite concurrent changes,
+so stable keys alone do not supply application-level concurrency control.
+
+The library does not replay PostgreSQL writes/commits. SQLite retries acquisition
+and side-effect-free reads with cancelable waits capped at five seconds; it does
+not replay write statements/commits. A read retry must fit the caller's overall
+deadline. Applications own retry limits/backoff for external embedders; partial
+embedding requests may have incurred cost even when database writes never begin.
+A failed embedding call does not roll back requests already sent to that service.
+
+Connection-termination tests block a read or the second statement of a 501-record
+write, terminate its PostgreSQL backend, and verify native error propagation,
+transaction rollback and subsequent operation through a replacement connection.
+They do not simulate every failover mode or the ambiguous-commit window.
+
+## SQLite files, recovery and backups
+
+Use a local filesystem with SQLite-compatible locking. Each Store has one pooled
+connection; WAL allows readers and other handles' writes to overlap, while writes
+serialize. FULL synchronization and WAL are configured by the provider. Exact
+search still decodes/scans the collection; benchmark record size, vectors, paging,
+concurrent readers/writers and memory use. Large offsets retain more candidates.
+See [SQLite costs](sqlite.md#query-costs-and-provider-limits).
+
+Do not rename, replace or remove an open database or its WAL/SHM sidecars. For live
+backups use SQLite-aware tooling built on the online backup API or an appropriate
+snapshot method. A plain copy of the main file can omit committed WAL data. For
+an offline copy, stop every process/handle accessing the file and verify a clean
+checkpoint before copying the database. Keep backups separate from active data;
+filesystem snapshots must consistently capture all required files. See
+[SQLite backup guidance](https://www.sqlite.org/backup.html) and
+[file corruption pitfalls](https://www.sqlite.org/howtocorrupt.html).
+
+Restore while the service is stopped, using a matched backup rather than mixing
+an old main file with another WAL. Restore to an isolated path first, run SQLite
+integrity checks, open existing registered collections, and verify expected keys,
+counts, generated-key continuation, native values and retrieval results. Reattach
+runtime embedders using the original model configuration. Exercise this procedure
+with actual backup tooling before relying on it operationally. PostgreSQL backup,
+point-in-time recovery and failover likewise belong to the database deployment;
+validate restoring pgvector, registrations, indexes and application data together.
+
+The SQLite subprocess test kills the writer without cleanup after a committed
+transaction and before commit of a spilled multi-row transaction. Reopening checks
+integrity, committed data, rollback and generated-key continuity. This establishes
+process-crash recovery in the tested environment; it does not simulate power loss,
+a lying disk cache, filesystem corruption or disk exhaustion.
+
+## Embeddings, monitoring and workload validation
+
+Persist an application-level identifier for the embedding model/configuration and
+use compatible inputs for ingestion and queries. Equal dimensions do not establish
+model compatibility; the library does not persist/verify embedding model identity.
+Plan re-embedding and cutover for model changes. Keep model/schema changes explicit.
+
+Monitor operation latency/error/cancellation rates, request/batch sizes, embedding
+latency/failures, memory/GC, pgx pool acquisition pressure and database lock/index
+behavior. Use application wrappers and pgx tracing/stats; the library does not add
+a telemetry backend or log document payloads. Avoid record IDs/queries as unbounded
+metric labels. Track restore drills, migration results and scheduled scan failures.
+
+Before rollout, measure your real dimensions/NNZ, filters, corpus size, write/read
+concurrency and ANN recall. Validate deadline/connection budgets and index plans.
+Deploy a pinned published version, canary it, and retain a rollback/restore plan.
+For schema changes follow [migration limits](migrations.md), including blocking
+DDL and explicit review. See [release compatibility](releases.md) and
+[verification commands](performance.md#production-hardening-verification).
