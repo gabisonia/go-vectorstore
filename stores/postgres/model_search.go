@@ -41,7 +41,7 @@ func scoreSQL(distance string, metric vectordata.DistanceMetric) string {
 	switch metric {
 	case vectordata.DistanceCosine:
 		return "(1 - " + distance + ")"
-	case vectordata.DistanceL2, vectordata.DistanceL1:
+	case vectordata.DistanceL2, vectordata.DistanceL1, vectordata.DistanceHamming:
 		return "(1 / (1 + " + distance + "))"
 	default:
 		return "(-" + distance + ")"
@@ -59,15 +59,25 @@ func (c *ModelCollection) searchPlan(vector []float32, top int, opts vectordata.
 	if err != nil {
 		return "", nil, p, err
 	}
+	return c.searchValuePlan(vectorLiteral(vector), top, opts)
+}
+func (c *ModelCollection) searchValuePlan(literal any, top int, opts vectordata.ModelSearchOptions) (string, []any, vectordata.VectorProperty, error) {
+	p, err := c.definition.Vector(opts.VectorProperty)
+	if err != nil {
+		return "", nil, p, err
+	}
+	if err := vectordata.ValidateModelSearchOptions(top, opts); err != nil {
+		return "", nil, p, err
+	}
 	_, _, relaxed, err := modelTuning(opts.ProviderOptions, p.Metric)
 	if err != nil {
 		return "", nil, p, err
 	}
-	op, err := metricOperator(p.Metric)
+	op, err := modelMetricOperator(p)
 	if err != nil {
 		return "", nil, p, err
 	}
-	distance := "(t." + quoteIdent(p.StorageName) + " " + op + " $1::" + vectorSQLType(p) + ")"
+	distance := "(t." + quoteIdent(p.StorageName) + " " + op + " $1::" + vectorQuerySQLType(p) + ")"
 	if err := vectordata.ValidateModelFilter(opts.Filter, c.definition); err != nil {
 		return "", nil, p, err
 	}
@@ -75,7 +85,7 @@ func (c *ModelCollection) searchPlan(vector []float32, top int, opts vectordata.
 	if err != nil {
 		return "", nil, p, err
 	}
-	args = append([]any{vectorLiteral(vector)}, args...)
+	args = append([]any{literal}, args...)
 	predicates := []string{}
 	if where != "" {
 		predicates = append(predicates, where)
@@ -285,6 +295,9 @@ func (c *ModelCollection) HybridSearch(ctx context.Context, vector []float32, ke
 	if err != nil {
 		return nil, err
 	}
+	return c.runHybrid(ctx, sql, args, p, opts)
+}
+func (c *ModelCollection) runHybrid(ctx context.Context, sql string, args []any, p vectordata.VectorProperty, opts vectordata.HybridSearchOptions) ([]vectordata.ModelSearchResult, error) {
 	out := []vectordata.ModelSearchResult{}
 	var failure error
 	c.runSearch(ctx, sql, args, p, opts.ModelSearchOptions, true, func(r vectordata.ModelSearchResult, err error) bool {
@@ -310,14 +323,22 @@ func (c *ModelCollection) hybridPlan(vector []float32, keywords string, top int,
 	if err != nil {
 		return "", nil, p, err
 	}
+	return c.hybridValuePlan(vectorLiteral(vector), keywords, top, opts)
+}
+func (c *ModelCollection) hybridValuePlan(literal any, keywords string, top int, opts vectordata.HybridSearchOptions) (string, []any, vectordata.VectorProperty, error) {
+	config, err := c.validateHybridOptions(keywords, top, opts)
+	p := config.vector
+	if err != nil {
+		return "", nil, p, err
+	}
 	where, filterArgs, next, err := filtersql.CompileFilterSQL(opts.Filter, c.filterConfig(), 3)
 	if err != nil {
 		return "", nil, p, err
 	}
-	args := append([]any{vectorLiteral(vector), keywords}, filterArgs...)
+	args := append([]any{literal, keywords}, filterArgs...)
 	bind := func(value any) string { ph := fmt.Sprintf("$%d", next); next++; args = append(args, value); return ph }
-	op, _ := metricOperator(p.Metric)
-	distance := "(t." + quoteIdent(p.StorageName) + " " + op + " $1::" + vectorSQLType(p) + ")"
+	op, _ := modelMetricOperator(p)
+	distance := "(t." + quoteIdent(p.StorageName) + " " + op + " $1::" + vectorQuerySQLType(p) + ")"
 	key := "t." + quoteIdent(c.definition.Key.StorageName)
 	predicate := "TRUE"
 	if where != "" {

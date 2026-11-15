@@ -11,6 +11,7 @@ const (
 	// DistanceL1 is Manhattan distance: the sum of absolute component differences.
 	DistanceL1           DistanceMetric = "l1"
 	DistanceInnerProduct DistanceMetric = "inner_product"
+	DistanceHamming      DistanceMetric = "hamming"
 )
 
 // EnsureMode controls how schema checks are enforced when ensuring collections.
@@ -150,7 +151,7 @@ func ScoreFromDistance(metric DistanceMetric, distance float64) float64 {
 	switch metric {
 	case DistanceCosine:
 		return 1 - distance
-	case DistanceL2, DistanceL1:
+	case DistanceL2, DistanceL1, DistanceHamming:
 		return 1 / (1 + distance)
 	case DistanceInnerProduct:
 		return -distance

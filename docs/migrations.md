@@ -114,6 +114,8 @@ a freshly reviewed no-op plan can be applied successfully.
 | Add optional decimal data or arrays | Nullable unconstrained `numeric`/`numeric[]` columns and requested B-tree/GIN indexes; additive application supported |
 | Add required data | Nullable `ADD COLUMN`, manual backfill/verification, then `SET NOT NULL` |
 | Add a vector | Same stages, with embedding/backfill flags |
+| Add/convert a binary vector | Required `bit(n)` storage needs manual backfill; dense-to-binary conversions require explicit re-embedding/conversion review |
+| Add a binary vector index | Compatible HNSW/IVFFlat `bit_hamming_ops` indexes support additive application after operator/opclass checks |
 | Relax nullability | `DROP NOT NULL` |
 | Require a nullable property | Manual null backfill/verification, then `SET NOT NULL` |
 | Rename storage with a stable logical property | `RENAME COLUMN`; rebuild affected managed index names |

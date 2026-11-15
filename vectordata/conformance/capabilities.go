@@ -23,6 +23,7 @@ func runCapabilities(t *testing.T, factory Factory) {
 	t.Run("decimals", func(t *testing.T) { runDecimals(t, factory, caps) })
 	t.Run("native_data", func(t *testing.T) { runNativeData(t, factory, caps) })
 	t.Run("vector_precisions", func(t *testing.T) { runVectorPrecisions(t, factory, caps) })
+	t.Run("binary_vectors", func(t *testing.T) { runBinaryVectors(t, factory, caps) })
 	if caps.Backend == "" || len(caps.KeyTypes) == 0 {
 		t.Fatal("capabilities must identify the backend and supported keys")
 	}
@@ -62,8 +63,18 @@ func runCapabilities(t *testing.T, factory Factory) {
 			}
 			for i, metric := range caps.DistanceMetrics {
 				vector := vectordata.VectorProperty{Name: fmt.Sprintf("Vector%d", i), Dimensions: 2, Metric: metric}
+				if metric == vectordata.DistanceHamming {
+					vector.Kind = vectordata.VectorBinary
+				}
 				d.Vectors = append(d.Vectors, vector)
-				record.Vectors[vector.Name] = []float32{1, 0}
+				if vector.Kind == vectordata.VectorBinary {
+					if record.BinaryVectors == nil {
+						record.BinaryVectors = map[string]vectordata.BinaryVector{}
+					}
+					record.BinaryVectors[vector.Name] = vectordata.BinaryVector{Bytes: []byte{0x80}, Dimensions: 2}
+				} else {
+					record.Vectors[vector.Name] = []float32{1, 0}
+				}
 			}
 			c, err := store.EnsureModelCollection(ctx, "capabilities_"+string(kind), d, vectordata.ModelCollectionOptions{})
 			if err != nil {
@@ -77,7 +88,17 @@ func runCapabilities(t *testing.T, factory Factory) {
 				t.Fatalf("native key round trip: %+v, %v", got, err)
 			}
 			for _, vector := range d.Vectors {
-				results, err := c.Search(ctx, []float32{1, 0}, 1, vectordata.ModelSearchOptions{VectorProperty: vector.Name})
+				var results []vectordata.ModelSearchResult
+				var err error
+				if vector.Kind == vectordata.VectorBinary {
+					b, ok := c.(vectordata.BinarySearcher)
+					if !ok {
+						t.Fatal("binary search interface missing")
+					}
+					results, err = b.SearchBinary(ctx, record.BinaryVectors[vector.Name], 1, vectordata.ModelSearchOptions{VectorProperty: vector.Name})
+				} else {
+					results, err = c.Search(ctx, []float32{1, 0}, 1, vectordata.ModelSearchOptions{VectorProperty: vector.Name})
+				}
 				if err != nil || len(results) != 1 || results[0].Record.Key != key {
 					t.Fatalf("advertised metric %s failed: %v, %v", vector.Metric, results, err)
 				}
@@ -158,10 +179,11 @@ func runCapabilities(t *testing.T, factory Factory) {
 		}
 	}
 	for i, index := range caps.VectorIndexCapabilities {
-		if index.MaxDimensions <= 0 || !slices.Contains(caps.DistanceMetrics, index.Metric) || !slices.Contains(caps.VectorPrecisions, index.Precision) || !slices.Contains(caps.VectorIndexMethods, index.Method) {
+		validRepresentation := index.Kind == vectordata.VectorBinary && index.Precision == "" && slices.Contains(caps.VectorKinds, vectordata.VectorBinary) || index.Kind != vectordata.VectorBinary && slices.Contains(caps.VectorPrecisions, index.Precision)
+		if index.MaxDimensions <= 0 || !slices.Contains(caps.DistanceMetrics, index.Metric) || !validRepresentation || !slices.Contains(caps.VectorIndexMethods, index.Method) {
 			t.Fatalf("inconsistent index capability: %+v", index)
 		}
-		d := vectordata.CollectionDefinition{Key: vectordata.KeyProperty{Name: "ID", Type: caps.KeyTypes[0]}, Vectors: []vectordata.VectorProperty{{Name: "Vector", Dimensions: 2, Metric: index.Metric, Precision: index.Precision, Index: &vectordata.VectorIndexOptions{Method: index.Method}}}}
+		d := vectordata.CollectionDefinition{Key: vectordata.KeyProperty{Name: "ID", Type: caps.KeyTypes[0]}, Vectors: []vectordata.VectorProperty{{Name: "Vector", Dimensions: 2, Kind: index.Kind, Metric: index.Metric, Precision: index.Precision, Index: &vectordata.VectorIndexOptions{Method: index.Method}}}}
 		c, err := store.EnsureModelCollection(ctx, fmt.Sprintf("capabilities_combination_%d", i), d, vectordata.ModelCollectionOptions{})
 		if err != nil {
 			t.Fatalf("advertised combination %+v failed: %v", index, err)

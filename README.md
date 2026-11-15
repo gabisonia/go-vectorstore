@@ -100,6 +100,9 @@ PostgreSQL hybrid search. Models can opt into float16 (`halfvec`) storage with
 metadata for supported keys, data types, metrics, index combinations and hybrid search.
 Both providers support Manhattan (`DistanceL1`) search; PostgreSQL supports L1 HNSW
 indexes and rejects unsupported L1/IVFFlat combinations before database work.
+Models can also use packed `BinaryVector` fields with `kind=binary`, Hamming
+distance and `SearchBinary`. PostgreSQL provides native `bit(n)` storage,
+HNSW/IVFFlat indexes and binary hybrid search.
 PostgreSQL offers [model migration planning and explicit additive application](docs/migrations.md)
 with schema drift detection, reviewable SQL and backfill/re-embedding classifications.
 Original `Record`/`Collection` callers remain compatible.

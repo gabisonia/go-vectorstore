@@ -12,7 +12,8 @@ func (*PostgresVectorStore) Capabilities() vectordata.ProviderCapabilities {
 		KeyTypes:             []vectordata.KeyType{vectordata.KeyString, vectordata.KeyInt64, vectordata.KeyUUID},
 		GeneratedKeyTypes:    []vectordata.KeyType{vectordata.KeyInt64},
 		DataTypes:            []vectordata.DataType{vectordata.TypeString, vectordata.TypeInt64, vectordata.TypeFloat64, vectordata.TypeBool, vectordata.TypeTime, vectordata.TypeStringArray, vectordata.TypeJSON, vectordata.TypeUUID, vectordata.TypeBytes, vectordata.TypeInt64Array, vectordata.TypeFloat64Array, vectordata.TypeBoolArray, vectordata.TypeUUIDArray, vectordata.TypeTimeArray, vectordata.TypeDateOnly, vectordata.TypeTimeOnly, vectordata.TypeDateOnlyArray, vectordata.TypeTimeOnlyArray, vectordata.TypeDecimal, vectordata.TypeDecimalArray},
-		DistanceMetrics:      []vectordata.DistanceMetric{vectordata.DistanceCosine, vectordata.DistanceL2, vectordata.DistanceInnerProduct, vectordata.DistanceL1},
+		DistanceMetrics:      []vectordata.DistanceMetric{vectordata.DistanceCosine, vectordata.DistanceL2, vectordata.DistanceInnerProduct, vectordata.DistanceL1, vectordata.DistanceHamming},
+		VectorKinds:          []vectordata.VectorKind{vectordata.VectorDense, vectordata.VectorBinary},
 		VectorPrecisions:     []vectordata.VectorPrecision{vectordata.VectorFloat32, vectordata.VectorFloat16},
 		VectorIndexMethods:   []vectordata.IndexMethod{vectordata.IndexMethodHNSW, vectordata.IndexMethodIVFFlat},
 		IndexedDataTypes:     []vectordata.DataType{vectordata.TypeString, vectordata.TypeInt64, vectordata.TypeFloat64, vectordata.TypeBool, vectordata.TypeTime, vectordata.TypeStringArray, vectordata.TypeUUID, vectordata.TypeBytes, vectordata.TypeInt64Array, vectordata.TypeFloat64Array, vectordata.TypeBoolArray, vectordata.TypeUUIDArray, vectordata.TypeTimeArray, vectordata.TypeDateOnly, vectordata.TypeTimeOnly, vectordata.TypeDateOnlyArray, vectordata.TypeTimeOnlyArray, vectordata.TypeDecimal, vectordata.TypeDecimalArray},
@@ -29,6 +30,9 @@ func (*PostgresVectorStore) Capabilities() vectordata.ProviderCapabilities {
 				}
 			}
 		}
+	}
+	for _, method := range caps.VectorIndexMethods {
+		caps.VectorIndexCapabilities = append(caps.VectorIndexCapabilities, vectordata.VectorIndexCapability{Kind: vectordata.VectorBinary, Method: method, Metric: vectordata.DistanceHamming, MaxDimensions: 64000})
 	}
 	return caps
 }

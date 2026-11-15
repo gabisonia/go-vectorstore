@@ -1,5 +1,24 @@
 # Performance and verification
 
+## Binary vector verification
+
+```sh
+go test -race -run 'Binary' ./vectordata ./stores/memory ./stores/postgres
+go test -race -tags=integration -run 'Binary|ModelContract/capabilities/binary_vectors' \
+  -timeout=3m ./stores/postgres
+```
+
+Shared tests cover exact bit lengths, nonzero padding, zero/non-byte-aligned
+vectors, Hamming rankings/scores, mixed dense/binary models, typed mapping,
+buffer ownership, filters, thresholds, paging, projections, iterators, atomic
+failures and hybrid search. Invalid binary batches skip float embedding calls.
+PostgreSQL fixtures check packed storage/transport, preserved parameter bit lengths,
+HNSW/IVFFlat eligibility with sequential scans disabled, normal filtered search,
+single-connection iterator cleanup, required backfill/conversion classifications,
+additive index migrations, schema drift and missing extension prerequisites.
+These checks establish behavior and index eligibility, without a production
+throughput or recall claim.
+
 ## Native array verification
 
 ```sh
