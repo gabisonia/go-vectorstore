@@ -77,14 +77,23 @@ schema/format validation in the same statement. It does not deserialize payloads
 and uses bounded Go memory; counting still scans the matching index entries and
 can grow with collection size. These fast paths do not invoke embedders.
 
-Query, filtered Count, and all search operations load a consistent snapshot of the
-entire collection into memory, release the SQL connection, and use the shared
-exact-search engine. Snapshot replay never invokes an embedder. Iterators
-materialize that snapshot before yielding and hold no open SQL cursor while
-application code runs. These operations cost O(collection size) memory and scan
-work; vector search also evaluates distance for each candidate. Benchmark
+Exact search streams and validates every payload through one deferred read
+transaction, retaining at most `top + Skip` candidates in a heap. Only the returned
+page is copied for projection. Ranking uses distance, then native key for ties;
+filters, thresholds and missing-vector exclusion apply before paging. Search still
+scans and decodes the entire collection: cumulative decoding allocations grow with
+collection size, while retained candidate records grow with `top + Skip`.
+Large offsets therefore increase memory use. WAL permits other connections to
+write during the scan; the Store's own connection remains occupied until it ends.
+Filter operands are normalized before acquiring the connection.
+
+Query and filtered Count still load the whole collection into the memory engine,
+using O(collection size) memory and scan work. Runtime embedders are disabled when
+reading stored records. QueryIter materializes its snapshot and SearchIter its
+result page before yielding, so application code holds no SQL cursor. Benchmark
 realistic sizes before selecting the provider for large collections or concurrent
-query services. See the [read benchmarks](performance.md#sqlite-batch-lookup-and-count-verification).
+query services. See the [read benchmarks](performance.md#sqlite-batch-lookup-and-count-verification)
+and [exact-search benchmarks](performance.md#exact-search-selection-and-copying).
 
 Index flags are accepted as portability hints; no physical property/vector
 indexes, ANN acceleration, full-text search, hybrid search, PostgreSQL tuning,

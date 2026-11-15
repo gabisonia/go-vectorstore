@@ -24,9 +24,8 @@ func (c *Collection) SearchSparse(ctx context.Context, v vectordata.SparseVector
 	if opts.ProviderOptions != nil {
 		return nil, vectordata.ErrUnsupported
 	}
-	return c.searchRecords(ctx, top, opts, p.Metric, func(r vectordata.ModelRecord) float64 {
-		n, _ := vectordata.SparseDistance(v, r.SparseVectors[p.Name], p.Metric)
-		return float64(n)
+	return c.searchRecords(ctx, top, opts, p, func(r vectordata.ModelRecord) (float64, error) {
+		return vectordata.SparseDistance(v, r.SparseVectors[p.Name], p.Metric)
 	})
 }
 func (c *Collection) SearchSparseIter(ctx context.Context, v vectordata.SparseVector, top int, opts vectordata.ModelSearchOptions) iter.Seq2[vectordata.ModelSearchResult, error] {

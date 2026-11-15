@@ -15,7 +15,7 @@ import (
 // WAL writer. Close idle provider connections so the external connection can
 // obtain the exclusive file lock before the operation reconnects.
 func TestExclusiveReadDeadlines(t *testing.T) {
-	for _, operation := range []string{"list", "exists", "get", "get_many", "query", "count", "open"} {
+	for _, operation := range []string{"list", "exists", "get", "get_many", "query", "count", "search", "open"} {
 		t.Run(operation, func(t *testing.T) {
 			ctx := context.Background()
 			path := filepath.Join(t.TempDir(), "exclusive.db")
@@ -24,7 +24,7 @@ func TestExclusiveReadDeadlines(t *testing.T) {
 				t.Fatal(err)
 			}
 			t.Cleanup(func() { store.Close() })
-			d := vectordata.CollectionDefinition{Key: vectordata.KeyProperty{Name: "ID"}}
+			d := vectordata.CollectionDefinition{Key: vectordata.KeyProperty{Name: "ID"}, Vectors: []vectordata.VectorProperty{{Name: "Vector", Dimensions: 1, Optional: true, Metric: vectordata.DistanceL2}}}
 			c, err := store.EnsureModelCollection(ctx, "records", d, vectordata.ModelCollectionOptions{})
 			if err != nil {
 				t.Fatal(err)
@@ -64,6 +64,8 @@ func TestExclusiveReadDeadlines(t *testing.T) {
 				_, err = c.GetMany(deadline, []any{"kept"}, vectordata.RetrievalOptions{})
 			case "query":
 				_, err = c.Query(deadline, nil, 1, vectordata.QueryOptions{})
+			case "search":
+				_, err = c.Search(deadline, []float32{0}, 1, vectordata.ModelSearchOptions{})
 			case "count":
 				_, err = c.Count(deadline, nil)
 			case "open":

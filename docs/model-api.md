@@ -396,9 +396,9 @@ ordering is not part of the portable contract. Text collation can vary by provid
 
 `QueryIter` and `SearchIter` use Go iterators. PostgreSQL reads rows lazily and
 releases the connection on completion, error, cancellation, or early loop exit.
-Memory and SQLite materialize collection snapshots before yielding. SQLite
-releases its SQL connection before evaluating the snapshot; its query/search
-costs are described in the [SQLite guide](sqlite.md#query-costs-and-provider-limits).
+Memory and SQLite materialize QueryIter snapshots and SearchIter result pages
+before yielding. SQLite releases its SQL connection before application iteration;
+its query/search costs are described in the [SQLite guide](sqlite.md#query-costs-and-provider-limits).
 Querying a deleted/missing collection returns `ErrCollectionNotFound`. PostgreSQL
 and SQLite operation errors add backend, collection, and operation context through
 `OperationError`, preserving
@@ -446,6 +446,13 @@ finite; cosine vectors must be nonzero.
 `Skip` and `top` page the ranked results. Approximate indexes can still return
 fewer matches or change the candidate set between requests; paging does not
 create a stable snapshot across separate searches.
+
+Memory and SQLite perform exact scans, retaining the best `top + Skip` candidates
+and sorting that set by distance, then native key for ties. Memory takes a shallow
+snapshot of immutable stored records and copies only the returned page. SQLite
+streams decoded records from one read snapshot. Both still examine the whole
+collection; large offsets increase retained candidate memory. See the
+[selection benchmarks](performance.md#exact-search-selection-and-copying).
 
 Vector search returns raw `Distance` plus a higher-is-better `Score`, tagged
 `ScoreSimilarity`. `DistanceThreshold` is an upper bound on raw distance;

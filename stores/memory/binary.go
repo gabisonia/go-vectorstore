@@ -24,9 +24,9 @@ func (c *Collection) SearchBinary(ctx context.Context, v vectordata.BinaryVector
 	if opts.ProviderOptions != nil {
 		return nil, vectordata.ErrUnsupported
 	}
-	return c.searchRecords(ctx, top, opts, p.Metric, func(r vectordata.ModelRecord) float64 {
-		n, _ := vectordata.HammingDistance(v, r.BinaryVectors[p.Name])
-		return float64(n)
+	return c.searchRecords(ctx, top, opts, p, func(r vectordata.ModelRecord) (float64, error) {
+		n, err := vectordata.HammingDistance(v, r.BinaryVectors[p.Name])
+		return float64(n), err
 	})
 }
 func (c *Collection) SearchBinaryIter(ctx context.Context, v vectordata.BinaryVector, top int, opts vectordata.ModelSearchOptions) iter.Seq2[vectordata.ModelSearchResult, error] {

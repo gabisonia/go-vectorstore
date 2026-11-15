@@ -336,7 +336,10 @@ sequences in a database file. Parameterized SQL, foreign-key cascades and immedi
 write transactions make batch changes atomic across handles. WAL and FULL
 synchronization are configured on each connection. GetMany performs indexed key
 lookups within one deferred read snapshot, and unfiltered Count uses SQL counting
-without decoding payloads. Query, filtered Count and exact search load a snapshot,
-release the connection, then use the memory engine. Runtime embedders are cleared during
-snapshot replay. Native values are decoded by declared type, with a separate SQL
-NULL marker for JSON properties. See [sqlite.md](sqlite.md) for workload limits.
+without decoding payloads. Query and filtered Count load a snapshot, release the
+connection, then use the memory engine. Exact search streams a deferred read
+snapshot through the shared `internal/exactsearch` top-K selector, retaining only
+`top + Skip` candidates. Memory uses that selector over a shallow snapshot of
+immutable records. Both copy only the returned search page and release resources
+before application iteration. Runtime embedders are cleared during stored reads.
+Native values are decoded by declared type, with a separate SQL NULL marker for JSON properties. See [sqlite.md](sqlite.md) for workload limits.

@@ -20,8 +20,9 @@ CGO_ENABLED=0 go test ./stores/sqlite
 ```
 
 The CGO-disabled command verifies embedded storage can run without a C toolchain.
-SQLite queries/searches materialize the whole collection; these checks establish
-correctness, not an ANN throughput claim. See [SQLite costs](sqlite.md#query-costs-and-provider-limits).
+SQLite queries materialize the whole collection; exact searches stream a full
+scan. These checks establish correctness, not an ANN throughput claim. See
+[SQLite costs](sqlite.md#query-costs-and-provider-limits).
 
 ## SQLite batch lookup and count verification
 
@@ -51,7 +52,8 @@ those timings are coarse. These local, cache-dependent results are regression
 measurements, not production latency guarantees. Unfiltered Count still scans
 index entries as collections grow; its Go allocations do not grow with payload
 size. GetMany work follows the requested keys and matching payloads. Filtered
-counts, queries and vector searches still use full snapshots.
+counts and queries still materialize full snapshots. Vector searches stream a
+snapshot through the bounded selector described below.
 
 Tests exercise more than two key batches, deduplication/native-key aliases,
 missing collections/records, schema validation on empty results, vector
@@ -61,6 +63,52 @@ verifying one read snapshot and that reads do not reserve the writer lock.
 EXPLAIN QUERY PLAN checks the record primary index for lookups and the covering
 collection index for counts. An unrelated damaged payload also confirms that
 these paths decode only the records they need.
+
+## Exact-search selection and copying
+
+```sh
+go test -race ./internal/exactsearch
+go test -race -run 'TestSearch|TestExclusiveReadDeadlines' ./stores/sqlite
+go test -run '^$' -bench BenchmarkExactSearch -benchmem -benchtime=100ms -count=3 ./internal/exactsearch
+```
+
+The benchmark compares bounded top-K selection with an explicit reference using
+the former Query-all, score-all and stable-sort strategy in the same binary.
+Each record contains a string property plus 128-dimensional dense, float16,
+binary and sparse vectors (three sparse nonzeros). All vectors are stored in the
+same record; each search selects one property, requests ten results with Skip=7,
+and excludes vector projections. Setup/inserts are outside the timer.
+
+Local medians of three runs at 10,000 records on Apple M3 Pro, darwin/arm64,
+Go 1.25.0:
+
+| Provider | Vector | Full sort | Top-K | Full-sort B/op | Top-K B/op |
+| --- | --- | --- | --- | --- | --- |
+| Memory | Dense | 22.75 ms | 3.25 ms | 36,228,944 | 492,632 |
+| Memory | Float16 | 22.67 ms | 4.61 ms | 36,228,944 | 493,144 |
+| Memory | Binary | 19.59 ms | 0.96 ms | 36,228,960 | 492,648 |
+| Memory | Sparse | 22.51 ms | 0.99 ms | 36,228,944 | 492,681 |
+| SQLite | Dense | 365.99 ms | 354.17 ms | 196,939,344 | 149,681,264 |
+| SQLite | Float16 | 372.78 ms | 359.99 ms | 196,939,664 | 149,682,912 |
+| SQLite | Binary | 368.35 ms | 374.98 ms | 196,939,728 | 149,683,360 |
+| SQLite | Sparse | 370.21 ms | 350.51 ms | 196,939,472 | 149,683,232 |
+
+SQLite measurements execute one iteration per sample and are coarse. Decoding and
+normalizing all vector properties still dominates SQLite time and cumulative
+allocations; these results show reduced copying, with no consistent latency gain
+across all vector kinds. They are local regression measurements, not production
+latency guarantees. Memory still allocates shallow headers for every record.
+Candidate retention is bounded by top + Skip in both providers; deep pages or
+requests for the whole collection can retain all matches. Exact search still
+examines every record and computes distance for each filtered, present vector.
+
+An independent full-sort oracle checks all supported distances and precisions,
+nullable/named vectors, exact int64 tie ordering, filters, thresholds, paging and
+projection ownership. Other tests cover huge paging values without proportional
+preallocation, cancellation, scan failures without partial results, filter codecs
+that write to the same Store, and iterator cleanup. A real-driver hook commits
+through another SQLite handle between metadata validation and payload scanning,
+verifying that search uses one read snapshot without reserving the writer lock.
 
 ## Sparse vector verification
 

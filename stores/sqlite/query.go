@@ -4,6 +4,7 @@ import (
 	"context"
 	"iter"
 
+	"github.com/gabisonia/go-vectorstore/internal/exactsearch"
 	"github.com/gabisonia/go-vectorstore/stores/memory"
 	"github.com/gabisonia/go-vectorstore/vectordata"
 )
@@ -160,11 +161,9 @@ func (c *Collection) Search(ctx context.Context, v []float32, top int, o vectord
 	if err != nil {
 		return nil, err
 	}
-	engine, err := c.engine(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return engine.Search(ctx, v, top, o)
+	return c.searchRecords(ctx, p, top, o, func(r vectordata.ModelRecord) (float64, error) {
+		return exactsearch.DenseDistance(v, r.Vectors[p.Name], p.Metric), nil
+	})
 }
 func (c *Collection) validateSearch(top int, o vectordata.ModelSearchOptions) (vectordata.VectorProperty, error) {
 	p, err := c.definition.Vector(o.VectorProperty)
@@ -206,11 +205,10 @@ func (c *Collection) SearchBinary(ctx context.Context, v vectordata.BinaryVector
 	if err != nil {
 		return nil, err
 	}
-	engine, err := c.engine(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return engine.SearchBinary(ctx, v, top, o)
+	return c.searchRecords(ctx, p, top, o, func(r vectordata.ModelRecord) (float64, error) {
+		n, err := vectordata.HammingDistance(v, r.BinaryVectors[p.Name])
+		return float64(n), err
+	})
 }
 func (c *Collection) SearchBinaryIter(ctx context.Context, v vectordata.BinaryVector, top int, o vectordata.ModelSearchOptions) iter.Seq2[vectordata.ModelSearchResult, error] {
 	return sequence(ctx, func() ([]vectordata.ModelSearchResult, error) { return c.SearchBinary(ctx, v, top, o) })
@@ -225,11 +223,9 @@ func (c *Collection) SearchSparse(ctx context.Context, v vectordata.SparseVector
 	if err != nil {
 		return nil, err
 	}
-	engine, err := c.engine(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return engine.SearchSparse(ctx, v, top, o)
+	return c.searchRecords(ctx, p, top, o, func(r vectordata.ModelRecord) (float64, error) {
+		return vectordata.SparseDistance(v, r.SparseVectors[p.Name], p.Metric)
+	})
 }
 func (c *Collection) SearchSparseIter(ctx context.Context, v vectordata.SparseVector, top int, o vectordata.ModelSearchOptions) iter.Seq2[vectordata.ModelSearchResult, error] {
 	return sequence(ctx, func() ([]vectordata.ModelSearchResult, error) { return c.SearchSparse(ctx, v, top, o) })
