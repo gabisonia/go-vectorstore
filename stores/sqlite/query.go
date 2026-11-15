@@ -12,6 +12,9 @@ import (
 // including when the collection is empty. The connection is released before
 // user code or query evaluation runs.
 func (c *Collection) read(ctx context.Context, key *string) ([]vectordata.ModelRecord, error) {
+	return retryBusy(ctx, func() ([]vectordata.ModelRecord, error) { return c.readOnce(ctx, key) })
+}
+func (c *Collection) readOnce(ctx context.Context, key *string) ([]vectordata.ModelRecord, error) {
 	statement := `SELECT c.definition,c.format,r.payload FROM __vectorstore_collections c LEFT JOIN __vectorstore_records r ON r.collection=c.name`
 	args := []any{}
 	if key != nil {

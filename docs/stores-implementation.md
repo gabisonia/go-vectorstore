@@ -214,7 +214,9 @@ driver, native schemas, indexes, migrations and transactions. See
 ## SQLite storage boundary
 
 SQLite owns a database/sql pool with one connection and configures WAL, FULL
-synchronization, foreign keys and a busy timeout. Immediate write transactions
+synchronization and foreign keys. Context-aware retries wait up to five seconds
+for transaction acquisition or a side-effect-free read. Write statements and
+commits are not replayed. Immediate write transactions
 commit records and generated-key sequences together. Reads check registration and
 load records with one consistent SQL snapshot; Get selects a single key directly.
 Query, GetMany, Count and search replay the whole collection through the shared

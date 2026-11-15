@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Honor SQLite context cancellation and deadlines during lock contention. Lock
+  acquisition and side-effect-free reads use cancelable waits capped at five
+  seconds; completed writes and commits are never replayed.
+- Reject incompatible memory collection handles with ErrSchemaMismatch on record
+  operations, including when a collection is recreated during embedding.
+
 ## v0.4.0 — 2026-11-15
 
 [Release notes](https://github.com/gabisonia/go-vectorstore/releases/tag/v0.4.0).

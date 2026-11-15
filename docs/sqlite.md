@@ -30,15 +30,21 @@ embedders are never serialized; configure them again when reopening a store.
 
 ## Durability and concurrency
 
-Open configures WAL mode, FULL synchronization, foreign keys, and a five-second
-busy timeout on every connection. File durability follows SQLite/filesystem
-semantics; the `:memory:` variant is transient. See SQLite's
+Open configures WAL mode, FULL synchronization and foreign keys on every
+connection. Lock acquisition and retryable reads wait in Go with a five-second
+limit, so caller cancellation/deadlines can stop the wait. File durability follows
+SQLite/filesystem semantics; the `:memory:` variant is transient. See SQLite's
 [WAL documentation](https://www.sqlite.org/wal.html) and
 [synchronous settings](https://www.sqlite.org/pragma.html#pragma_synchronous).
 Each Store owns one pooled connection; multiple handles/processes can access the
 same local database file. SQLite immediate write transactions serialize batches
-and generated-key allocation. Busy writers wait up to the configured timeout;
-lock errors and context cancellation propagate to callers.
+and generated-key allocation. Competing writers wait up to five seconds or the
+caller's context limit, whichever arrives first. Cancellation/deadlines remain
+discoverable with `errors.Is(err, context.Canceled)` or
+`errors.Is(err, context.DeadlineExceeded)`. Reaching the five-second
+contention limit returns the underlying SQLite busy error. Retries acquire a
+transaction or repeat a side-effect-free read; write statements and commits are
+not replayed.
 
 Insert, Upsert, Delete, collection creation/deletion, and generated sequences are
 transactional. Failed record batches roll back every row and sequence update.

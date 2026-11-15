@@ -16,9 +16,9 @@ import (
 )
 
 type state struct {
-	definition vectordata.CollectionDefinition
-	records    map[any]vectordata.ModelRecord
-	next       int64
+	registration string
+	records      map[any]vectordata.ModelRecord
+	next         int64
 }
 type Store struct {
 	mu          sync.RWMutex
@@ -90,7 +90,7 @@ func (s *Store) GetModelCollection(name string, d vectordata.CollectionDefinitio
 	if err != nil {
 		return nil, err
 	}
-	return &Collection{store: s, name: name, definition: definition, options: opts}, nil
+	return &Collection{store: s, name: name, definition: definition, registration: definitionJSON(definition), options: opts}, nil
 }
 func (s *Store) EnsureModelCollection(ctx context.Context, name string, d vectordata.CollectionDefinition, opts vectordata.ModelCollectionOptions) (vectordata.ModelCollection, error) {
 	c, err := s.GetModelCollection(name, d, opts)
@@ -104,10 +104,11 @@ func (s *Store) EnsureModelCollection(ctx context.Context, name string, d vector
 }
 
 type Collection struct {
-	store      *Store
-	name       string
-	definition vectordata.CollectionDefinition
-	options    vectordata.ModelCollectionOptions
+	store        *Store
+	name         string
+	definition   vectordata.CollectionDefinition
+	registration string
+	options      vectordata.ModelCollectionOptions
 }
 
 func (c *Collection) Name() string                                { return c.name }
@@ -133,7 +134,7 @@ func (c *Collection) EnsureExists(ctx context.Context) error {
 	c.store.mu.Lock()
 	defer c.store.mu.Unlock()
 	if current, exists := c.store.collections[c.name]; exists {
-		if definitionJSON(current.definition) != definitionJSON(c.definition) {
+		if current.registration != c.registration {
 			return fmt.Errorf("%w: collection definition differs", vectordata.ErrSchemaMismatch)
 		}
 		return nil
@@ -141,7 +142,7 @@ func (c *Collection) EnsureExists(ctx context.Context) error {
 	if c.store.collections == nil {
 		c.store.collections = map[string]*state{}
 	}
-	c.store.collections[c.name] = &state{definition: c.definition.Clone(), records: map[any]vectordata.ModelRecord{}, next: 1}
+	c.store.collections[c.name] = &state{registration: c.registration, records: map[any]vectordata.ModelRecord{}, next: 1}
 	return nil
 }
 func (c *Collection) Insert(ctx context.Context, records []vectordata.ModelRecord) ([]any, error) {
@@ -151,6 +152,11 @@ func (c *Collection) Upsert(ctx context.Context, records []vectordata.ModelRecor
 	return c.write(ctx, records, true)
 }
 func (c *Collection) write(ctx context.Context, records []vectordata.ModelRecord, upsert bool) ([]any, error) {
+	if len(records) > 0 {
+		if err := c.checkSchema(ctx); err != nil {
+			return nil, err
+		}
+	}
 	prepared, err := vectordata.PrepareModelRecords(ctx, c.definition, c.options, records)
 	if err != nil {
 		return nil, err
@@ -160,9 +166,9 @@ func (c *Collection) write(ctx context.Context, records []vectordata.ModelRecord
 	}
 	c.store.mu.Lock()
 	defer c.store.mu.Unlock()
-	s, exists := c.store.collections[c.name]
-	if !exists {
-		return nil, vectordata.ErrCollectionNotFound
+	s, err := c.stateLocked()
+	if err != nil {
+		return nil, err
 	}
 	staged := make(map[any]vectordata.ModelRecord, len(s.records)+len(prepared))
 	for key, r := range s.records {
@@ -193,9 +199,9 @@ func (c *Collection) snapshot(ctx context.Context, vectors bool) ([]vectordata.M
 	}
 	c.store.mu.RLock()
 	defer c.store.mu.RUnlock()
-	s, exists := c.store.collections[c.name]
-	if !exists {
-		return nil, vectordata.ErrCollectionNotFound
+	s, err := c.stateLocked()
+	if err != nil {
+		return nil, err
 	}
 	records := make([]vectordata.ModelRecord, 0, len(s.records))
 	for _, r := range s.records {
@@ -213,9 +219,9 @@ func (c *Collection) Get(ctx context.Context, key any, opts vectordata.Retrieval
 	}
 	c.store.mu.RLock()
 	defer c.store.mu.RUnlock()
-	s, exists := c.store.collections[c.name]
-	if !exists {
-		return vectordata.ModelRecord{}, vectordata.ErrCollectionNotFound
+	s, err := c.stateLocked()
+	if err != nil {
+		return vectordata.ModelRecord{}, err
 	}
 	r, exists := s.records[normalized]
 	if !exists {
@@ -331,9 +337,9 @@ func (c *Collection) Delete(ctx context.Context, keys []any) (int64, error) {
 	}
 	c.store.mu.Lock()
 	defer c.store.mu.Unlock()
-	s, exists := c.store.collections[c.name]
-	if !exists {
-		return 0, vectordata.ErrCollectionNotFound
+	s, err := c.stateLocked()
+	if err != nil {
+		return 0, err
 	}
 	var count int64
 	for _, key := range normalized {
@@ -450,9 +456,35 @@ func (c *Collection) SearchText(ctx context.Context, text string, top int, opts 
 	if opts.ProviderOptions != nil {
 		return nil, vectordata.ErrUnsupported
 	}
+	if err := c.checkSchema(ctx); err != nil {
+		return nil, err
+	}
 	vector, err := vectordata.EmbedQuery(ctx, text, p, c.options)
 	if err != nil {
 		return nil, err
 	}
 	return c.Search(ctx, vector, top, opts)
+}
+
+// stateLocked validates schema identity in the same critical section as record
+// access. The caller must hold the store mutex for reading or writing.
+func (c *Collection) stateLocked() (*state, error) {
+	current, exists := c.store.collections[c.name]
+	if !exists {
+		return nil, vectordata.ErrCollectionNotFound
+	}
+	if current.registration != c.registration {
+		return nil, fmt.Errorf("%w: collection definition differs", vectordata.ErrSchemaMismatch)
+	}
+	return current, nil
+}
+
+func (c *Collection) checkSchema(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	c.store.mu.RLock()
+	defer c.store.mu.RUnlock()
+	_, err := c.stateLocked()
+	return err
 }
