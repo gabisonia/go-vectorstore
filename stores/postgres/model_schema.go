@@ -169,6 +169,10 @@ func dataSQLType(t vectordata.DataType) string {
 		return "timestamp with time zone"
 	case vectordata.TypeStringArray:
 		return "text[]"
+	case vectordata.TypeUUID:
+		return "uuid"
+	case vectordata.TypeBytes:
+		return "bytea"
 	}
 	panic("validated data type")
 }
@@ -346,6 +350,10 @@ func dataOpClass(t vectordata.DataType) string {
 		return "timestamptz_ops"
 	case vectordata.TypeStringArray:
 		return "array_ops"
+	case vectordata.TypeUUID:
+		return "uuid_ops"
+	case vectordata.TypeBytes:
+		return "bytea_ops"
 	}
 	return ""
 }

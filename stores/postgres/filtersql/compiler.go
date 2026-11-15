@@ -16,6 +16,9 @@ type FilterSQLConfig struct {
 	ArrayColumns   map[string]bool
 	// ColumnExpr maps logical column names to pre-quoted SQL expressions.
 	ColumnExpr map[string]string
+	// NormalizeColumnValue optionally canonicalizes native values before binding.
+	// It is not called for JSON columns/paths, whose value semantics stay JSON.
+	NormalizeColumnValue func(string, any) (any, error)
 	// MetadataExpr is the SQL expression of the metadata JSONB column.
 	MetadataExpr string
 	// UseMetadataContainment adds GIN-compatible prefilters to metadata Eq/In.
@@ -123,7 +126,10 @@ func (c *filterCompiler) compileEq(node EqFilter) (string, error) {
 			}
 			return fmt.Sprintf("(%s = %s::jsonb)", fieldExpr, ph), nil
 		}
-		ph := c.bind(node.Value)
+		ph, err := c.bindColumn(node.Field, node.Value)
+		if err != nil {
+			return "", err
+		}
 		return fmt.Sprintf("(%s = %s)", fieldExpr, ph), nil
 	}
 	ph, err := c.bindJSONB(node.Value)
@@ -152,7 +158,10 @@ func (c *filterCompiler) compileIn(node InFilter) (string, error) {
 			parts = append(parts, fmt.Sprintf("%s::jsonb", ph))
 			continue
 		}
-		ph := c.bind(v)
+		ph, err := c.bindColumn(node.Field, v)
+		if err != nil {
+			return "", err
+		}
 		parts = append(parts, ph)
 	}
 	if !isMetadata {
@@ -200,7 +209,11 @@ func (c *filterCompiler) compileCompare(field FieldRef, value any, op string) (s
 		return "", err
 	}
 	if !metadata {
-		return fmt.Sprintf("(%s %s %s)", expr, op, c.bind(value)), nil
+		ph, err := c.bindColumn(field, value)
+		if err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("(%s %s %s)", expr, op, ph), nil
 	}
 	if number, numeric, err := numericLiteral(value); err != nil {
 		return "", err
@@ -292,6 +305,19 @@ func (c *filterCompiler) bind(v any) string {
 	c.nextArg++
 	c.args = append(c.args, v)
 	return ph
+}
+
+func (c *filterCompiler) bindColumn(field FieldRef, value any) (string, error) {
+	if !isNilValue(value) && c.cfg.NormalizeColumnValue != nil && c.cfg.JSONColumnExpr[strings.TrimSpace(field.Name)] == "" {
+		var err error
+		value, err = c.cfg.NormalizeColumnValue(strings.TrimSpace(field.Name), value)
+		if err != nil {
+			return "", fmt.Errorf("%w: invalid value for %q: %v", ErrInvalidFilter, field.Name, err)
+		}
+	} else if isNilValue(value) {
+		value = nil
+	}
+	return c.bind(value), nil
 }
 
 func (c *filterCompiler) bindJSONB(v any) (string, error) {
