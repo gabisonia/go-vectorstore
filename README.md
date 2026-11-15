@@ -49,6 +49,19 @@ For adoption and compatibility details, see the [upgrade guide](docs/upgrading.m
 
 ## Quick Start (Local)
 
+For typed text retrieval with no server or API key:
+
+```sh
+go run ./samples/typed-search -category architecture
+go run ./samples/typed-rag
+```
+
+These new commands are on master until the next release. Fixture mode uses an
+instructional deterministic embedder. See the [sample index](samples/README.md)
+for real OpenAI opt-in, provider selection, expected output, and cleanup.
+For coding-agent integrations, start with the [AI usage guide](docs/ai-guide.md)
+and [documentation discovery index](llms.txt).
+
 Run the persistent SQLite example without a server or API key:
 
 ```sh
@@ -363,12 +376,18 @@ git push origin "v${RELEASE_VERSION}"
 ## Samples
 
 - Overview and entry points: [`samples/README.md`](samples/README.md)
+- Typed semantic search and RAG: [`typed-search`](samples/typed-search/README.md), [`typed-rag`](samples/typed-rag/README.md)
+- Focused model workflows: [`recipes`](samples/recipes/README.md)
 - Model-driven collections (no API key): [`samples/model-store`](samples/model-store/README.md)
 - Persistent SQLite and optional vectors (no API key): [`samples/sqlite-store`](samples/sqlite-store/README.md)
 - Semantic search sample app: `samples/semantic-search`
 - RAG sample app (`RAGrimosa`): `samples/ragrimosa`
 
 ## Documentation
+
+- AI application usage: [`docs/ai-guide.md`](docs/ai-guide.md)
+- Repository agent instructions: [`AGENTS.md`](AGENTS.md)
+- Documentation discovery: [`llms.txt`](llms.txt)
 
 - Docs index: [`docs/README.md`](docs/README.md)
 - Internals and architecture: [`docs/architecture.md`](docs/architecture.md)

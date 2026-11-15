@@ -1,5 +1,9 @@
 # RAGrimosa Sample
 
+This example uses the supported original PostgreSQL Record API. For new model
+applications, see [typed-rag](../typed-rag/README.md), which also has a
+credential-free fixture mode.
+
 `RAGrimosa` is a retrieval-augmented generation sample built on `go-vectorstore`.
 
 It uses the Lacrimosa story as source data, manually split into chunks and inserted into Postgres (`pgvector`).
@@ -33,7 +37,6 @@ docker compose down
 ```bash
 cd samples/ragrimosa
 export OPENAI_API_KEY=your_key_here
-go get github.com/gabisonia/go-vectorstore/vectordata@latest
 
 docker compose up -d postgres
 go run . -q "How did Lacrimosa and Rex build trust?" -topk 4
