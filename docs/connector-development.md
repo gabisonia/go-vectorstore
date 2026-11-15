@@ -180,6 +180,15 @@ interface is present, including native keys/data, generated keys, metrics, index
 and hybrid search. Providers without metadata continue to run the other contract
 checks.
 
+Native `TypeUUID` and `TypeBytes` properties are explicit schema choices; preserve
+existing string/JSON inference. `NormalizeModelData` canonicalizes UUID values and
+copies byte buffers; `CloneModelRecord` protects mutable read values. Preserve the
+difference between NULL and non-nil empty bytes. Filters must canonicalize native
+values before binding, while keeping JSON values under JSON semantics. PostgreSQL
+does this through `filtersql.FilterSQLConfig.NormalizeColumnValue` without casting
+indexed columns to text. `conformance.Run` exercises advertised UUID/byte support,
+including aliases, typed mapping, nulls, sorting, filters and buffer ownership.
+
 Advertise supported `VectorPrecisions` explicitly. The Go vector API stays float32;
 `NormalizeModelVector` validates and rounds float16 values. It returns a new slice
 for float16 and the original slice for float32, so copy float32 inputs before

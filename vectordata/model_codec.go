@@ -18,9 +18,10 @@ type ModelCodec[T any] interface {
 	Decode(ModelRecord) (T, error)
 }
 type structField struct {
-	index []int
-	name  string
-	role  string
+	index    []int
+	name     string
+	role     string
+	dataType DataType
 }
 
 // StructCodec resolves field mappings once at construction, not once per record.
@@ -204,7 +205,7 @@ func NewStructCodec[T any](definition *CollectionDefinition) (*StructCodec[T], e
 			}
 			parent = part.Type
 		}
-		codec.fields = append(codec.fields, structField{field.Index, name, role})
+		codec.fields = append(codec.fields, structField{index: field.Index, name: name, role: role})
 		return nil
 	}
 	if err := add(d.Key.Name, "key"); err != nil {
@@ -224,9 +225,22 @@ func NewStructCodec[T any](definition *CollectionDefinition) (*StructCodec[T], e
 			return nil, err
 		}
 		field, _ := t.FieldByName(p.Name)
-		if p.Type != TypeJSON && inferDataType(field.Type) != p.Type {
+		typ := field.Type
+		for typ.Kind() == reflect.Pointer {
+			typ = typ.Elem()
+		}
+		valid := p.Type == TypeJSON || inferDataType(field.Type) == p.Type
+		if p.Type == TypeUUID {
+			textValue := typ.Implements(reflect.TypeFor[encoding.TextMarshaler]()) || typ.Implements(reflect.TypeFor[fmt.Stringer]())
+			valid = typ.Kind() == reflect.String || textValue && reflect.PointerTo(typ).Implements(reflect.TypeFor[encoding.TextUnmarshaler]())
+		}
+		if p.Type == TypeBytes {
+			valid = typ.Kind() == reflect.Slice && typ.Elem().Kind() == reflect.Uint8
+		}
+		if !valid {
 			return nil, fmt.Errorf("%w: field %q type conflicts with definition", ErrSchemaMismatch, p.Name)
 		}
+		codec.fields[len(codec.fields)-1].dataType = p.Type
 	}
 	for _, p := range d.Vectors {
 		if err := add(p.Name, "vector"); err != nil {
@@ -292,6 +306,8 @@ func (c *StructCodec[T]) Encode(value T) (ModelRecord, error) {
 			}
 			if v.Kind() == reflect.Pointer && v.IsNil() {
 				out.Data[field.name] = nil
+			} else if field.dataType == TypeUUID {
+				out.Data[field.name] = v.Interface()
 			} else {
 				// Normalize integer and float aliases to portable native values.
 				switch inferDataType(v.Type()) {

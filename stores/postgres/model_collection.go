@@ -119,6 +119,12 @@ func (c *ModelCollection) writeStatement(r vectordata.ModelRecord, upsert, useBi
 		updates = append(updates, column+"=EXCLUDED."+column)
 		value := r.Data[p.Name]
 		cast := ""
+		if p.Type == vectordata.TypeUUID {
+			cast = "::uuid"
+		}
+		if p.Type == vectordata.TypeBytes {
+			cast = "::bytea"
+		}
 		if p.Type == vectordata.TypeJSON && !(p.Optional && value == nil) {
 			payload, err := json.Marshal(value)
 			if err != nil {
@@ -170,7 +176,7 @@ func (c *ModelCollection) columns(alias string, vectors bool) []string {
 	columns := []string{key}
 	for _, p := range c.definition.Data {
 		column := qualify(p.StorageName)
-		if p.Type == vectordata.TypeJSON {
+		if p.Type == vectordata.TypeJSON || p.Type == vectordata.TypeUUID {
 			column += "::text"
 		}
 		columns = append(columns, column)
@@ -207,6 +213,9 @@ func (c *ModelCollection) scan(row modelScanner, vectors, withDistance bool) (ve
 	}
 	for i, p := range c.definition.Data {
 		value := data[i]
+		if value != nil && p.Type == vectordata.TypeBytes {
+			value = append([]byte{}, value.([]byte)...)
+		}
 		if value != nil && p.Type == vectordata.TypeJSON {
 			decoder := json.NewDecoder(strings.NewReader(value.(string)))
 			decoder.UseNumber()
@@ -283,6 +292,7 @@ func (c *ModelCollection) GetMany(ctx context.Context, keys []any, opts vectorda
 }
 func (c *ModelCollection) filterConfig() filtersql.FilterSQLConfig {
 	cfg := filtersql.FilterSQLConfig{ColumnExpr: map[string]string{c.definition.Key.Name: "t." + quoteIdent(c.definition.Key.StorageName)}, JSONColumnExpr: map[string]string{}, ArrayColumns: map[string]bool{}, UseMetadataContainment: true}
+	native := map[string]vectordata.DataProperty{}
 	for _, p := range c.definition.Data {
 		expr := "t." + quoteIdent(p.StorageName)
 		cfg.ColumnExpr[p.Name] = expr
@@ -292,6 +302,22 @@ func (c *ModelCollection) filterConfig() filtersql.FilterSQLConfig {
 		if p.Type == vectordata.TypeStringArray {
 			cfg.ArrayColumns[p.Name] = true
 		}
+		if p.Type == vectordata.TypeUUID || p.Type == vectordata.TypeBytes {
+			native[p.Name] = p
+		}
+	}
+	cfg.NormalizeColumnValue = func(name string, value any) (any, error) {
+		if property, ok := native[name]; ok {
+			if value == nil {
+				return nil, nil
+			}
+			property.Optional = true // NULL is a valid filter even for required fields.
+			return vectordata.NormalizeModelData(value, property)
+		}
+		if name == c.definition.Key.Name && c.definition.Key.Type == vectordata.KeyUUID && value != nil {
+			return c.definition.NormalizeKey(value)
+		}
+		return value, nil
 	}
 	return cfg
 }

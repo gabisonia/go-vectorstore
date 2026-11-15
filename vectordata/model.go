@@ -32,6 +32,8 @@ const (
 	TypeJSON        DataType = "json"
 	TypeTime        DataType = "time"
 	TypeStringArray DataType = "string_array"
+	TypeUUID        DataType = "uuid"
+	TypeBytes       DataType = "bytes"
 )
 
 type KeyProperty struct {
@@ -246,7 +248,7 @@ func (d CollectionDefinition) Normalize() (CollectionDefinition, error) {
 			return fail("invalid or duplicate data property")
 		}
 		switch p.Type {
-		case TypeString, TypeInt64, TypeFloat64, TypeBool, TypeJSON, TypeTime, TypeStringArray:
+		case TypeString, TypeInt64, TypeFloat64, TypeBool, TypeJSON, TypeTime, TypeStringArray, TypeUUID, TypeBytes:
 		default:
 			return fail("unsupported data property type")
 		}
@@ -413,6 +415,25 @@ func normalizeData(value any, p DataProperty) (any, error) {
 		return nil, fmt.Errorf("%w: invalid %s data property %q", ErrInvalidRecord, p.Type, p.Name)
 	}
 	switch p.Type {
+	case TypeUUID:
+		if isNilValue(value) {
+			if p.Optional {
+				return nil, nil
+			}
+			return invalid()
+		}
+		return (CollectionDefinition{Key: KeyProperty{Type: KeyUUID}}).NormalizeKey(value)
+	case TypeBytes:
+		v := reflect.ValueOf(value)
+		if v.Kind() == reflect.Slice && v.Type().Elem().Kind() == reflect.Uint8 {
+			if v.IsNil() {
+				if p.Optional {
+					return nil, nil
+				}
+				return invalid()
+			}
+			return append([]byte{}, v.Bytes()...), nil
+		}
 	case TypeString:
 		if v := reflect.ValueOf(value); v.Kind() == reflect.String {
 			return v.String(), nil
@@ -465,6 +486,13 @@ func normalizeData(value any, p DataProperty) (any, error) {
 		return out, nil
 	}
 	return invalid()
+}
+
+// NormalizeModelData validates a native property value and copies mutable values.
+// UUID values become canonical strings; nil byte slices become SQL NULL only for
+// optional properties, while non-nil empty slices remain empty binary values.
+func NormalizeModelData(value any, p DataProperty) (any, error) {
+	return normalizeData(value, p)
 }
 
 // PrepareModelRecords copies and validates inputs and batches automatic embedding

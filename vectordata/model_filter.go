@@ -1,6 +1,7 @@
 package vectordata
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"math/big"
@@ -99,6 +100,12 @@ func ValidateModelFilter(filter Filter, d CollectionDefinition) error {
 		for _, property := range d.Data {
 			if property.Name != ref.Name {
 				continue
+			}
+			if (property.Type == TypeUUID || property.Type == TypeBytes) && isNilValue(value) {
+				if ordered {
+					return invalid(fmt.Errorf("ordered comparisons require a value"))
+				}
+				return nil
 			}
 			if ordered && (property.Type == TypeJSON || property.Type == TypeStringArray || property.Type == TypeBool) {
 				return invalid(fmt.Errorf("property is not an ordered scalar"))
@@ -258,6 +265,10 @@ func modelNumber(value any) (*big.Rat, bool) {
 	return r, ok
 }
 func modelEqual(a, b any) bool {
+	if x, ok := a.([]byte); ok {
+		y, ok := b.([]byte)
+		return ok && bytes.Equal(x, y)
+	}
 	if _, ok := a.(JSONNull); ok {
 		a = nil
 	}
@@ -316,6 +327,11 @@ func modelEqual(a, b any) bool {
 	return reflect.DeepEqual(a, b)
 }
 func compareModelValues(a, b any) (int, bool) {
+	if x, ok := a.([]byte); ok {
+		if y, ok := b.([]byte); ok {
+			return bytes.Compare(x, y), true
+		}
+	}
 	if x, ok := a.(string); ok {
 		if y, ok := b.(string); ok {
 			return strings.Compare(x, y), true
@@ -582,6 +598,10 @@ func CloneModelRecord(r ModelRecord, d CollectionDefinition, vectors bool) Model
 		case TypeStringArray:
 			if array, ok := value.([]string); ok {
 				value = append([]string{}, array...)
+			}
+		case TypeBytes:
+			if buffer, ok := value.([]byte); ok {
+				value = append([]byte{}, buffer...)
 			}
 		}
 		out.Data[p.Name] = value

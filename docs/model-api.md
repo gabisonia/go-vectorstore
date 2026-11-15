@@ -78,8 +78,8 @@ column. A zero generated key in a tagged model requests a new key. Insert/Upsert
 return keys in input order; input models are not mutated. Assign the returned key
 before upserting the same model again. Generated keys can have gaps.
 
-Data types are `string`, `int64`, `float64`, `bool`, `time`, `string_array`, and
-`json`. Pointer data fields are optional. Nonoptional fields reject nil values.
+Data types are `string`, `int64`, `float64`, `bool`, `time`, `string_array`, `json`,
+`uuid`, and `bytes`. Pointer data fields are optional. Nonoptional fields reject nil values.
 JSON numbers retain their precision as `json.Number`. Dynamic records use logical
 property names in `ModelRecord.Data` and `ModelRecord.Vectors`.
 
@@ -87,6 +87,43 @@ PostgreSQL uses native columns, B-tree indexes for scalar `index` properties,
 GIN indexes for indexed string arrays, GIN full-text indexes for `fulltext`
 strings, and optional per-vector HNSW/IVFFlat indexes. JSON properties currently
 require provider-specific indexes and reject the generic `index` flag.
+
+UUID and byte data are opt-in, using tags or `DataProperty.Type`:
+
+```go
+type Document struct {
+    ID      string `vectordata:"key"`
+    Owner   string `vectordata:"data,type=uuid,index"`
+    Backup  *string `vectordata:"data,type=uuid"`
+    Digest  []byte `vectordata:"data,type=bytes,index"`
+    Content []byte `vectordata:"data,type=bytes,optional"`
+    Legacy  []byte `vectordata:"data"` // Existing JSON/base64 mapping.
+}
+```
+
+`TypeUUID` maps to a PostgreSQL `uuid` column. Dynamic records return lowercase,
+hyphenated UUID strings. Values use the same strict 36-character form as UUID keys;
+string aliases and compatible `encoding.TextMarshaler`/`fmt.Stringer` values are
+accepted. Typed UUID fields can be strings or types with value text formatting and
+pointer `encoding.TextUnmarshaler` support. Invalid UUIDs fail before writing.
+
+`TypeBytes` maps to `bytea`, accepts byte slices and slice aliases, and returns
+`[]byte` in dynamic records. A non-nil empty slice is an empty binary value. A nil
+slice is SQL NULL for an optional property and an error for a required property.
+Providers copy buffers on writes and reads, so callers can reuse their buffers.
+
+Native UUID/byte properties support equality, membership, existence, ordered
+comparisons and query ordering, with the usual SQL null semantics. UUID comparisons
+use canonical UUID order; bytes use unsigned lexicographic order, including prefix
+length. `Contains` remains string-array membership, not byte substring matching.
+The `index` flag creates a B-tree index for either native type. Memory applies the
+same validation and comparison rules without physical indexes.
+
+Type inference is unchanged: an ordinary string remains `string`, and byte slices
+without `type=bytes` remain JSON values (base64 for `[]byte`). Existing models and
+registrations do not silently change. Adding optional native fields is supported
+by additive migrations; changing an existing JSON/string/native mapping requires
+manual conversion and backfill review.
 
 Models use strict schema validation: columns, types, nullability, identity and
 primary-key shape must match. Existing indexes are checked for conflicts.
@@ -113,7 +150,7 @@ if provider, ok := store.(vectordata.CapabilityProvider); ok {
 }
 ```
 
-Both providers report string/int64/UUID keys, generated int64 keys, all seven
+Both providers report string/int64/UUID keys, generated int64 keys, all nine
 portable data types, and cosine/L2/inner-product metrics.
 `VectorPrecisions` reports `VectorFloat32` and `VectorFloat16` on both providers;
 PostgreSQL float16 storage requires pgvector 0.7+ and a visible `halfvec` type.
@@ -121,7 +158,7 @@ PostgreSQL float16 storage requires pgvector 0.7+ and a visible `halfvec` type.
 | Feature | Memory | PostgreSQL |
 | --- | --- | --- |
 | `VectorIndexMethods` | None | HNSW, IVFFlat |
-| `IndexedDataTypes` | None | String, int64, float64, bool, time, string array |
+| `IndexedDataTypes` | None | String, int64, float64, bool, time, string array, UUID, bytes |
 | `FullTextIndexing` | False | True, for string properties |
 | `HybridSearch` | False | True |
 | `MigrationPlanning` | False | True, plan-only |
