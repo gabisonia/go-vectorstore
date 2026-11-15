@@ -179,6 +179,14 @@ func dataSQLType(t vectordata.DataType) string {
 		return "uuid[]"
 	case vectordata.TypeTimeArray:
 		return "timestamp with time zone[]"
+	case vectordata.TypeDateOnly:
+		return "date"
+	case vectordata.TypeTimeOnly:
+		return "time without time zone"
+	case vectordata.TypeDateOnlyArray:
+		return "date[]"
+	case vectordata.TypeTimeOnlyArray:
+		return "time without time zone[]"
 	case vectordata.TypeUUID:
 		return "uuid"
 	case vectordata.TypeBytes:
@@ -361,6 +369,10 @@ func dataOpClass(t vectordata.DataType) string {
 		return "bool_ops"
 	case vectordata.TypeTime:
 		return "timestamptz_ops"
+	case vectordata.TypeDateOnly:
+		return "date_ops"
+	case vectordata.TypeTimeOnly:
+		return "time_ops"
 	case vectordata.TypeUUID:
 		return "uuid_ops"
 	case vectordata.TypeBytes:

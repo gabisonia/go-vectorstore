@@ -126,6 +126,9 @@ func (c *ModelCollection) writeStatement(r vectordata.ModelRecord, upsert, useBi
 		if p.Type == vectordata.TypeBytes {
 			cast = "::bytea"
 		}
+		if p.Type == vectordata.TypeDateOnly || p.Type == vectordata.TypeTimeOnly {
+			cast = "::" + dataSQLType(p.Type)
+		}
 		if _, array := p.Type.ArrayElementType(); array && p.Type != vectordata.TypeStringArray {
 			cast = "::" + dataSQLType(p.Type)
 		}
@@ -234,10 +237,26 @@ func (c *ModelCollection) scan(row modelScanner, vectors, withDistance bool) (ve
 					return r, 0, fmt.Errorf("%w: property %q requires a one-dimensional array with lower bound 1", vectordata.ErrInvalidRecord, p.Name)
 				}
 				var err error
+				element, _ := p.Type.ArrayElementType()
+				if element == vectordata.TypeDateOnly || element == vectordata.TypeTimeOnly {
+					for j, item := range array.Elements {
+						array.Elements[j], err = decodeCalendarValue(item, element)
+						if err != nil {
+							return r, 0, err
+						}
+					}
+				}
 				value, err = vectordata.NormalizeModelData(array.Elements, p)
 				if err != nil {
 					return r, 0, err
 				}
+			}
+		}
+		if p.Type == vectordata.TypeDateOnly || p.Type == vectordata.TypeTimeOnly {
+			var err error
+			value, err = decodeCalendarValue(value, p.Type)
+			if err != nil {
+				return r, 0, err
 			}
 		}
 		if value != nil && p.Type == vectordata.TypeBytes {
@@ -333,7 +352,7 @@ func (c *ModelCollection) filterConfig() filtersql.FilterSQLConfig {
 				native[p.Name] = p
 			}
 		}
-		if p.Type == vectordata.TypeUUID || p.Type == vectordata.TypeBytes {
+		if p.Type == vectordata.TypeUUID || p.Type == vectordata.TypeBytes || p.Type == vectordata.TypeDateOnly || p.Type == vectordata.TypeTimeOnly {
 			native[p.Name] = p
 		}
 	}

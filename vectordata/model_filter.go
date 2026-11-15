@@ -103,7 +103,7 @@ func ValidateModelFilter(filter Filter, d CollectionDefinition) error {
 				continue
 			}
 			_, array := property.Type.ArrayElementType()
-			if (property.Type == TypeUUID || property.Type == TypeBytes || array && property.Type != TypeStringArray) && isNilValue(value) {
+			if (property.Type == TypeUUID || property.Type == TypeBytes || property.Type == TypeDateOnly || property.Type == TypeTimeOnly || array && property.Type != TypeStringArray) && isNilValue(value) {
 				if ordered {
 					return invalid(fmt.Errorf("ordered comparisons require a value"))
 				}
@@ -610,7 +610,7 @@ func CloneModelRecord(r ModelRecord, d CollectionDefinition, vectors bool) Model
 			if value == nil {
 				value = JSONNull{}
 			}
-		case TypeStringArray, TypeUUIDArray:
+		case TypeStringArray, TypeUUIDArray, TypeDateOnlyArray, TypeTimeOnlyArray:
 			if array, ok := value.([]string); ok {
 				value = append([]string{}, array...)
 			}

@@ -216,6 +216,18 @@ Typed decoding must support text-mapped UUIDs and defined `time.Time` types with
 depending on JSON methods. The shared suite checks all five types, null
 semantics, aliases, filters, search, atomic failures and legacy JSON round trips.
 
+`TypeDateOnly`/`TypeTimeOnly` and their array counterparts are opt-in calendar
+values. Normalize them with `NormalizeModelData` and `NormalizeModelArrayElement`:
+canonical ISO strings, Gregorian years 1–9999, clock times below 24:00:00 with
+microsecond truncation, no timezone or timestamp coercion. Dynamic arrays return
+`[]string`; typed fields use string aliases or the `DateOnly`/`TimeOnly` helpers.
+Scalar fields support ordered comparisons and B-tree indexes; arrays use GIN.
+PostgreSQL decodes native date/time values before normalization, preserving array
+dimensions and avoiding session formatting dependencies. Reject out-of-range SQL
+dates, infinities and 24:00:00 on read. Preserve existing inference and timestamp
+behavior; shared calendar and native-array tests cover filters, search and typed
+round trips, with PostgreSQL-specific migration and index-plan checks.
+
 Advertise supported `VectorPrecisions` explicitly. The Go vector API stays float32;
 `NormalizeModelVector` validates and rounds float16 values. It returns a new slice
 for float16 and the original slice for float32, so copy float32 inputs before

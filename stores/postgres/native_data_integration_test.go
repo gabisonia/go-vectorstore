@@ -87,7 +87,7 @@ func TestIntegrationNativeDataMigrationAndTransport(t *testing.T) {
 }
 
 func TestIntegrationRequiredNativeAdditionsNeedBackfill(t *testing.T) {
-	for _, kind := range []vectordata.DataType{vectordata.TypeUUID, vectordata.TypeBytes} {
+	for _, kind := range []vectordata.DataType{vectordata.TypeUUID, vectordata.TypeBytes, vectordata.TypeDateOnly, vectordata.TypeTimeOnly} {
 		t.Run(string(kind), func(t *testing.T) {
 			store, c, d := migrationFixture(t)
 			d.Data = append(d.Data, vectordata.DataProperty{Name: "Required", Type: kind})

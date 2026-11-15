@@ -109,6 +109,8 @@ a freshly reviewed no-op plan can be applied successfully.
 | Add optional UUID/byte data | Nullable native `uuid`/`bytea` column, then requested B-tree indexes; additive application supported |
 | Add optional numeric/bool arrays | Nullable `bigint[]`/`double precision[]`/`boolean[]` column, then requested GIN indexes; additive application supported |
 | Add optional UUID/timestamp arrays | Nullable `uuid[]`/`timestamptz[]` column, then requested GIN indexes; additive application supported |
+| Add optional date-only/time-only data | Nullable native `date`/`time without time zone` column and requested B-tree indexes; additive application supported |
+| Add optional date-only/time-only arrays | Nullable native arrays and requested GIN indexes; additive application supported |
 | Add required data | Nullable `ADD COLUMN`, manual backfill/verification, then `SET NOT NULL` |
 | Add a vector | Same stages, with embedding/backfill flags |
 | Relax nullability | `DROP NOT NULL` |
