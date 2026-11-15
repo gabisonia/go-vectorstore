@@ -1,0 +1,86 @@
+# Upgrading to the next model API release
+
+The next planned release is **v0.4.0**; the last published baseline is v0.3.1.
+See [CHANGELOG](../CHANGELOG.md). This branch prepares the release; it does not
+publish a tag or GitHub release.
+
+## Existing Record API applications
+
+VectorStore, Collection, Record, TypedCollection and custom Codec users can
+continue without converting their collections. Model collections are an opt-in
+API with their own schema registration and native fields. Do not point a new
+model definition at an existing Record table and expect it to convert the schema.
+Create a separate collection, transform/upsert application records, validate
+counts and search results, then switch the application when ready.
+
+Use Go 1.25 or later; the current stable Go release is recommended for standard
+library fixes. PostgreSQL and SQLite dependencies are pinned in go.mod. SQLite's
+pure-Go driver is selected from its Go 1.25-compatible releases. Applications that
+only use PostgreSQL do not import/link the SQLite driver unless they import that
+provider or a sample that uses it.
+
+PostgreSQL JSON/metadata numbers are decoded as json.Number, including nested
+objects and arrays, preserving values above 2^53. Replace float64 assertions with
+json.Number.Int64/Float64 as appropriate; Float64 can lose precision. PostgreSQL
+required data, native vector and collection validation errors remain discoverable
+through errors.Is/As. See the [model guide](model-api.md) for supported types.
+
+## Adopting model collections
+
+1. Define a native key, data properties and vector properties with struct tags or
+   an explicit CollectionDefinition. Existing untargeted []int64/[]float64/[]bool
+   fields keep their JSON mapping; native arrays require explicit type tags.
+   UUID, bytes, calendar values and decimals are likewise opt-in types.
+2. Choose a provider by the [capability matrix](parity.md). Reuse the definition
+   across providers, checking optional indexes, hybrid and migration interfaces.
+3. Configure runtime embedders at store, collection, or property level. Reconfigure
+   these after reopening a store; registrations never contain embedder instances.
+4. Ensure a new collection, map/insert records, and compare retrieval/filter/search
+   results using realistic inputs. Explicit vectors must match dimensions/kind/
+   precision; cosine requires nonzero values. Index limits can be tighter than
+   storage limits, particularly sparse HNSW NNZ.
+
+## Existing model collections
+
+Required vectors remain the default. The new Optional flag is omitted from
+serialized registrations when false, preserving previous required-vector
+registrations. Binary/sparse vector absence uses missing map keys; typed nullable
+fields use pointers, or an optional dense slice. See [optional vectors](model-api.md#optional-vectors)
+for source embedding and upsert-clearing semantics.
+
+Changing an existing required vector to optional is a schema change. EnsureExists
+validates definitions and never applies that change automatically. On PostgreSQL,
+use PlanMigration and review the generated nullability/storage steps and registry
+finalization; nullability changes require a separate migration procedure. Adding
+a **new optional vector**, including an index, fits the explicit additive
+ApplyMigration subset and leaves existing rows NULL. Adding a required vector
+needs a backfill and possibly re-embedding. Regenerate plans with the installed
+provider version and apply only an unedited reviewed plan.
+
+SQLite and memory reject mismatched definitions and do not apply migrations. For
+SQLite schema changes, create a separately named collection and copy transformed
+records in bounded batches before switching application configuration. Changing
+providers uses the same logical types but does not copy storage automatically.
+SQLite stores records in an internal format; it does not reuse PostgreSQL tables.
+
+Queries and Count include records with missing optional vectors. Vector and
+hybrid searches exclude them on the selected property before ranking and paging.
+If an application expects keyword-only hybrid hits with no vector, use a separate
+filtered text workflow or populate the missing vector first.
+
+ContainsAny/ContainsAll are new optional conveniences over Contains compositions.
+Review SQL NULL versus JSON null and empty operand behavior in the
+[array filter guide](model-api.md#array-set-filters), especially under Not.
+
+## Release validation
+
+The release workflow runs the CI matrix before publishing: Go 1.25/current stable
+race tests (including SQLite), vet, release-tool tests, PostgreSQL 16/18 integration
+race tests, and vulnerability scanning. Local equivalents are in the repository
+workflow and [performance guide](performance.md). Run the model sample for each
+provider you use and the persistent SQLite sample when adopting embedded storage.
+
+After merge and green CI, a maintainer can invoke the existing Release workflow
+with v0.4.0 and the intended master commit, or push that version tag. Review the
+changelog and generated notes before doing so. No release has been created by
+this preparation change.

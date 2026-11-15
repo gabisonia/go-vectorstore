@@ -171,3 +171,30 @@ func Or(children ...Filter) Filter {
 func Not(child Filter) Filter {
 	return NotFilter{Child: child}
 }
+
+// ContainsAnyFilter tests whether an array contains any of Values.
+type ContainsAnyFilter struct {
+	Field  FieldRef
+	Values []any
+}
+
+func (ContainsAnyFilter) isFilter() {}
+
+// ContainsAllFilter tests whether an array contains every value in Values.
+type ContainsAllFilter struct {
+	Field  FieldRef
+	Values []any
+}
+
+func (ContainsAllFilter) isFilter() {}
+
+// ContainsAny tests overlap. An empty operand matches no non-NULL array.
+func ContainsAny(field FieldRef, values ...any) Filter {
+	return ContainsAnyFilter{field, append([]any(nil), values...)}
+}
+
+// ContainsAll tests containment. An empty operand matches every non-NULL array.
+// SQL NULL arrays produce UNKNOWN for both helpers, including under Not.
+func ContainsAll(field FieldRef, values ...any) Filter {
+	return ContainsAllFilter{field, append([]any(nil), values...)}
+}

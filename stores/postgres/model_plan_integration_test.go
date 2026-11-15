@@ -30,6 +30,12 @@ func TestIntegrationModelQueryIndexes(t *testing.T) {
 		{name: "array membership", plan: func() (string, []any, error) {
 			return c.queryPlan(vectordata.Contains(vectordata.Column("Tags"), "rare"), 10, vectordata.QueryOptions{})
 		}, indexes: []string{"idx_models_Tags_data"}},
+		{name: "array overlap", plan: func() (string, []any, error) {
+			return c.queryPlan(vectordata.ContainsAny(vectordata.Column("Tags"), "rare", "missing"), 10, vectordata.QueryOptions{})
+		}, indexes: []string{"idx_models_Tags_data"}},
+		{name: "array containment", plan: func() (string, []any, error) {
+			return c.queryPlan(vectordata.ContainsAll(vectordata.Column("Tags"), "rare", "rare"), 10, vectordata.QueryOptions{})
+		}, indexes: []string{"idx_models_Tags_data"}},
 		{name: "filtered vector", plan: func() (string, []any, error) {
 			q, a, _, err := c.searchPlan(vector, 10, vectordata.ModelSearchOptions{Filter: vectordata.Eq(vectordata.Column("Category"), "rare")})
 			return q, a, err

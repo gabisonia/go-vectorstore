@@ -6,6 +6,12 @@ Run the typed model sample with in-memory storage, without an API key:
 go run ./samples/model-store
 ```
 
+Or use a durable SQLite file:
+
+```sh
+go run ./samples/model-store -sqlite /tmp/model-store.db
+```
+
 Or start the repository's PostgreSQL instance and use native model storage:
 
 ```sh
@@ -14,7 +20,7 @@ go run ./samples/model-store -dsn 'postgres://postgres:postgres@localhost:54329/
 ```
 
 The sample demonstrates struct tags, generated int64 keys, store-wide embedding
-defaults, bounded embedding batches, indexed string-array filtering, text queries,
+defaults, bounded embedding batches, string-array overlap filtering, text queries,
 batch reads and deletes. The default embedding batch size is two texts; change it
 with `-embedding-batch-size=128`, or use zero for one request per vector property.
 The collection inherits its embedder and batch size from the store.

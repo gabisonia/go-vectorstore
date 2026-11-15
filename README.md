@@ -9,9 +9,9 @@ A lightweight Go vector-store library inspired by `Microsoft.Extensions.VectorDa
 
 Scope:
 - Go 1.25+
-- Postgres + `pgvector`
+- PostgreSQL + `pgvector`, embedded SQLite, and in-memory model storage
 - Model-driven collections with typed/native keys, named vectors, struct tags, and optional embeddings
-- PostgreSQL provider plus an in-memory model provider
+- Shared model contracts and conformance tests across all three providers
 - Original Record API and custom codecs remain supported
 
 This library can be used to build retrieval systems such as:
@@ -25,13 +25,16 @@ The minimum Go version is now 1.25 because the patched pgx and text dependencies
 require it. Use current stable Go for up-to-date standard-library security fixes.
 
 - Go 1.25+
-- PostgreSQL 16+ with `pgvector` extension
+- PostgreSQL provider: PostgreSQL 16+ with `pgvector` extension
+- SQLite provider: a writable database file; no database server or C toolchain required
 - Docker (optional, for integration tests and sample compose flows)
 
 ## Project layout
 
 - `vectordata`: backend-agnostic core interfaces, record model, filters, typed wrapper
 - `stores/postgres`: Postgres implementation with `pgxpool`
+- `stores/sqlite`: durable SQLite model collections with exact search
+- `stores/memory`: transient model collections for development and contract tests
 - `samples`: runnable demos (see `samples/README.md`)
 - `docs`: architecture and implementation notes
 
@@ -86,7 +89,8 @@ Run a complete example without an API key:
 go run ./samples/model-store
 ```
 
-The same sample accepts `-dsn` to use PostgreSQL and `-embedding-batch-size` to
+The same sample accepts `-sqlite /path/to/models.db` for embedded storage,
+`-dsn` to use PostgreSQL and `-embedding-batch-size` to
 bound embedding requests. It demonstrates store-wide embedding defaults
 with a deterministic instructional embedder, typed reads,
 array filtering, and generated keys. Use a real embedding model for semantic search.
@@ -98,16 +102,23 @@ multiple vectors, iterator APIs, embeddings and
 PostgreSQL hybrid search. Models can opt into float16 (`halfvec`) storage with
 `precision=float16` while keeping `[]float32` inputs and outputs. Stores also expose optional `CapabilityProvider`
 metadata for supported keys, data types, metrics, index combinations and hybrid search.
-Both providers support Manhattan (`DistanceL1`) search; PostgreSQL supports L1 HNSW
+All three providers support Manhattan (`DistanceL1`) search; PostgreSQL supports L1 HNSW
 indexes and rejects unsupported L1/IVFFlat combinations before database work.
 Models can also use packed `BinaryVector` fields with `kind=binary`, Hamming
 distance and `SearchBinary`. PostgreSQL provides native `bit(n)` storage,
 HNSW/IVFFlat indexes and binary hybrid search.
 Sparse models use `SparseVector` with zero-based coordinates, `kind=sparse`, and
-`SearchSparse`. Both providers support cosine/L2/inner-product/L1 sparse search;
+`SearchSparse`. All three providers support cosine/L2/inner-product/L1 sparse search;
 PostgreSQL adds `sparsevec(n)` storage, HNSW indexes and sparse hybrid search.
 PostgreSQL offers [model migration planning and explicit additive application](docs/migrations.md)
 with schema drift detection, reviewable SQL and backfill/re-embedding classifications.
+Vectors may be nullable with `optional` (or pointer fields). Missing vectors are
+stored without an embedding and excluded from searches on that property.
+`ContainsAny` and `ContainsAll` support array overlap and containment; PostgreSQL
+uses native predicates for indexed native arrays.
+
+See the [provider and .NET parity checklist](docs/parity.md), [SQLite guide](docs/sqlite.md),
+[upgrade guide](docs/upgrading.md), and [changelog](CHANGELOG.md).
 Original `Record`/`Collection` callers remain compatible.
 Bulk PostgreSQL writes automatically use binary vector parameters to reduce
 serialization allocations; see [the measured transport comparison](docs/performance.md#binary-vector-ingestion-and-copy-comparison).

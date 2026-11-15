@@ -178,11 +178,10 @@ func validateAdditiveMigration(plan vectordata.MigrationPlan) error {
 	for _, p := range after.Vectors {
 		vectors[p.Name] = p
 	}
-	if len(before.Vectors) != len(after.Vectors) {
-		return deny("vectors")
-	}
+
 	for _, old := range before.Vectors {
 		next, exists := vectors[old.Name]
+		delete(vectors, old.Name)
 		if !exists {
 			return deny(old.Name)
 		}
@@ -195,6 +194,11 @@ func validateAdditiveMigration(plan vectordata.MigrationPlan) error {
 		next.Embedder = nil
 		if old != next {
 			return deny(old.Name)
+		}
+	}
+	for _, p := range vectors {
+		if !p.Optional {
+			return deny(p.Name)
 		}
 	}
 	for _, step := range plan.Steps {

@@ -155,6 +155,18 @@ func ValidateModelFilter(filter Filter, d CollectionDefinition) error {
 		return valueCheck(f.Field, f.Value, false, true)
 	case ExistsFilter:
 		return field(f.Field, false)
+	case ContainsAnyFilter:
+		if err := field(f.Field, true); err != nil {
+			return err
+		}
+		for _, v := range f.Values {
+			if err := valueCheck(f.Field, v, true, false); err != nil {
+				return err
+			}
+		}
+		return nil
+	case ContainsAllFilter:
+		return ValidateModelFilter(ContainsAny(f.Field, f.Values...), d)
 	case ContainsFilter:
 		return valueCheck(f.Field, f.Value, true, false)
 	case AndFilter:
@@ -517,6 +529,10 @@ func modelTruth(filter Filter, r ModelRecord, d CollectionDefinition) (truth, er
 	case ExistsFilter:
 		value, present, jsonPath := resolve(f.Field)
 		return boolTruth(present && (jsonPath || value != nil)), nil
+	case ContainsAnyFilter:
+		return modelContainsMany(f.Field, f.Values, false, r, d)
+	case ContainsAllFilter:
+		return modelContainsMany(f.Field, f.Values, true, r, d)
 	case ContainsFilter:
 		value, present, jsonPath := resolve(f.Field)
 		if !present || value == nil {
@@ -663,4 +679,27 @@ func CloneModelRecord(r ModelRecord, d CollectionDefinition, vectors bool) Model
 		}
 	}
 	return out
+}
+
+func modelContainsMany(field FieldRef, values []any, all bool, r ModelRecord, d CollectionDefinition) (truth, error) {
+	if len(values) == 0 {
+		field, _ = NormalizeFieldRef(field)
+		value, present, jsonPath := modelField(r, field)
+		if !jsonPath && value == nil {
+			return unknownValue, nil
+		}
+		if !present || value == nil {
+			return falseValue, nil
+		}
+		kind := reflect.TypeOf(value).Kind()
+		return boolTruth(all && (kind == reflect.Slice || kind == reflect.Array)), nil
+	}
+	children := make([]Filter, len(values))
+	for i, value := range values {
+		children[i] = Contains(field, value)
+	}
+	if all {
+		return modelTruth(And(children...), r, d)
+	}
+	return modelTruth(Or(children...), r, d)
 }

@@ -394,9 +394,13 @@ func (c *Collection) searchRecords(ctx context.Context, top int, opts vectordata
 		return nil, err
 	}
 	out := []vectordata.ModelSearchResult{}
+	p, _ := c.definition.Vector(opts.VectorProperty)
 	for _, r := range records {
 		if err := ctx.Err(); err != nil {
 			return nil, err
+		}
+		if !vectordata.HasModelVector(r, p) {
+			continue
 		}
 		d := measure(r)
 		score := vectordata.ScoreFromDistance(metric, d)

@@ -19,7 +19,7 @@ func migrationProperties(d vectordata.CollectionDefinition) []migrationProperty 
 	}
 	for i := range d.Vectors {
 		p := d.Vectors[i]
-		properties = append(properties, migrationProperty{name: p.Name, column: p.StorageName, role: "vector", typ: vectorColumnType(p), vector: &p})
+		properties = append(properties, migrationProperty{name: p.Name, column: p.StorageName, role: "vector", optional: p.Optional, typ: vectorColumnType(p), vector: &p})
 	}
 	return properties
 }

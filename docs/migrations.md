@@ -2,7 +2,7 @@
 
 PostgreSQL implements the optional `vectordata.MigrationPlanner` and
 `vectordata.MigrationApplier` interfaces, reporting `MigrationPlanning=true` and
-`MigrationApplication=true`. Memory reports both false. Existing `ModelStore` and
+`MigrationApplication=true`. Memory and SQLite report both false. Existing `ModelStore` and
 collection interfaces do not require migration support.
 
 `PlanMigration(ctx, name, desired)` compares the registered model with live
@@ -70,9 +70,9 @@ _ = products
 
 Through `ModelStore`, check `MigrationApplication` and assert
 `vectordata.MigrationApplier`. Application accepts optional scalar/JSON/array data
-additions and new data, full-text or vector indexes. Existing property names,
+additions, new optional dense/binary/sparse vector properties, and new data, full-text or vector indexes. Existing property names,
 storage mappings, types, nullability, keys and vector settings must stay unchanged.
-Removing/rebuilding indexes, renames, required fields, new vectors, conversions,
+Removing/rebuilding indexes, renames, required fields, required vectors, conversions,
 backfills and re-embedding require a separate migration procedure. A plan with
 `HasManualWork()==false` can still fall outside this additive subset.
 

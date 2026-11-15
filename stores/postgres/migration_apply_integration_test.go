@@ -328,3 +328,53 @@ func TestIntegrationApplyCancellationAndSingleConnection(t *testing.T) {
 		t.Fatalf("single-connection retry: %v", err)
 	}
 }
+
+func TestIntegrationAddOptionalVectors(t *testing.T) {
+	store, c, d := migrationFixture(t)
+	ctx := context.Background()
+	for _, p := range []vectordata.VectorProperty{
+		{Name: "OptionalDense", Dimensions: 3, Optional: true, Index: &vectordata.VectorIndexOptions{}},
+		{Name: "OptionalHalf", Dimensions: 3, Optional: true, Precision: vectordata.VectorFloat16},
+		{Name: "OptionalBits", Dimensions: 3, Optional: true, Kind: vectordata.VectorBinary},
+		{Name: "OptionalSparse", Dimensions: 3, Optional: true, Kind: vectordata.VectorSparse},
+	} {
+		d.Vectors = append(d.Vectors, p)
+	}
+	plan, err := store.PlanMigration(ctx, c.name, d)
+	if err != nil || plan.HasManualWork() {
+		t.Fatalf("optional vector plan: %+v %v", plan, err)
+	}
+	if err := store.ApplyMigration(ctx, plan); err != nil {
+		t.Fatal(err)
+	}
+	updated, err := store.EnsureModelCollection(ctx, c.name, d, vectordata.ModelCollectionOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	row, err := updated.Get(ctx, "a", vectordata.RetrievalOptions{IncludeVectors: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(row.Vectors["Vector"]) != 3 {
+		t.Fatalf("original vectors changed: %v", row)
+	}
+	for _, p := range d.Vectors[1:] {
+		if vectordata.HasModelVector(row, p) {
+			t.Fatalf("new vector should be NULL: %s", p.Name)
+		}
+	}
+	hits, err := updated.Search(ctx, []float32{1, 0, 0}, 3, vectordata.ModelSearchOptions{VectorProperty: "OptionalDense"})
+	if err != nil || len(hits) != 0 {
+		t.Fatalf("new vector search: %v %v", hits, err)
+	}
+	// Existing nullability changes remain outside automatic additive application.
+	desired := d.Clone()
+	desired.Vectors[1].Optional = false
+	required, err := store.PlanMigration(ctx, c.name, desired)
+	if err != nil || !required.HasManualWork() {
+		t.Fatalf("required backfill classification: %+v %v", required, err)
+	}
+	if err := store.ApplyMigration(ctx, required); !errors.Is(err, vectordata.ErrMigrationNotAdditive) {
+		t.Fatalf("required conversion accepted: %v", err)
+	}
+}

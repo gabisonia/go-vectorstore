@@ -302,3 +302,21 @@ property/collection embedders for text search. Run
 factory receives embedding defaults and must return an isolated store configured
 with them. It verifies override precedence, batching, text/hybrid queries and
 atomic insert/upsert behavior after embedding errors or cancellation.
+
+
+## Optional vectors and array set filters
+
+Advertise `OptionalVectors` only when every supported vector kind can be absent.
+Use `HasModelVector` to distinguish missing sparse/binary entries from valid zero
+vectors. Query vectors still undergo full validation. Reads preserve absence and
+all searches exclude records missing the selected vector before ranking/paging;
+hybrid candidates follow the same rule. `PrepareModelRecords` validates optional
+values and resolves optional embedding sources before writes.
+
+Translate ContainsAnyFilter/ContainsAllFilter for native arrays with SQL NULL
+semantics and the existing Contains element normalization. JSON paths retain
+whole-element equality, including nested arrays and JSON null. See the model
+guide for empty-operand rules. The shared contract exercises these filters,
+optional vectors, and nullable search/hybrid behavior. SQLite demonstrates a
+persistent provider reusing the exact-search engine; it adds file persistence and
+concurrent-handle/transaction tests alongside the shared suite.

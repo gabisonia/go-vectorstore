@@ -85,6 +85,14 @@ func runNativeArrays(t *testing.T, factory Factory, caps vectordata.ProviderCapa
 				{"null", vectordata.Eq(field, nil), []string{"c", "e"}},
 				{"typed null", vectordata.Eq(field, tt.null), []string{"c", "e"}},
 				{"exists", vectordata.Exists(field), []string{"a", "b", "d"}},
+				{"contains any", vectordata.ContainsAny(field, tt.needle, tt.needle), []string{"a"}},
+				{"contains all", vectordata.ContainsAll(field, tt.needle, tt.needle), []string{"a"}},
+				{"any empty", vectordata.ContainsAny(field), nil},
+				{"all empty", vectordata.ContainsAll(field), []string{"a", "b", "d"}},
+				{"not any empty", vectordata.Not(vectordata.ContainsAny(field)), []string{"a", "b", "d"}},
+				{"not all empty", vectordata.Not(vectordata.ContainsAll(field)), nil},
+				{"any null", vectordata.ContainsAny(field, nil, tt.needle), []string{"a"}},
+				{"all null", vectordata.ContainsAll(field, nil, tt.needle), nil},
 				{"contains alias", vectordata.Contains(field, tt.needle), []string{"a"}},
 				{"negated contains", vectordata.Not(vectordata.Contains(field, tt.needle)), []string{"b", "d"}},
 				{"contains null", vectordata.Contains(field, nil), nil},
@@ -111,7 +119,7 @@ func runNativeArrays(t *testing.T, factory Factory, caps vectordata.ProviderCapa
 					}
 				})
 			}
-			for _, invalid := range []vectordata.Filter{vectordata.Contains(field, tt.badNeedle), vectordata.Eq(field, tt.badArray), vectordata.Gt(field, tt.want)} {
+			for _, invalid := range []vectordata.Filter{vectordata.Contains(field, tt.badNeedle), vectordata.ContainsAny(field, tt.badNeedle), vectordata.ContainsAll(field, tt.badNeedle), vectordata.Eq(field, tt.badArray), vectordata.Gt(field, tt.want)} {
 				if _, err := c.Query(ctx, invalid, 1, vectordata.QueryOptions{}); !errors.Is(err, vectordata.ErrInvalidFilter) {
 					t.Fatalf("invalid array filter accepted: %v", err)
 				}

@@ -86,7 +86,7 @@ func (c *ModelCollection) searchValuePlan(literal any, top int, opts vectordata.
 		return "", nil, p, err
 	}
 	args = append([]any{literal}, args...)
-	predicates := []string{}
+	predicates := []string{"t." + quoteIdent(p.StorageName) + " IS NOT NULL"}
 	if where != "" {
 		predicates = append(predicates, where)
 	}
@@ -340,9 +340,9 @@ func (c *ModelCollection) hybridValuePlan(literal any, keywords string, top int,
 	op, _ := modelMetricOperator(p)
 	distance := "(t." + quoteIdent(p.StorageName) + " " + op + " $1::" + vectorQuerySQLType(p) + ")"
 	key := "t." + quoteIdent(c.definition.Key.StorageName)
-	predicate := "TRUE"
+	predicate := "t." + quoteIdent(p.StorageName) + " IS NOT NULL"
 	if where != "" {
-		predicate = where
+		predicate += " AND (" + where + ")"
 	}
 	text := ftsExpr("t." + quoteIdent(config.textProperty))
 	query := "plainto_tsquery('simple'::regconfig,$2)"
