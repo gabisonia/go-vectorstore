@@ -113,12 +113,13 @@ a freshly reviewed no-op plan can be applied successfully.
 | Add optional date-only/time-only arrays | Nullable native arrays and requested GIN indexes; additive application supported |
 | Add optional decimal data or arrays | Nullable unconstrained `numeric`/`numeric[]` columns and requested B-tree/GIN indexes; additive application supported |
 | Add required data | Nullable `ADD COLUMN`, manual backfill/verification, then `SET NOT NULL` |
-| Add a vector | Same stages, with embedding/backfill flags |
+| Add an optional dense/float16/binary/sparse vector | Nullable native column and requested compatible indexes; additive application supported |
+| Add a required vector | Nullable column, manual embedding/backfill verification, then `SET NOT NULL` |
 | Add/convert a binary vector | Required `bit(n)` storage needs manual backfill; dense-to-binary conversions require explicit re-embedding/conversion review |
 | Add a binary vector index | Compatible HNSW/IVFFlat `bit_hamming_ops` indexes support additive application after operator/opclass checks |
 | Add/convert a sparse vector | Required `sparsevec(n)` fields and representation changes need manual backfill/re-embedding review |
 | Add a sparse HNSW index | Additive if stored vectors have at most 1,000 nonzeros; planning scans compact sparse serialization sizes and reports manual backfill for oversized rows |
-| Relax nullability | `DROP NOT NULL` |
+| Relax nullability | `DROP NOT NULL`; separate procedure, outside additive application |
 | Require a nullable property | Manual null backfill/verification, then `SET NOT NULL` |
 | Rename storage with a stable logical property | `RENAME COLUMN`; rebuild affected managed index names |
 | Rename a logical property with stable storage | Metadata change; stored values remain in place |

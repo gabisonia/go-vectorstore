@@ -1,8 +1,12 @@
-# Upgrading to the next model API release
+# Upgrading to v0.4.0
 
-The next planned release is **v0.4.0**; the last published baseline is v0.3.1.
-See [CHANGELOG](../CHANGELOG.md). This branch prepares the release; it does not
-publish a tag or GitHub release.
+**v0.4.0 was published on November 15, 2026**, following v0.3.1.
+See the [release notes](https://github.com/gabisonia/go-vectorstore/releases/tag/v0.4.0)
+and [changelog](../CHANGELOG.md).
+
+```sh
+go get github.com/gabisonia/go-vectorstore@v0.4.0
+```
 
 ## Existing Record API applications
 
@@ -80,7 +84,9 @@ race tests, and vulnerability scanning. Local equivalents are in the repository
 workflow and [performance guide](performance.md). Run the model sample for each
 provider you use and the persistent SQLite sample when adopting embedded storage.
 
-After merge and green CI, a maintainer can invoke the existing Release workflow
-with v0.4.0 and the intended master commit, or push that version tag. Review the
-changelog and generated notes before doing so. No release has been created by
-this preparation change.
+The [v0.4.0 release workflow](https://github.com/gabisonia/go-vectorstore/actions/runs/43704299961)
+passed all checks and published tag `v0.4.0` at commit
+`af25930d0e6f3bf3e69b1ee7b4c71a42ac93871d`. The module download was verified
+through the public Go proxy. For future releases, follow the
+[release instructions](../README.md#release-automation) with a new version; published
+tags stay on their original commits.

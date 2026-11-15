@@ -4,7 +4,7 @@ This document explains how `go-vectorstore` store backends are implemented, how 
 
 ## 1) Design Goals
 
-- Keep a single backend-agnostic public API in `vectordata`
+- Keep provider-neutral model and Record contracts in `vectordata`
 - Isolate backend specifics inside `stores/<backend>`
 - Enforce schema and vector-dimension correctness at runtime
 - Keep write/read/search behavior consistent across implementations
@@ -12,19 +12,28 @@ This document explains how `go-vectorstore` store backends are implemented, how 
 
 ## 2) Layering and Boundaries
 
-The implementation is split into:
+The shared core and provider packages are:
 
-- `vectordata`: shared contracts, record/search types, filter AST, filter SQL compiler, typed codec wrapper, error model
-- `stores/postgres`: PostgreSQL + pgvector implementation
+- `vectordata`: contracts, records, model codecs, errors, scores and portable filter evaluation
+- `vectordata/filterast`: portable filter node types
+- `stores/postgres/filtersql`: PostgreSQL SQL compiler; the core compiler entry point is a compatibility shim
+- `stores/postgres`: native model columns plus the original Record API
+- `stores/sqlite`: durable model storage with exact snapshot queries/search
+- `stores/memory`: transient model storage with exact search
 
-Each backend implements:
-
-- a `VectorStore` implementation (`EnsureCollection`, `Collection`)
-- a `Collection` implementation (`Insert`, `Upsert`, `Get`, `Delete`, `Count`, `SearchByVector`, `EnsureIndexes`)
+All built-in providers implement ModelStore and ModelCollection. Only PostgreSQL
+also implements the original VectorStore/Collection contracts. New model providers
+do not need to implement the Record API. See the [provider matrix](parity.md).
 
 ## 3) Shared Core Contracts (`vectordata`)
 
-Main types:
+The model API consists of CollectionDefinition, ModelRecord, ModelStore,
+ModelCollection, typed codecs and search/query options. PrepareModelRecords
+normalizes/copies writes and resolves automatic dense embeddings before a provider
+opens its write transaction. CloneModelRecord protects mutable reads. Vectors may
+be required or optional; searches skip records missing the selected property.
+
+The original Record API has these types:
 
 - `CollectionSpec`: `{Name, Dimension, Metric, Mode}`
 - `Record`: `{ID, Vector, Metadata, Content}`
@@ -100,8 +109,8 @@ content text
 
 `SearchByVector` pipeline:
 
-1. Validate `topK` and query vector dimension
-2. Resolve metric operator (`<=>`, `<->`, `<#>`)
+1. Validate `topK`, query dimensions, finite values and cosine norm
+2. Resolve metric operator (`<=>`, `<->`, `<#>`, `<+>`)
 3. Build distance expression and dynamic projection columns
 4. Compile optional filter AST into SQL + bind args
 5. Apply optional backend distance threshold (`distance <= threshold`; lower is stricter)
@@ -113,32 +122,36 @@ content text
 `EnsureIndexes` can create:
 
 - Vector index (HNSW or IVFFlat)
-  - metric-specific opclass: `vector_cosine_ops`, `vector_l2_ops`, `vector_ip_ops`
+  - metric-specific opclass: `vector_cosine_ops`, `vector_l2_ops`, `vector_ip_ops`, `vector_l1_ops` (L1 requires HNSW)
   - defaults:
     - HNSW: `m=16`, `ef_construction=64`
     - IVFFlat: `lists=100`
 - Metadata GIN index
   - optional `jsonb_path_ops`
 
-Metadata indexes are created on the JSONB column. They may not accelerate every supported filter expression because the current compiler emits JSONB extraction and text/numeric comparison predicates.
+Metadata Eq/In can add GIN-compatible containment prefilters while preserving
+exact JSONB extraction comparisons. Range/Exists predicates do not generally use
+the whole-column GIN index. Model native arrays use GIN-compatible membership,
+overlap and containment predicates.
 
 ## 5) Filter System and Execution Model
 
 Filter AST supports:
 
-- `Eq`, `In`, `Gt`, `Lt`, `Exists`
-- `And`, `Or`, `Not`
-- Fields: fixed columns (`id`, `content`) and metadata JSON paths
+- `Eq`, `Ne`, `In`, `Gt`, `Gte`, `Lt`, `Lte`, `Exists`
+- `Contains`, `ContainsAny`, `ContainsAll`, `And`, `Or`, `Not`
+- Fields: Record columns/metadata paths or model key/data fields and DataPath JSON paths
 
 Execution strategy by backend:
 
-- Postgres: compile AST -> parameterized SQL via `CompileFilterSQL`
+- PostgreSQL: compile AST to parameterized SQL via `stores/postgres/filtersql`
+- Memory and SQLite models: evaluate the shared AST against collection snapshots
 
 Important behavior:
 
 - Invalid AST structures return `ErrInvalidFilter`
 - Numeric comparisons are numeric when values are numeric; otherwise textual comparison is used
-- Missing fields typically evaluate as non-match, except `Exists` which reports presence
+- Preserve SQL NULL versus JSON null, missing paths, and UNKNOWN under negation; see [filter semantics](model-api.md#filtering)
 
 ## 6) Schema Safety Modes
 
@@ -154,11 +167,11 @@ Mode default comes from backend options:
 
 ## 7) Invariants
 
-These rules are enforced in all current implementations:
+These rules describe PostgreSQL Record collections:
 
 - Collection name must be non-empty
 - Dimension must be greater than zero
-- Metric must be supported (`cosine`, `l2`, `inner_product`)
+- Dense metric must be supported (`cosine`, `l2`, `inner_product`, `l1`)
 - Record ID must be non-empty for writes
 - Query and record vectors must match collection dimension
 - Nil metadata is normalized to empty object
@@ -168,12 +181,15 @@ These rules are enforced in all current implementations:
 
 To add a new store backend, follow the same contract shape:
 
-1. Implement `VectorStore` and `Collection`
-2. Add robust `EnsureCollection` validation and mode behavior
-3. Enforce vector dimension checks on write/search
-4. Support filter handling (compiled or in-process)
-5. Reuse `vectordata` errors and scoring semantics
-6. Add integration tests matching existing backend test coverage style
+1. Implement ModelStore and ModelCollection, normalizing definitions and preserving native types.
+2. Prepare/validate complete batches before committing atomic writes.
+3. Preserve missing optional vectors, dimensions, precision, score and projection semantics.
+4. Translate filters or reuse the portable evaluator with SQL/JSON NULL behavior.
+5. Implement and advertise only supported optional capabilities.
+6. Run shared conformance plus real persistence/transaction and provider-specific tests.
+
+Implement VectorStore/Collection as well when adding support for the original
+Record API; its CollectionSpec and strict/auto-migrate modes are separate.
 
 For a practical checklist and repository wiring steps, see [`connector-development.md`](connector-development.md).
 
@@ -182,12 +198,29 @@ For a practical checklist and repository wiring steps, see [`connector-developme
 Model collections use a separate native schema defined by
 `vectordata.CollectionDefinition`. They support typed keys, data properties,
 named vectors, batched embeddings, projected and streaming retrieval, and
-PostgreSQL keyword/vector hybrid search. Model tables use native key/data/vector
-columns, rather than the legacy Record table shape. The original implementation
+PostgreSQL keyword/vector hybrid search. PostgreSQL model tables use native key/data/vector columns. SQLite stores
+canonical records and definitions in internal provider tables; memory stores
+normalized records in process. The original implementation
 and interfaces remain supported.
 
 The portable AST is in `vectordata/filterast`; PostgreSQL compilation is in
-`stores/postgres/filtersql`. `stores/memory` implements the model contract with
-exact search. Both providers run `vectordata/conformance.Run`; keep PostgreSQL
-integration tests for driver, schema, planner and transactional behavior. See
+`stores/postgres/filtersql`. Memory and SQLite provide exact search. All three
+providers run `vectordata/conformance.Run`. SQLite adds file-reopen, concurrent
+handle, rollback and precision tests; PostgreSQL integration tests cover the
+driver, native schemas, indexes, migrations and transactions. See
 [model-api.md](model-api.md) for details and current limits.
+
+
+## SQLite storage boundary
+
+SQLite owns a database/sql pool with one connection and configures WAL, FULL
+synchronization, foreign keys and a busy timeout. Immediate write transactions
+commit records and generated-key sequences together. Reads check registration and
+load records with one consistent SQL snapshot; Get selects a single key directly.
+Query, GetMany, Count and search replay the whole collection through the shared
+memory engine after clearing runtime embedding sources. This releases the SQL
+connection before user iteration and prevents embeddings during snapshot replay.
+
+Those operations cost O(collection size) memory and scan work. Index hints are
+accepted for portability; SQLite advertises no physical property/vector indexes,
+full-text/hybrid search or migrations. See [SQLite storage and limits](sqlite.md).

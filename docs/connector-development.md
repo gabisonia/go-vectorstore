@@ -1,164 +1,145 @@
 # Connector Development Guide
 
-This guide explains how to add a new backend connector under `stores/<backend>`.
+This guide explains how to add a provider under `stores/<backend>`. Compare the
+[provider matrix](parity.md) and [store implementation](stores-implementation.md)
+before choosing storage and optional capabilities.
 
-## 1) Scope and Contract
+## 1) Scope and contract
 
-Every connector must implement the shared interfaces in `vectordata`:
+A model provider implements `vectordata.ModelStore` (including CollectionManager)
+and `vectordata.ModelCollection`. PostgreSQL, SQLite and memory share this contract.
+Optional interfaces cover binary/sparse search, hybrid search, capabilities and
+migrations. Implement only the optional workflows the backend supports.
 
-- `vectordata.VectorStore`
-- `vectordata.Collection`
+The original `vectordata.VectorStore` and `Collection` contracts are separate.
+PostgreSQL implements them as well; a model-only provider does not need to.
+They use CollectionSpec, Record, SearchByVector and EnsureIndexes rather than
+model definitions, named vectors and model query options.
 
-The connector must preserve shared behavior:
+Both contracts must preserve context cancellation, errors.Is/As, vector validation,
+score semantics and caller ownership of mutable values.
 
-- validate collection specs (`name`, `dimension`, `metric`, `mode`)
-- enforce vector dimension on write and search
-- return `vectordata.ErrNotFound` for missing records
-- return `vectordata.ErrDimensionMismatch`, `vectordata.ErrInvalidVector`, `vectordata.ErrSchemaMismatch`, and `vectordata.ErrInvalidFilter` where applicable
-- compute score via `vectordata.ScoreFromDistance`
+## 2) Recommended layout
 
-## 2) Recommended Layout
+Typical components are store/lifecycle, collection writes and reads, query/search,
+filter translation, and provider tests. Separate schema, codec and migration files
+when the provider needs them. Constructor and option names follow the provider:
+PostgreSQL uses NewVectorStore, SQLite uses Open/Close, and memory uses New.
 
-Create a new directory:
+## 3) Store implementation checklist
 
-- `stores/<backend>/doc.go`
-- `stores/<backend>/store.go`
-- `stores/<backend>/collection.go`
-- `stores/<backend>/schema.go`
-- `stores/<backend>/helpers.go`
-- `stores/<backend>/<backend>_integration_test.go`
+1. Normalize store defaults, including runtime embedding options.
+2. Implement GetModelCollection as a validated handle constructor without storage I/O.
+3. Implement EnsureModelCollection and EnsureExists with idempotent creation and
+   strict definition/storage validation. Keep migrations explicit.
+4. Implement ListCollectionNames, CollectionExists and idempotent DeleteCollection.
+5. Define resource ownership and Close behavior for pools/files owned by the store.
+6. Return a local, caller-owned capability snapshot when implementing CapabilityProvider.
 
-Add extra files only when needed (for example filter compiler/evaluator files).
+For the original Record API, implement EnsureCollection and Collection as well;
+validate CollectionSpec and its schema mode separately from model definitions.
 
-## 3) Store Implementation Checklist
+## 4) Collection implementation checklist
 
-Implement a store type that owns connection/resources and options:
+1. Normalize definitions once. Use PrepareModelRecords to copy/validate the whole
+   input and generate requested embeddings before write transactions.
+2. Implement atomic Insert/Upsert batches, native keys and supported generated keys.
+   Return keys in input order without mutating caller records.
+3. Implement Get/GetMany, Delete and Count. Get returns ErrNotFound; GetMany omits
+   missing keys. Use ErrCollectionNotFound for missing collection errors.
+4. Implement filtered Query/QueryIter with scalar ordering, deterministic key
+   tie-breaks, Skip/top and optional vector projection.
+5. Implement Search/SearchIter/SearchText with named vector selection, valid query
+   vectors, filters, thresholds, scores and paging. Unknown ProviderOptions must
+   return ErrUnsupported. Preserve absence of optional vectors and exclude records
+   missing the selected property before ranking/paging.
+6. Implement supported binary/sparse/hybrid search interfaces separately. Hybrid
+   scores use ScoreRRF, while ordinary vector results use ScoreSimilarity.
+7. Define iterator materialization/streaming behavior and release resources on
+   completion, cancellation, errors and early exit. Copy mutable returned values.
 
-1. Add `StoreOptions` and `DefaultStoreOptions()`.
-2. Add `NewVectorStore(...)` constructor with option normalization.
-3. Implement `EnsureCollection(ctx, spec)`:
-   - normalize and validate spec
-   - ensure schema/table/metadata structures
-   - create or validate collection storage
-4. Implement `Collection(name, dimension, metric)` as a lightweight handle constructor.
+For Record collections, validate ID/Vector/Metadata, honor SearchOptions projection
+and thresholds, and implement EnsureIndexes or return explicit unsupported-option
+errors. Record collection modes do not apply to model migrations.
 
-## 4) Collection Implementation Checklist
+## 5) Filter strategy
 
-Implement collection operations with strict validation:
+Translate the portable AST to bound backend queries or evaluate it in Go with
+ValidateModelFilter and MatchModelFilter. PostgreSQL translation is in
+`stores/postgres/filtersql`; the compiler entry point in vectordata is a deprecated
+compatibility shim. Values must remain bound parameters.
 
-1. `Insert` and `Upsert`
-   - validate ID and vector dimension
-   - normalize nil metadata to empty object
-   - use batching/chunking for bulk writes
-2. `Get` and `Delete`
-   - return `ErrNotFound` from `Get` when missing
-3. `Count`
-   - support nil filter and filter predicates
-4. `SearchByVector`
-   - validate `topK > 0`
-   - validate query vector dimension
-   - apply filter (SQL pushdown or in-process evaluation)
-   - apply optional threshold
-   - honor projection (`Metadata`, `Content`, `Vector`)
-   - return results ordered by best match first
-   - compute `Score` from `Distance`
-5. `EnsureIndexes`
-   - create backend-specific indexes when supported
-   - return explicit error if unsupported options are requested
+Preserve native normalization, SQL NULL versus JSON null, missing JSON paths and
+UNKNOWN under negation. Support the common filter nodes and report invalid
+structures/values as ErrInvalidFilter even when the collection is empty. Native
+ContainsAny/ContainsAll need overlap/containment semantics; JSON paths compare
+whole array elements. See [filter semantics](model-api.md#filtering).
 
-## 5) Filter Strategy
+## 6) Schema handling
 
-Choose one strategy:
+Model definitions describe key/data/vector types, nullability, storage mappings
+and index hints. Ensure validates these expectations; it does not implicitly
+convert registered models. Implement MigrationPlanner/MigrationApplier only with
+the documented review, drift and transaction guarantees. A provider may reject
+unsupported index hints or accept them for portability, but capability metadata
+must describe physical indexes actually provided.
 
-- SQL pushdown: compile `vectordata.Filter` to parameterized backend SQL
-- In-process: load records and evaluate filter AST in Go
+For the original Record API, CollectionSpec.Mode selects EnsureStrict or
+EnsureAutoMigrate. The latter permits supported additions of missing optional
+Record columns; it does not authorize arbitrary model migrations or conversions.
 
-Requirements:
+## 7) Testing requirements
 
-- never interpolate raw values into SQL
-- return `vectordata.ErrInvalidFilter` for invalid AST/input
+Run `vectordata/conformance.Run` with a fresh provider/namespace for each test and
+clean up resources through t.Cleanup. The suite exercises CRUD, keys, filters,
+projections, ordering, scores, thresholds, cancellation and advertised optional
+features. Run RunEmbeddingConfiguration for store/collection/property defaults.
+Add provider-specific schema, driver, transaction and persistence tests.
 
-## 6) Schema Safety Modes
+Embedded stores can run file-reopen/concurrent-handle tests with normal unit tests.
+Server providers should also have tests using `//go:build integration`, disposable
+Testcontainers fixtures and an optional test DSN override. Memory conformance does
+not replace exercising the real database.
 
-Respect `CollectionSpec.Mode`:
-
-- `EnsureStrict`: fail on mismatches
-- `EnsureAutoMigrate`: add/fix optional schema parts where possible
-
-When mode is unset, use connector defaults (`StrictByDefault` behavior).
-
-## 7) Testing Requirements
-
-Add both unit and integration coverage.
-
-Unit tests:
-
-- spec validation
-- schema mismatch behavior
-- filter behavior (happy path + invalid filters)
-- dimension mismatch and error mapping
-- projection and threshold behavior in search
-
-Integration tests:
-
-- put in `stores/<backend>/<backend>_integration_test.go`
-- use `//go:build integration`
-- start backend with Testcontainers when DSN env var is absent
-- allow DSN override via `<BACKEND>_TEST_DSN`
-
-Run commands:
-
-```bash
-go test ./...
-go test -tags=integration ./stores/<backend>
+```sh
+go test -race ./...
+go test -race -tags=integration -timeout=5m ./stores/postgres
 ```
 
-## 8) Repository Wiring
+Adapt the second command to the provider and its integration requirements.
 
-When adding a connector, also update:
+## 8) Repository wiring
 
-1. `README.md`:
-   - scope
-   - requirements
-   - project layout
-   - integration test notes
-2. `docs/architecture.md` and `docs/stores-implementation.md`
-3. `docs/README.md`
-4. `Makefile` integration targets (if per-backend targets are used)
-5. `docker-compose.yml` only if manual local backend compose is required
-6. `go.mod` and `go.sum` dependencies
+Update the root README, docs index, architecture/store design, provider matrix,
+model capabilities, runnable samples and performance/verification commands.
+Add dependencies to go.mod/go.sum and the required checks to CI. Add Docker
+Compose or Make targets only if the new provider needs them.
 
-## 9) Minimal Skeleton
+## 9) Contract checks
+
+Use compile-time assertions in the implementation:
 
 ```go
-package mybackend
+var _ vectordata.ModelStore = (*Store)(nil)
+var _ vectordata.ModelCollection = (*Collection)(nil)
+```
 
-import (
-	"context"
+Wire the shared suite in provider tests. Here newTestStore is a test helper that
+opens the actual provider with a fresh namespace/file and registers cleanup:
 
-	"github.com/gabisonia/go-vectorstore/vectordata"
-)
-
-type StoreOptions struct{}
-
-func DefaultStoreOptions() StoreOptions { return StoreOptions{} }
-
-type VectorStore struct{}
-
-func NewVectorStore(opts StoreOptions) (*VectorStore, error) {
-	return &VectorStore{}, nil
-}
-
-func (s *VectorStore) EnsureCollection(ctx context.Context, spec vectordata.CollectionSpec) (vectordata.Collection, error) {
-	return nil, nil
-}
-
-func (s *VectorStore) Collection(name string, dimension int, metric vectordata.DistanceMetric) vectordata.Collection {
-	return nil
+```go
+func TestModelContract(t *testing.T) {
+    conformance.Run(t, func(t *testing.T) vectordata.ModelStore {
+        return newTestStore(t)
+    })
 }
 ```
 
-## Model API providers
+Import testing, vectordata and vectordata/conformance. Follow the existing
+SQLite/memory tests for embedded providers and PostgreSQL integration tests for
+server-backed storage.
+
+## Model normalization and optional capabilities
 
 New providers can implement `vectordata.ModelStore` and `ModelCollection` without
 implementing the original Record API. Normalize definitions once, call
@@ -221,7 +202,8 @@ values. Normalize them with `NormalizeModelData` and `NormalizeModelArrayElement
 canonical ISO strings, Gregorian years 1–9999, clock times below 24:00:00 with
 microsecond truncation, no timezone or timestamp coercion. Dynamic arrays return
 `[]string`; typed fields use string aliases or the `DateOnly`/`TimeOnly` helpers.
-Scalar fields support ordered comparisons and B-tree indexes; arrays use GIN.
+PostgreSQL scalar fields support ordered comparisons and B-tree indexes; arrays
+use GIN.
 PostgreSQL decodes native date/time values before normalization, preserving array
 dimensions and avoiding session formatting dependencies. Reject out-of-range SQL
 dates, infinities and 24:00:00 on read. Preserve existing inference and timestamp

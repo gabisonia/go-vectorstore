@@ -1,12 +1,21 @@
 # Documentation
 
-This directory contains internal design and implementation notes for `go-vectorstore`.
+`go-vectorstore` provides model collections across PostgreSQL, embedded SQLite,
+and memory, plus the original PostgreSQL Record API.
 
-- [`architecture.md`](architecture.md): architecture, request flow, schema behavior, filter system, and index model
-- [`stores-implementation.md`](stores-implementation.md): detailed store-backend design, component responsibilities, flows, invariants, and backend differences
-- [`connector-development.md`](connector-development.md): step-by-step checklist for implementing a new backend connector
-- [`performance.md`](performance.md): reproducible benchmarks, measured allocation changes, and indexing/recall checks
+## Using the library
 
-- [`model-api.md`](model-api.md): model definitions, typed/native keys, named vectors, retrieval, embeddings, and hybrid search
+- [Model API](model-api.md): schemas, typed/native keys and data, optional named vectors, filters, embeddings, search and iterators
+- [SQLite provider](sqlite.md): setup, persistence, concurrency and snapshot-scan limits
+- [Provider and .NET parity](parity.md): implemented workflows, provider capabilities and deliberate differences
+- [Upgrading to v0.4.0](upgrading.md): installation, compatibility changes and adoption steps
+- [Model migrations](migrations.md): PostgreSQL planning, explicit additive application, drift, backfills and registry finalization
+- [Changelog](../CHANGELOG.md): published version history
+- [Runnable examples](../samples/README.md): memory, SQLite, PostgreSQL and retrieval demos
 
-- [`migrations.md`](migrations.md): read-only planning, explicit additive application, SQL/risk classifications, drift and registry finalization
+## Implementation and verification
+
+- [Architecture](architecture.md): contracts, request flows, schema behavior, filters and indexes
+- [Store implementation](stores-implementation.md): provider responsibilities, storage boundaries and invariants
+- [Connector development](connector-development.md): implementing and verifying a provider
+- [Performance and verification](performance.md): test commands, measured allocations and index/recall checks

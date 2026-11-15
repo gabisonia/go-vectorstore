@@ -41,10 +41,21 @@ require it. Use current stable Go for up-to-date standard-library security fixes
 ## Install
 
 ```bash
-go get github.com/gabisonia/go-vectorstore
+go get github.com/gabisonia/go-vectorstore@v0.4.0
 ```
 
+The current release is [v0.4.0](https://github.com/gabisonia/go-vectorstore/releases/tag/v0.4.0).
+For adoption and compatibility details, see the [upgrade guide](docs/upgrading.md).
+
 ## Quick Start (Local)
+
+Run the persistent SQLite example without a server or API key:
+
+```sh
+go run ./samples/sqlite-store -db /tmp/vectorstore-demo.db
+```
+
+For the PostgreSQL semantic-search example:
 
 1. Start local Postgres + `pgvector` from the repository root:
 
@@ -333,21 +344,27 @@ any publishing job runs. Existing tags must point to the checked-out, tested
 commit; the workflow will not move a tag to another commit. Prerelease versions
 are published as GitHub prereleases.
 
-Release options:
+`VERSION` records the current release (`0.4.0`). For a future release, choose an
+unused version and update `VERSION` and the changelog in a reviewed PR before
+publishing from master. Published tags are immutable; documentation updates after
+a release do not change the source stored under that tag.
 
-1. Manual (recommended): run `Release` workflow via GitHub UI with `version` input (`0.3.1` or `v0.3.1`).
+Release options for that new version:
+
+1. Manual (recommended): run `Release` workflow on master via GitHub UI with the new `version` input, with or without leading `v`.
 2. Tag-driven: push a semver tag and the workflow publishes release notes automatically:
 
 ```bash
-VERSION="$(cat VERSION)"
-git tag "v${VERSION}"
-git push origin "v${VERSION}"
+RELEASE_VERSION="$(cat VERSION)" # After updating VERSION to the unused release version.
+git tag "v${RELEASE_VERSION}"
+git push origin "v${RELEASE_VERSION}"
 ```
 
 ## Samples
 
 - Overview and entry points: [`samples/README.md`](samples/README.md)
-- Model-driven collections (no API key): `samples/model-store`
+- Model-driven collections (no API key): [`samples/model-store`](samples/model-store/README.md)
+- Persistent SQLite and optional vectors (no API key): [`samples/sqlite-store`](samples/sqlite-store/README.md)
 - Semantic search sample app: `samples/semantic-search`
 - RAG sample app (`RAGrimosa`): `samples/ragrimosa`
 
@@ -357,6 +374,11 @@ git push origin "v${VERSION}"
 - Internals and architecture: [`docs/architecture.md`](docs/architecture.md)
 - Connector development guide: [`docs/connector-development.md`](docs/connector-development.md)
 - Model-driven API: [`docs/model-api.md`](docs/model-api.md)
+- SQLite provider: [`docs/sqlite.md`](docs/sqlite.md)
+- Provider and .NET parity: [`docs/parity.md`](docs/parity.md)
+- Upgrade guide: [`docs/upgrading.md`](docs/upgrading.md)
+- Model migrations: [`docs/migrations.md`](docs/migrations.md)
+- Changelog: [`CHANGELOG.md`](CHANGELOG.md)
 - Benchmarks and performance notes: [`docs/performance.md`](docs/performance.md)
 
 ## License
