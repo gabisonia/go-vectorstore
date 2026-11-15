@@ -7,11 +7,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"iter"
-	"math"
 	"sort"
 	"strings"
 	"sync"
 
+	"github.com/gabisonia/go-vectorstore/internal/exactsearch"
 	"github.com/gabisonia/go-vectorstore/vectordata"
 )
 
@@ -350,33 +350,6 @@ func (c *Collection) Delete(ctx context.Context, keys []any) (int64, error) {
 	}
 	return count, nil
 }
-func distance(a, b []float32, metric vectordata.DistanceMetric) float64 {
-	if metric == vectordata.DistanceL1 {
-		var sum float64
-		for i, x := range a {
-			sum += math.Abs(float64(x) - float64(b[i]))
-		}
-		return sum
-	}
-	var dot, aa, bb, sum float64
-	for i, x := range a {
-		xx, yy := float64(x), float64(b[i])
-		dot += xx * yy
-		aa += xx * xx
-		bb += yy * yy
-		delta := xx - yy
-		sum += delta * delta
-	}
-	switch metric {
-	case vectordata.DistanceL2:
-		return math.Sqrt(sum)
-	case vectordata.DistanceInnerProduct:
-		return -dot
-	default:
-		cosine := dot / (math.Sqrt(aa) * math.Sqrt(bb))
-		return 1 - math.Max(-1, math.Min(1, cosine))
-	}
-}
 func (c *Collection) Search(ctx context.Context, vector []float32, top int, opts vectordata.ModelSearchOptions) ([]vectordata.ModelSearchResult, error) {
 	p, err := c.definition.Vector(opts.VectorProperty)
 	if err != nil {
@@ -392,37 +365,47 @@ func (c *Collection) Search(ctx context.Context, vector []float32, top int, opts
 	if opts.ProviderOptions != nil {
 		return nil, vectordata.ErrUnsupported
 	}
-	return c.searchRecords(ctx, top, opts, p.Metric, func(r vectordata.ModelRecord) float64 { return distance(vector, r.Vectors[p.Name], p.Metric) })
+	return c.searchRecords(ctx, top, opts, p, func(r vectordata.ModelRecord) (float64, error) {
+		return exactsearch.DenseDistance(vector, r.Vectors[p.Name], p.Metric), nil
+	})
 }
-func (c *Collection) searchRecords(ctx context.Context, top int, opts vectordata.ModelSearchOptions, metric vectordata.DistanceMetric, measure func(vectordata.ModelRecord) float64) ([]vectordata.ModelSearchResult, error) {
-	records, err := c.Query(ctx, opts.Filter, int(^uint(0)>>1), vectordata.QueryOptions{IncludeVectors: true})
-	if err != nil {
-		return nil, err
+func (c *Collection) searchRecords(ctx context.Context, top int, opts vectordata.ModelSearchOptions, p vectordata.VectorProperty, measure exactsearch.Measure) ([]vectordata.ModelSearchResult, error) {
+	return exactsearch.Run(ctx, c.definition, p, top, opts, c.searchSnapshot(ctx), measure)
+}
+
+// Stored record values are immutable: writes replace them and public reads clone
+// them. Copy headers under the lock, then evaluate caller filters after release.
+func (c *Collection) searchSnapshot(ctx context.Context) iter.Seq2[vectordata.ModelRecord, error] {
+	return func(yield func(vectordata.ModelRecord, error) bool) {
+		records, err := func() ([]vectordata.ModelRecord, error) {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+			c.store.mu.RLock()
+			defer c.store.mu.RUnlock()
+			state, err := c.stateLocked()
+			if err != nil {
+				return nil, err
+			}
+			out := make([]vectordata.ModelRecord, 0, len(state.records))
+			for _, record := range state.records {
+				if err := ctx.Err(); err != nil {
+					return nil, err
+				}
+				out = append(out, record)
+			}
+			return out, nil
+		}()
+		if err != nil {
+			yield(vectordata.ModelRecord{}, err)
+			return
+		}
+		for _, record := range records {
+			if !yield(record, nil) {
+				return
+			}
+		}
 	}
-	out := []vectordata.ModelSearchResult{}
-	p, _ := c.definition.Vector(opts.VectorProperty)
-	for _, r := range records {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		if !vectordata.HasModelVector(r, p) {
-			continue
-		}
-		d := measure(r)
-		score := vectordata.ScoreFromDistance(metric, d)
-		if opts.DistanceThreshold != nil && d > *opts.DistanceThreshold || opts.ScoreThreshold != nil && score < *opts.ScoreThreshold {
-			continue
-		}
-		if !opts.IncludeVectors {
-			r.Vectors = nil
-			r.BinaryVectors = nil
-			r.SparseVectors = nil
-		}
-		out = append(out, vectordata.ModelSearchResult{Record: r, Distance: d, Score: score, ScoreKind: vectordata.ScoreSimilarity})
-	}
-	sort.SliceStable(out, func(i, j int) bool { return out[i].Distance < out[j].Distance })
-	start := min(opts.Skip, len(out))
-	return out[start : start+min(top, len(out)-start)], nil
 }
 func (c *Collection) SearchIter(ctx context.Context, vector []float32, top int, opts vectordata.ModelSearchOptions) iter.Seq2[vectordata.ModelSearchResult, error] {
 	return func(yield func(vectordata.ModelSearchResult, error) bool) {

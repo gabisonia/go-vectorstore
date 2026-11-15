@@ -16,7 +16,7 @@ It is a workflow comparison, not a claim of API or feature equivalence with ever
 | Dense, half, binary, sparse search | Search/SearchBinary/SearchSparse; explicit metric, thresholds and paging | Implemented; index support varies |
 | Automatic embeddings | Embedder with store/collection/property overrides, bounded batches, SearchText | Implemented for dense vectors |
 | Filtered retrieval/search | Portable AST, JSON paths, native arrays, Contains/ContainsAny/ContainsAll | Implemented |
-| Streaming and cancellation | Go iter.Seq2 and context.Context | Implemented; SQLite/memory materialize snapshots |
+| Streaming and cancellation | Go iter.Seq2 and context.Context | Implemented; memory/SQLite materialize query snapshots or search result pages |
 | Hybrid keyword/vector search | Optional HybridSearcher and binary/sparse variants, RRF | PostgreSQL |
 | Provider discovery | CapabilityProvider reports keys, types, vector kinds, physical index tuples and optional workflows | Implemented |
 | Schema evolution | Read-only plans, drift detection, explicit reviewed additive application | PostgreSQL |

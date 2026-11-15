@@ -4,9 +4,12 @@
 
 ### Performance
 
+- Bound memory/SQLite exact-search ranking to top + Skip candidates, preserving
+  distance/key ordering across dense, float16, binary and sparse vectors. Memory
+  copies only returned payloads; SQLite streams one read snapshot instead of
+  rebuilding a memory collection.
 - Use indexed, bounded SQLite GetMany lookups in a single read snapshot and SQL
   COUNT for unfiltered counts, avoiding full-collection payload reconstruction.
-
 
 ### Fixed
 
