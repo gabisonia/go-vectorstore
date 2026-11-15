@@ -386,6 +386,9 @@ func (c *Collection) Search(ctx context.Context, vector []float32, top int, opts
 	if opts.ProviderOptions != nil {
 		return nil, vectordata.ErrUnsupported
 	}
+	return c.searchRecords(ctx, top, opts, p.Metric, func(r vectordata.ModelRecord) float64 { return distance(vector, r.Vectors[p.Name], p.Metric) })
+}
+func (c *Collection) searchRecords(ctx context.Context, top int, opts vectordata.ModelSearchOptions, metric vectordata.DistanceMetric, measure func(vectordata.ModelRecord) float64) ([]vectordata.ModelSearchResult, error) {
 	records, err := c.Query(ctx, opts.Filter, int(^uint(0)>>1), vectordata.QueryOptions{IncludeVectors: true})
 	if err != nil {
 		return nil, err
@@ -395,13 +398,14 @@ func (c *Collection) Search(ctx context.Context, vector []float32, top int, opts
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		d := distance(vector, r.Vectors[p.Name], p.Metric)
-		score := vectordata.ScoreFromDistance(p.Metric, d)
+		d := measure(r)
+		score := vectordata.ScoreFromDistance(metric, d)
 		if opts.DistanceThreshold != nil && d > *opts.DistanceThreshold || opts.ScoreThreshold != nil && score < *opts.ScoreThreshold {
 			continue
 		}
 		if !opts.IncludeVectors {
 			r.Vectors = nil
+			r.BinaryVectors = nil
 		}
 		out = append(out, vectordata.ModelSearchResult{Record: r, Distance: d, Score: score, ScoreKind: vectordata.ScoreSimilarity})
 	}

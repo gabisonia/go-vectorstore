@@ -63,7 +63,7 @@ func TestL1TuningRejectedBeforeEmbedding(t *testing.T) {
 func TestIndexCapabilityLimitsMatchValidation(t *testing.T) {
 	store := &PostgresVectorStore{opts: DefaultStoreOptions()}
 	for _, index := range store.Capabilities().VectorIndexCapabilities {
-		d := vectordata.CollectionDefinition{Key: vectordata.KeyProperty{Name: "ID"}, Vectors: []vectordata.VectorProperty{{Name: "Vector", Metric: index.Metric, Precision: index.Precision, Dimensions: index.MaxDimensions, Index: &vectordata.VectorIndexOptions{Method: index.Method}}}}
+		d := vectordata.CollectionDefinition{Key: vectordata.KeyProperty{Name: "ID"}, Vectors: []vectordata.VectorProperty{{Name: "Vector", Metric: index.Metric, Kind: index.Kind, Precision: index.Precision, Dimensions: index.MaxDimensions, Index: &vectordata.VectorIndexOptions{Method: index.Method}}}}
 		if _, err := store.GetModelCollection("capability", d, vectordata.ModelCollectionOptions{}); err != nil {
 			t.Fatalf("advertised limit rejected: %+v: %v", index, err)
 		}

@@ -62,7 +62,7 @@ names, names over 63 bytes, and the reserved `__vs_` prefix are rejected.
 | --- | --- |
 | `key` | `name=<storage name>`, `type=string|int64|uuid`, `generated` |
 | `data` | `name=<storage name>`, `type=<data type>`, `optional`, `index`, `fulltext` |
-| `vector` | `name=<storage name>`, `dimensions=<n>`, `precision=float32|float16`, `metric=cosine|l2|inner_product|l1`, `index`, `method=hnsw|ivfflat`, `source=<data field>` |
+| `vector` | `name=<storage name>`, `dimensions=<n>`, `kind=dense|binary`, `precision=float32|float16`, `metric=cosine|l2|inner_product|l1|hamming`, `index`, `method=hnsw|ivfflat`, `source=<data field>` |
 | `-` | Ignore the field |
 
 Untagged fields are ignored when inferring a definition. Exported fields and
@@ -297,7 +297,9 @@ if provider, ok := store.(vectordata.CapabilityProvider); ok {
 ```
 
 Both providers report string/int64/UUID keys, generated int64 keys, all twenty
-portable data types, and cosine/L2/inner-product/L1 metrics.
+portable data types, and cosine/L2/inner-product/L1/Hamming metrics.
+`VectorKinds` reports dense and binary support. Hamming applies only to binary
+vectors; the other metrics apply to dense vectors.
 `VectorPrecisions` reports `VectorFloat32` and `VectorFloat16` on both providers;
 PostgreSQL float16 storage requires pgvector 0.7+ and a visible `halfvec` type.
 
@@ -326,8 +328,11 @@ for _, index := range caps.VectorIndexCapabilities {
 }
 ```
 
-PostgreSQL reports HNSW for all four metrics and IVFFlat for cosine/L2/inner
+PostgreSQL reports HNSW for all four dense metrics and IVFFlat for cosine/L2/inner
 product, each with float32 (2,000 indexed dimensions) and float16 (4,000).
+Binary entries have `Kind=VectorBinary`, empty precision, and Hamming distance;
+HNSW and IVFFlat both support up to 64,000 bits. Empty kind in older entries means
+dense, and missing `VectorKinds` means the provider has not reported kinds.
 Unsupported PostgreSQL combinations fail before database access. A third-party
 provider with a nil detailed list has not reported combinations; use its schema
 validation rather than assuming a cross product. Memory reports no physical
@@ -544,6 +549,63 @@ input regardless of batch size.
 Callers must use compatible embedding models for ingestion and queries;
 embedders must honor cancellation and be safe for concurrent use.
 
+## Binary vectors
+
+Binary vectors are explicit model properties with packed bytes and an exact bit
+length. They support Hamming distance in both providers:
+
+```go
+type Image struct {
+    ID          string                  `vectordata:"key"`
+    Description string                  `vectordata:"data,fulltext"`
+    Fingerprint vectordata.BinaryVector `vectordata:"vector,kind=binary,dimensions=9,index"`
+}
+bits, err := vectordata.ParseBinaryVector("101010101")
+_ = bits // Bytes: {0xaa, 0x80}, Dimensions: 9.
+_ = err
+```
+
+Explicit definitions use `VectorProperty{Kind:VectorBinary, Dimensions:9}`.
+The metric defaults to `DistanceHamming`; other metrics and float precisions are
+rejected for binary properties. Dense remains the default kind, and existing
+registrations retain their original JSON representation.
+
+`BinaryVector{Bytes, Dimensions}` stores bits most significant bit first. Use
+`NewBinaryVector(bytes, dimensions)` to validate/copy packed bytes, or
+`ParseBinaryVector` for 0/1 text. `BitString()` returns the exact bits. Dimensions
+must be 1–64,000, the byte count must be `ceil(dimensions/8)`, and unused low bits
+must be zero. Non-byte-aligned vectors and all-zero vectors are valid. Wrong bit
+lengths return `ErrDimensionMismatch`; invalid padding returns `ErrInvalidVector`.
+
+Dynamic records put binary values in `ModelRecord.BinaryVectors` and dense values
+in `ModelRecord.Vectors`; mixing up maps or omitting a required vector fails
+before writes. Models can contain multiple dense and binary properties. Providers
+copy binary buffers on writes and reads. `IncludeVectors` controls both maps;
+typed binary fields stay zero-valued when vectors are omitted.
+
+Typed collections expose `SearchBinary(ctx, bits, top, opts)` and
+`SearchBinaryIter`. Dynamic collections implement the optional `BinarySearcher`
+interface, leaving the existing `ModelCollection` interface unchanged. Set
+`VectorProperty` when the model has multiple vector fields. Filtering, paging,
+thresholds, cancellation and projections follow the dense search contract.
+Distance counts differing bits; similarity is `1/(1+distance)`.
+
+PostgreSQL stores `bit(n)` and supports HNSW/IVFFlat `bit_hamming_ops` indexes
+with pgvector 0.7+ and visible operators/classes. Packed bits travel through the
+driver directly for writes, queries and reads. Query parameter casts preserve
+the declared bit length; indexed columns remain native. PostgreSQL also supports
+`BinaryHybridSearcher`/typed `HybridSearchBinary`, combining Hamming candidates
+and keyword candidates with the existing RRF semantics.
+
+Float-based `Search`/`SearchIter` require a dense property; binary search requires
+a binary property. Binary values are supplied explicitly: binary properties do
+not use the float `Embedder` or `source` mapping, and text query methods reject a
+selected binary property before invoking an embedder. Dense embedding generation
+continues to work in mixed models. Adding binary fields or converting existing
+vectors requires manual backfill/re-embedding review. New compatible indexes can
+be applied through additive migrations. Prerequisite and schema checks validate
+operator/index availability and exact bit lengths.
+
 ## Hybrid search
 
 PostgreSQL implements optional `HybridSearcher`. Declare a string data property
@@ -580,7 +642,7 @@ measurements and model index-plan checks. Keep production database integration
 tests even when using memory for development.
 
 This is a Go adaptation of the main model-driven workflows, not binary or full
-feature parity with every .NET provider. Binary/sparse vectors, additional
+feature parity with every .NET provider. Sparse vectors, additional
 metrics, server-side embedding generation, and automatic model migrations remain
 outside the initial model API. Existing Record API callers can adopt models
 collection by collection.

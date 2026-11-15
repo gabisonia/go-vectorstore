@@ -35,7 +35,7 @@ func TestBuiltInCapabilitiesAreLocalSnapshots(t *testing.T) {
 				t.Fatalf("vector precisions: %v", before.VectorPrecisions)
 			}
 			if tt.indexed {
-				if len(before.VectorIndexCapabilities) != 14 {
+				if len(before.VectorIndexCapabilities) != 16 {
 					t.Fatalf("index combinations: %+v", before.VectorIndexCapabilities)
 				}
 				for _, index := range before.VectorIndexCapabilities {
@@ -67,6 +67,9 @@ func TestBuiltInCapabilitiesAreLocalSnapshots(t *testing.T) {
 			}
 			for i := range mutated.VectorPrecisions {
 				mutated.VectorPrecisions[i] = "changed"
+			}
+			for i := range mutated.VectorKinds {
+				mutated.VectorKinds[i] = "changed"
 			}
 			for i := range mutated.VectorIndexMethods {
 				mutated.VectorIndexMethods[i] = "changed"

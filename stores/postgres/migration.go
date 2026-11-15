@@ -167,6 +167,11 @@ func (c *ModelCollection) planMigrationTx(ctx context.Context, tx pgx.Tx, indexe
 		return plan, err
 	}
 	plan.Steps = append(prerequisites, plan.Steps...)
+	binary, err := binaryMigrationPrerequisites(ctx, tx, c.definition)
+	if err != nil {
+		return plan, err
+	}
+	plan.Steps = append(binary, plan.Steps...)
 	if len(plan.Issues) > 0 {
 		// Desired deltas remain visible as descriptions, without SQL against drifted storage.
 		for i := range plan.Steps {

@@ -13,6 +13,9 @@ import (
 func runVectorPrecisions(t *testing.T, factory Factory, caps vectordata.ProviderCapabilities) {
 	for _, precision := range caps.VectorPrecisions {
 		for _, metric := range caps.DistanceMetrics {
+			if metric == vectordata.DistanceHamming {
+				continue
+			}
 			t.Run(string(precision)+"_"+string(metric), func(t *testing.T) {
 				ctx := context.Background()
 				store := factory(t)

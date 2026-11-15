@@ -645,6 +645,13 @@ func CloneModelRecord(r ModelRecord, d CollectionDefinition, vectors bool) Model
 	}
 	if vectors {
 		out.Vectors = map[string][]float32{}
+		if len(r.BinaryVectors) > 0 {
+			out.BinaryVectors = map[string]BinaryVector{}
+			for key, v := range r.BinaryVectors {
+				v.Bytes = append([]byte(nil), v.Bytes...)
+				out.BinaryVectors[key] = v
+			}
+		}
 		for key, vector := range r.Vectors {
 			out.Vectors[key] = append([]float32(nil), vector...)
 		}

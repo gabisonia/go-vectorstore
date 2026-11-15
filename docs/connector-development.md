@@ -241,13 +241,28 @@ that retain array dimensions and reject non-finite/out-of-range SQL values.
 Shared tests cover exact fractions, numeric ordering, filters, search, typed
 mapping, ownership, atomic failures and legacy JSON precision.
 
-Advertise supported `VectorPrecisions` explicitly. The Go vector API stays float32;
+Advertise supported `VectorPrecisions` explicitly. Dense Go vectors stay float32;
 `NormalizeModelVector` validates and rounds float16 values. It returns a new slice
 for float16 and the original slice for float32, so copy float32 inputs before
 retaining them. Use it for both stored vectors and search queries. The capability
 conformance tests verify mixed precision, embedding generation, query rounding,
 text/hybrid search and atomic rejection of invalid values. Persist precision and
 validate matching column/index types; classify changes as manual conversions.
+
+Advertise `VectorKinds` for dense/binary support. An empty schema kind stays dense
+and is omitted from registrations for compatibility. Binary properties use
+`BinaryVector` with packed bytes and exact dimensions, `ModelRecord.BinaryVectors`,
+and Hamming distance. Use `NormalizeBinaryVector` and copy bytes on reads; reject
+wrong map kinds, bit lengths and nonzero padding before writes/embedding work.
+Implement optional `BinarySearcher`; hybrid-capable providers can also implement
+`BinaryHybridSearcher`. Float/text query methods must reject binary properties
+without calling a float embedder. Binary index capability entries specify kind,
+Hamming distance and bit limits, with empty precision. Shared tests cover mixed
+models, typed mapping, ownership, scores, filters, paging, projection, atomicity
+and iterators. PostgreSQL uses packed `pgtype.Bits` values and `bit(n)` parameters;
+read projections use `varbit` to preserve exact length and a stable result type.
+Validate visible operators/opclasses and classify new fields/conversions as
+manual backfill work; compatible index additions remain additive.
 
 `vectordata.MigrationPlanner` is a separate optional capability for model schema
 planning. Advertise `MigrationPlanning` only when it is implemented. Planning must

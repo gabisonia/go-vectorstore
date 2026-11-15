@@ -7,9 +7,11 @@ type CapabilityProvider interface {
 	Capabilities() ProviderCapabilities
 }
 
-// VectorIndexCapability describes one physical index combination. Precision is
-// explicit (float32 or float16), and MaxDimensions is the positive index limit.
+// VectorIndexCapability describes one physical index combination. Dense entries
+// use float32/float16 precision; binary entries omit it. MaxDimensions is positive.
 type VectorIndexCapability struct {
+	// Kind defaults to dense for older providers; binary entries omit precision.
+	Kind          VectorKind
 	Method        IndexMethod
 	Metric        DistanceMetric
 	Precision     VectorPrecision
@@ -27,6 +29,8 @@ type ProviderCapabilities struct {
 	DataTypes         []DataType
 	DistanceMetrics   []DistanceMetric
 	VectorPrecisions  []VectorPrecision
+	// VectorKinds reports dense/binary support. Nil means kinds are unreported.
+	VectorKinds []VectorKind
 	// Index fields report physical indexes, rather than accepted schema hints.
 	VectorIndexMethods []IndexMethod
 	// VectorIndexCapabilities lists supported physical combinations. Nil means

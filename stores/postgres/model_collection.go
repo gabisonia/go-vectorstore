@@ -54,6 +54,9 @@ func (c *ModelCollection) Upsert(ctx context.Context, records []vectordata.Model
 func (c *ModelCollection) write(ctx context.Context, records []vectordata.ModelRecord, upsert bool) ([]any, error) {
 	dimensions := 0
 	for _, p := range c.definition.Vectors {
+		if p.Kind == vectordata.VectorBinary {
+			continue
+		}
 		dimensions += min(p.Dimensions, minBinaryVectorValues-dimensions)
 	}
 	return c.writeEncoded(ctx, records, upsert, useBinaryVectors(len(records), dimensions))
@@ -146,6 +149,10 @@ func (c *ModelCollection) writeStatement(r vectordata.ModelRecord, upsert, useBi
 		column := quoteIdent(p.StorageName)
 		columns = append(columns, column)
 		updates = append(updates, column+"=EXCLUDED."+column)
+		if p.Kind == vectordata.VectorBinary {
+			values = append(values, bind(binaryWriteValue(r.BinaryVectors[p.Name]), "::"+vectorColumnType(p)))
+			continue
+		}
 		cast := "::vector"
 		if p.Precision == vectordata.VectorFloat16 {
 			// Reuse the scoped float32 wire codec, then cast to half storage. Values
@@ -194,7 +201,14 @@ func (c *ModelCollection) columns(alias string, vectors bool) []string {
 	}
 	if vectors {
 		for _, p := range c.definition.Vectors {
-			columns = append(columns, qualify(p.StorageName)+"::text")
+			column := qualify(p.StorageName)
+			if p.Kind != vectordata.VectorBinary {
+				column += "::text"
+			} else {
+				// Preserve packed bits and their length with a stable result type.
+				column += "::varbit"
+			}
+			columns = append(columns, column)
 		}
 	}
 	return columns
@@ -216,9 +230,14 @@ func (c *ModelCollection) scan(row modelScanner, vectors, withDistance bool) (ve
 		}
 	}
 	vectorTexts := make([]string, len(c.definition.Vectors))
+	binaryValues := make([]pgtype.Bits, len(c.definition.Vectors))
 	if vectors {
 		for i := range vectorTexts {
-			targets = append(targets, &vectorTexts[i])
+			if c.definition.Vectors[i].Kind == vectordata.VectorBinary {
+				targets = append(targets, &binaryValues[i])
+			} else {
+				targets = append(targets, &vectorTexts[i])
+			}
 		}
 	}
 	var distance float64
@@ -297,6 +316,20 @@ func (c *ModelCollection) scan(row modelScanner, vectors, withDistance bool) (ve
 	if vectors {
 		r.Vectors = map[string][]float32{}
 		for i, p := range c.definition.Vectors {
+			if p.Kind == vectordata.VectorBinary {
+				if !binaryValues[i].Valid {
+					return r, 0, fmt.Errorf("%w: NULL binary vector %q", vectordata.ErrInvalidVector, p.Name)
+				}
+				v, err := vectordata.NormalizeBinaryVector(vectordata.BinaryVector{Bytes: binaryValues[i].Bytes, Dimensions: int(binaryValues[i].Len)}, p)
+				if err != nil {
+					return r, 0, err
+				}
+				if r.BinaryVectors == nil {
+					r.BinaryVectors = map[string]vectordata.BinaryVector{}
+				}
+				r.BinaryVectors[p.Name] = v
+				continue
+			}
 			v, err := parseVectorText(vectorTexts[i])
 			if err != nil {
 				return r, 0, err

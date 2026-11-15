@@ -10,6 +10,9 @@ import (
 )
 
 func vectorSQLType(p vectordata.VectorProperty) string {
+	if p.Kind == vectordata.VectorBinary {
+		return "bit"
+	}
 	if p.Precision == vectordata.VectorFloat16 {
 		return "halfvec"
 	}
@@ -20,7 +23,18 @@ func vectorColumnType(p vectordata.VectorProperty) string {
 	return fmt.Sprintf("%s(%d)", vectorSQLType(p), p.Dimensions)
 }
 
+func vectorQuerySQLType(p vectordata.VectorProperty) string {
+	// An unqualified ::bit cast silently truncates the literal to one bit.
+	if p.Kind == vectordata.VectorBinary {
+		return vectorColumnType(p)
+	}
+	return vectorSQLType(p)
+}
+
 func vectorOpClass(p vectordata.VectorProperty) (string, error) {
+	if p.Kind == vectordata.VectorBinary {
+		return "bit_hamming_ops", nil
+	}
 	op, err := metricOpClass(p.Metric)
 	if p.Precision == vectordata.VectorFloat16 {
 		op = "halfvec_" + strings.TrimPrefix(op, "vector_")
@@ -39,11 +53,11 @@ func usesHalfVectors(d vectordata.CollectionDefinition) bool {
 
 func validateVectorDimensions(d vectordata.CollectionDefinition) error {
 	for _, p := range d.Vectors {
-		if p.Dimensions > 16000 {
+		if p.Kind != vectordata.VectorBinary && p.Dimensions > 16000 {
 			return fmt.Errorf("%w: PostgreSQL vector storage supports at most 16000 dimensions", vectordata.ErrSchemaMismatch)
 		}
 		if p.Index != nil {
-			limit, err := vectorIndexLimit(p.Precision, p.Metric, p.Index.Method)
+			limit, err := modelVectorIndexLimit(p)
 			if err != nil {
 				return err
 			}
@@ -59,6 +73,9 @@ func validateVectorDimensions(d vectordata.CollectionDefinition) error {
 func vectorIndexLimit(precision vectordata.VectorPrecision, metric vectordata.DistanceMetric, method vectordata.IndexMethod) (int, error) {
 	if err := metric.Validate(); err != nil {
 		return 0, err
+	}
+	if metric == vectordata.DistanceHamming {
+		return 0, fmt.Errorf("%w: Hamming requires binary storage", vectordata.ErrSchemaMismatch)
 	}
 	if method != vectordata.IndexMethodHNSW && method != vectordata.IndexMethodIVFFlat {
 		return 0, fmt.Errorf("%w: unsupported vector index method %q", vectordata.ErrSchemaMismatch, method)
@@ -76,6 +93,16 @@ func vectorIndexLimit(precision vectordata.VectorPrecision, metric vectordata.Di
 	}
 }
 
+func modelVectorIndexLimit(p vectordata.VectorProperty) (int, error) {
+	if p.Kind == vectordata.VectorBinary {
+		if p.Metric != vectordata.DistanceHamming || p.Precision != "" || p.Index == nil || p.Index.Method != vectordata.IndexMethodHNSW && p.Index.Method != vectordata.IndexMethodIVFFlat {
+			return 0, fmt.Errorf("%w: unsupported binary index", vectordata.ErrSchemaMismatch)
+		}
+		return 64000, nil
+	}
+	return vectorIndexLimit(p.Precision, p.Metric, p.Index.Method)
+}
+
 func (c *ModelCollection) validateVectorTypes(ctx context.Context, tx pgx.Tx) error {
 	if usesHalfVectors(c.definition) {
 		var available bool
@@ -90,6 +117,11 @@ func (c *ModelCollection) validateVectorTypes(ctx context.Context, tx pgx.Tx) er
 	if err != nil {
 		return err
 	}
+	binary, err := binaryMigrationPrerequisites(ctx, tx, c.definition)
+	if err != nil {
+		return err
+	}
+	steps = append(steps, binary...)
 	if len(steps) != 0 {
 		return fmt.Errorf("%w: %s", vectordata.ErrUnsupported, steps[0].Description)
 	}

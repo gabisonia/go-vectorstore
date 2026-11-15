@@ -31,7 +31,7 @@ func roundFloat16(x float32) float32 {
 	return math.Float32frombits(bits&0x80000000 | abs)
 }
 
-// NormalizeModelVector validates storage precision and vector values. Float16
+// NormalizeModelVector validates dense storage precision and vector values. Float16
 // produces a new slice rounded to binary16; float32 returns the input unchanged.
 // Providers must copy float32 inputs before retaining them.
 func NormalizeModelVector(vector []float32, p VectorProperty) ([]float32, error) {
@@ -39,6 +39,9 @@ func NormalizeModelVector(vector []float32, p VectorProperty) ([]float32, error)
 }
 
 func modelVector(vector []float32, p VectorProperty, normalize bool) ([]float32, error) {
+	if p.Kind != "" && p.Kind != VectorDense {
+		return nil, fmt.Errorf("%w: float vectors require a dense property", ErrInvalidVector)
+	}
 	if p.Precision != "" && p.Precision != VectorFloat32 && p.Precision != VectorFloat16 {
 		return nil, fmt.Errorf("%w: unsupported vector precision %q", ErrSchemaMismatch, p.Precision)
 	}

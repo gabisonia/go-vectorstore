@@ -22,6 +22,7 @@ type structField struct {
 	name     string
 	role     string
 	dataType DataType
+	binary   bool
 }
 
 // StructCodec resolves field mappings once at construction, not once per record.
@@ -74,7 +75,7 @@ func uuidFieldType(typ reflect.Type) bool {
 
 // DefinitionFor reads vectordata tags. Roles are key, data, or vector. Options:
 // name=<storage name>, type=<type>, generated, optional, index, fulltext,
-// dimensions=<n>, precision=float32|float16, metric=<metric>, source=<data field>, method=hnsw|ivfflat.
+// dimensions=<n>, kind=dense|binary, precision=float32|float16, metric=<metric>, source=<data field>, method=hnsw|ivfflat.
 func DefinitionFor[T any]() (CollectionDefinition, error) {
 	t, _, err := modelType[T]()
 	if err != nil {
@@ -97,7 +98,7 @@ func DefinitionFor[T any]() (CollectionDefinition, error) {
 			key, value, hasValue := strings.Cut(option, "=")
 			if hasValue {
 				switch key {
-				case "name", "type", "dimensions", "precision", "metric", "source", "method":
+				case "name", "type", "dimensions", "precision", "metric", "source", "method", "kind":
 				default:
 					return d, fmt.Errorf("%w: unknown tag option %q", ErrSchemaMismatch, key)
 				}
@@ -126,7 +127,7 @@ func DefinitionFor[T any]() (CollectionDefinition, error) {
 			allowedValues["type"] = true
 		case "vector":
 			allowedFlags["index"] = true
-			for _, key := range []string{"dimensions", "precision", "metric", "source", "method"} {
+			for _, key := range []string{"dimensions", "precision", "metric", "source", "method", "kind"} {
 				allowedValues[key] = true
 			}
 		}
@@ -165,7 +166,7 @@ func DefinitionFor[T any]() (CollectionDefinition, error) {
 			if err != nil {
 				return d, fmt.Errorf("%w: vector %q requires dimensions", ErrSchemaMismatch, f.Name)
 			}
-			p := VectorProperty{Name: f.Name, StorageName: values["name"], Dimensions: dimensions, Precision: VectorPrecision(values["precision"]), Metric: DistanceMetric(values["metric"]), SourceProperty: values["source"]}
+			p := VectorProperty{Name: f.Name, StorageName: values["name"], Dimensions: dimensions, Kind: VectorKind(values["kind"]), Precision: VectorPrecision(values["precision"]), Metric: DistanceMetric(values["metric"]), SourceProperty: values["source"]}
 			if flags["index"] || values["method"] != "" {
 				p.Index = &VectorIndexOptions{Method: IndexMethod(values["method"])}
 			}
@@ -195,9 +196,6 @@ func NewStructCodec[T any](definition *CollectionDefinition) (*StructCodec[T], e
 		field, ok := t.FieldByName(name)
 		if !ok || field.PkgPath != "" {
 			return fmt.Errorf("%w: no exported model field %q", ErrSchemaMismatch, name)
-		}
-		if role == "vector" && field.Type != reflect.TypeFor[[]float32]() {
-			return fmt.Errorf("%w: vector field %q must be []float32", ErrSchemaMismatch, name)
 		}
 		parent := t
 		for _, index := range field.Index {
@@ -265,6 +263,15 @@ func NewStructCodec[T any](definition *CollectionDefinition) (*StructCodec[T], e
 		if err := add(p.Name, "vector"); err != nil {
 			return nil, err
 		}
+		field, _ := t.FieldByName(p.Name)
+		want := reflect.TypeFor[[]float32]()
+		if p.Kind == VectorBinary {
+			want = reflect.TypeFor[BinaryVector]()
+			codec.fields[len(codec.fields)-1].binary = true
+		}
+		if field.Type != want {
+			return nil, fmt.Errorf("%w: vector field %q must be %s", ErrSchemaMismatch, p.Name, want)
+		}
 	}
 	return codec, nil
 }
@@ -315,7 +322,16 @@ func (c *StructCodec[T]) Encode(value T) (ModelRecord, error) {
 				out.Key = v.Interface()
 			}
 		case "vector":
-			out.Vectors[field.name] = append([]float32(nil), v.Interface().([]float32)...)
+			if field.binary {
+				if out.BinaryVectors == nil {
+					out.BinaryVectors = map[string]BinaryVector{}
+				}
+				b := v.Interface().(BinaryVector)
+				b.Bytes = append([]byte(nil), b.Bytes...)
+				out.BinaryVectors[field.name] = b
+			} else {
+				out.Vectors[field.name] = append([]float32(nil), v.Interface().([]float32)...)
+			}
 		case "data":
 			for v.Kind() == reflect.Pointer {
 				if v.IsNil() {
@@ -447,7 +463,12 @@ func (c *StructCodec[T]) Decode(record ModelRecord) (T, error) {
 		case "data":
 			value = record.Data[field.name]
 		case "vector":
-			if record.Vectors != nil {
+			if field.binary {
+				if b, ok := record.BinaryVectors[field.name]; ok {
+					b.Bytes = append([]byte(nil), b.Bytes...)
+					value = b
+				}
+			} else if record.Vectors != nil {
 				value = record.Vectors[field.name]
 			}
 		}

@@ -60,7 +60,9 @@ type DataProperty struct {
 type VectorProperty struct {
 	Name, StorageName string
 	Dimensions        int
-	// Precision defaults to float32. Its canonical default stays empty so existing
+	Kind              VectorKind `json:",omitempty"`
+	// Dense precision defaults to float32; binary properties leave it unset.
+	// The canonical default stays empty so existing
 	// serialized model registrations remain unchanged.
 	Precision VectorPrecision `json:",omitempty"`
 	Metric    DistanceMetric
@@ -84,9 +86,10 @@ func (JSONNull) MarshalJSON() ([]byte, error) { return []byte("null"), nil }
 
 // ModelRecord is the dynamic counterpart of a typed application model. Maps use logical property names.
 type ModelRecord struct {
-	Key     any
-	Data    map[string]any
-	Vectors map[string][]float32
+	Key           any
+	Data          map[string]any
+	Vectors       map[string][]float32
+	BinaryVectors map[string]BinaryVector `json:",omitempty"`
 }
 
 // Embedder generates one vector for each input, preserving input order. Implementations must honor ctx.
@@ -276,7 +279,25 @@ func (d CollectionDefinition) Normalize() (CollectionDefinition, error) {
 			p.StorageName = p.Name
 		}
 		if p.Metric == "" {
-			p.Metric = DistanceCosine
+			if p.Kind == VectorBinary {
+				p.Metric = DistanceHamming
+			} else {
+				p.Metric = DistanceCosine
+			}
+		}
+		switch p.Kind {
+		case "", VectorDense:
+			p.Kind = ""
+		case VectorBinary:
+		default:
+			return fail("unsupported vector kind")
+		}
+		if p.Kind == VectorBinary {
+			if p.Metric != DistanceHamming || p.Precision != "" || p.SourceProperty != "" || !isNilValue(p.Embedder) || p.Dimensions > 64000 {
+				return fail("binary vectors require Hamming distance, no float precision/embedder, and at most 64000 bits")
+			}
+		} else if p.Metric == DistanceHamming {
+			return fail("Hamming distance requires a binary vector")
 		}
 		switch p.Precision {
 		case "", VectorFloat32:
@@ -566,15 +587,39 @@ func PrepareModelRecords(ctx context.Context, d CollectionDefinition, opts Model
 		for name, vector := range r.Vectors {
 			found := false
 			for _, p := range d.Vectors {
-				found = found || p.Name == name
+				found = found || p.Name == name && p.Kind != VectorBinary
 			}
 			if !found {
 				return nil, fmt.Errorf("%w: unknown vector property %q", ErrInvalidRecord, name)
 			}
 			out[i].Vectors[name] = append([]float32(nil), vector...)
 		}
+		for name := range r.BinaryVectors {
+			found := false
+			for _, p := range d.Vectors {
+				found = found || p.Name == name && p.Kind == VectorBinary
+			}
+			if !found {
+				return nil, fmt.Errorf("%w: unknown/non-binary property %q", ErrInvalidRecord, name)
+			}
+		}
+		for _, p := range d.Vectors {
+			if p.Kind == VectorBinary {
+				v, err := NormalizeBinaryVector(r.BinaryVectors[p.Name], p)
+				if err != nil {
+					return nil, fmt.Errorf("%w: record %d: %w", ErrInvalidRecord, i, err)
+				}
+				if out[i].BinaryVectors == nil {
+					out[i].BinaryVectors = map[string]BinaryVector{}
+				}
+				out[i].BinaryVectors[p.Name] = v
+			}
+		}
 	}
 	for _, p := range d.Vectors {
+		if p.Kind == VectorBinary {
+			continue
+		}
 		var positions []int
 		var inputs []string
 		for i := range out {
@@ -641,6 +686,9 @@ func PrepareModelRecords(ctx context.Context, d CollectionDefinition, opts Model
 func EmbedQuery(ctx context.Context, text string, p VectorProperty, opts ModelCollectionOptions) ([]float32, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
+	}
+	if p.Kind == VectorBinary {
+		return nil, fmt.Errorf("%w: binary queries require an explicit BinaryVector", ErrUnsupported)
 	}
 	if _, err := opts.WithDefaults(ModelCollectionOptions{}); err != nil {
 		return nil, err
