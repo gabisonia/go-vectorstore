@@ -22,6 +22,9 @@ func TestBuiltInCapabilitiesAreLocalSnapshots(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			before := tt.provider.Capabilities()
+			if !slices.Contains(before.DistanceMetrics, vectordata.DistanceL1) {
+				t.Fatal("L1 support missing")
+			}
 			if before.Backend != tt.name || before.FullTextIndexing != tt.indexed || before.HybridSearch != tt.indexed || before.MigrationPlanning != tt.indexed || before.MigrationApplication != tt.indexed {
 				t.Fatalf("unexpected features: %+v", before)
 			}
@@ -32,13 +35,21 @@ func TestBuiltInCapabilitiesAreLocalSnapshots(t *testing.T) {
 				t.Fatalf("vector precisions: %v", before.VectorPrecisions)
 			}
 			if tt.indexed {
+				if len(before.VectorIndexCapabilities) != 14 {
+					t.Fatalf("index combinations: %+v", before.VectorIndexCapabilities)
+				}
+				for _, index := range before.VectorIndexCapabilities {
+					if index.Metric == vectordata.DistanceL1 && index.Method != vectordata.IndexMethodHNSW {
+						t.Fatalf("unsupported L1 index advertised: %+v", index)
+					}
+				}
 				if !slices.Equal(before.VectorIndexMethods, []vectordata.IndexMethod{vectordata.IndexMethodHNSW, vectordata.IndexMethodIVFFlat}) {
 					t.Fatalf("indexes: %v", before.VectorIndexMethods)
 				}
 				if slices.Contains(before.IndexedDataTypes, vectordata.TypeJSON) {
 					t.Fatal("generic JSON indexing is not implemented")
 				}
-			} else if len(before.VectorIndexMethods) != 0 || len(before.IndexedDataTypes) != 0 {
+			} else if len(before.VectorIndexMethods) != 0 || len(before.VectorIndexCapabilities) != 0 || len(before.IndexedDataTypes) != 0 {
 				t.Fatal("memory must not advertise physical indexes")
 			}
 			mutated := tt.provider.Capabilities()
@@ -59,6 +70,10 @@ func TestBuiltInCapabilitiesAreLocalSnapshots(t *testing.T) {
 			}
 			for i := range mutated.VectorIndexMethods {
 				mutated.VectorIndexMethods[i] = "changed"
+			}
+			for i := range mutated.VectorIndexCapabilities {
+				mutated.VectorIndexCapabilities[i].Metric = "changed"
+				mutated.VectorIndexCapabilities[i].MaxDimensions = 1
 			}
 			for i := range mutated.IndexedDataTypes {
 				mutated.IndexedDataTypes[i] = "changed"

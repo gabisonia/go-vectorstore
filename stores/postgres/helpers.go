@@ -49,6 +49,8 @@ func metricOperator(metric vectordata.DistanceMetric) (string, error) {
 		return "<=>", nil
 	case vectordata.DistanceL2:
 		return "<->", nil
+	case vectordata.DistanceL1:
+		return "<+>", nil
 	case vectordata.DistanceInnerProduct:
 		return "<#>", nil
 	default:
@@ -62,6 +64,8 @@ func metricOpClass(metric vectordata.DistanceMetric) (string, error) {
 		return "vector_cosine_ops", nil
 	case vectordata.DistanceL2:
 		return "vector_l2_ops", nil
+	case vectordata.DistanceL1:
+		return "vector_l1_ops", nil
 	case vectordata.DistanceInnerProduct:
 		return "vector_ip_ops", nil
 	default:

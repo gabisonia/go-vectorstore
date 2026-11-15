@@ -26,6 +26,13 @@ func (c *PostgresCollection) ensureVectorIndex(ctx context.Context, opts *vector
 		}
 		metric = opts.Metric
 	}
+	limit, err := vectorIndexLimit(vectordata.VectorFloat32, metric, method)
+	if err != nil {
+		return err
+	}
+	if c.dimension > limit {
+		return fmt.Errorf("%w: vector indexes support at most %d dimensions", vectordata.ErrSchemaMismatch, limit)
+	}
 
 	opClass, err := metricOpClass(metric)
 	if err != nil {

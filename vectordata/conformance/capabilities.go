@@ -23,6 +23,7 @@ func runCapabilities(t *testing.T, factory Factory) {
 	if caps.Backend == "" || len(caps.KeyTypes) == 0 {
 		t.Fatal("capabilities must identify the backend and supported keys")
 	}
+	t.Run("l1", func(t *testing.T) { runL1(t, factory, caps) })
 	ctx := context.Background()
 	examples := map[vectordata.DataType]any{
 		vectordata.TypeString: "quiet hotel", vectordata.TypeInt64: int64(42), vectordata.TypeFloat64: 2.5,
@@ -143,6 +144,19 @@ func runCapabilities(t *testing.T, factory Factory) {
 		d := vectordata.CollectionDefinition{Key: vectordata.KeyProperty{Name: "ID", Type: caps.KeyTypes[0]}, Vectors: []vectordata.VectorProperty{{Name: "Vector", Dimensions: 2, Metric: caps.DistanceMetrics[0], Index: &vectordata.VectorIndexOptions{Method: method}}}}
 		if _, err := store.EnsureModelCollection(ctx, "capabilities_index_"+string(method), d, vectordata.ModelCollectionOptions{}); err != nil {
 			t.Fatalf("advertised index %s failed: %v", method, err)
+		}
+	}
+	for i, index := range caps.VectorIndexCapabilities {
+		if index.MaxDimensions <= 0 || !slices.Contains(caps.DistanceMetrics, index.Metric) || !slices.Contains(caps.VectorPrecisions, index.Precision) || !slices.Contains(caps.VectorIndexMethods, index.Method) {
+			t.Fatalf("inconsistent index capability: %+v", index)
+		}
+		d := vectordata.CollectionDefinition{Key: vectordata.KeyProperty{Name: "ID", Type: caps.KeyTypes[0]}, Vectors: []vectordata.VectorProperty{{Name: "Vector", Dimensions: 2, Metric: index.Metric, Precision: index.Precision, Index: &vectordata.VectorIndexOptions{Method: index.Method}}}}
+		c, err := store.EnsureModelCollection(ctx, fmt.Sprintf("capabilities_combination_%d", i), d, vectordata.ModelCollectionOptions{})
+		if err != nil {
+			t.Fatalf("advertised combination %+v failed: %v", index, err)
+		}
+		if err := c.EnsureExists(ctx); err != nil {
+			t.Fatalf("index combination failed validation: %+v: %v", index, err)
 		}
 	}
 }

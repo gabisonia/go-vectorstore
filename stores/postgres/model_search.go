@@ -18,7 +18,7 @@ type SearchTuning struct {
 	IVFFlat *vectordata.IVFFlatSearchOptions
 }
 
-func modelTuning(value any) ([]searchSetting, bool, bool, error) {
+func modelTuning(value any, metric vectordata.DistanceMetric) ([]searchSetting, bool, bool, error) {
 	var t SearchTuning
 	switch v := value.(type) {
 	case nil:
@@ -31,6 +31,9 @@ func modelTuning(value any) ([]searchSetting, bool, bool, error) {
 	default:
 		return nil, false, false, fmt.Errorf("%w: unknown PostgreSQL search tuning %T", vectordata.ErrUnsupported, value)
 	}
+	if metric == vectordata.DistanceL1 && t.IVFFlat != nil {
+		return nil, false, false, fmt.Errorf("%w: IVFFlat tuning is unavailable for L1 distance", vectordata.ErrInvalidSearchOptions)
+	}
 	settings, iterative, err := searchSettings(vectordata.SearchOptions{HNSW: t.HNSW, IVFFlat: t.IVFFlat})
 	return settings, iterative, t.IVFFlat != nil && t.IVFFlat.IterativeScan, err
 }
@@ -38,7 +41,7 @@ func scoreSQL(distance string, metric vectordata.DistanceMetric) string {
 	switch metric {
 	case vectordata.DistanceCosine:
 		return "(1 - " + distance + ")"
-	case vectordata.DistanceL2:
+	case vectordata.DistanceL2, vectordata.DistanceL1:
 		return "(1 / (1 + " + distance + "))"
 	default:
 		return "(-" + distance + ")"
@@ -56,7 +59,7 @@ func (c *ModelCollection) searchPlan(vector []float32, top int, opts vectordata.
 	if err != nil {
 		return "", nil, p, err
 	}
-	_, _, relaxed, err := modelTuning(opts.ProviderOptions)
+	_, _, relaxed, err := modelTuning(opts.ProviderOptions, p.Metric)
 	if err != nil {
 		return "", nil, p, err
 	}
@@ -130,7 +133,7 @@ func (c *ModelCollection) SearchText(ctx context.Context, text string, top int, 
 	if err := vectordata.ValidateModelFilter(opts.Filter, c.definition); err != nil {
 		return nil, err
 	}
-	if _, _, _, err := modelTuning(opts.ProviderOptions); err != nil {
+	if _, _, _, err := modelTuning(opts.ProviderOptions, p.Metric); err != nil {
 		return nil, err
 	}
 	vector, err := vectordata.EmbedQuery(ctx, text, p, c.options)
@@ -148,7 +151,7 @@ type scoreScanner struct {
 func (s scoreScanner) Scan(targets ...any) error { return s.row.Scan(append(targets, s.score)...) }
 func (c *ModelCollection) runSearch(ctx context.Context, sql string, args []any, p vectordata.VectorProperty, opts vectordata.ModelSearchOptions, fusion bool, yield func(vectordata.ModelSearchResult, error) bool) {
 	report := func(err error) { yield(vectordata.ModelSearchResult{}, c.operation("search", err)) }
-	settings, iterative, _, err := modelTuning(opts.ProviderOptions)
+	settings, iterative, _, err := modelTuning(opts.ProviderOptions, p.Metric)
 	if err != nil {
 		report(err)
 		return
@@ -258,7 +261,7 @@ func (c *ModelCollection) validateHybridOptions(keywords string, top int, opts v
 	if err := vectordata.ValidateModelFilter(opts.Filter, c.definition); err != nil {
 		return config, err
 	}
-	if _, _, _, err := modelTuning(opts.ProviderOptions); err != nil {
+	if _, _, _, err := modelTuning(opts.ProviderOptions, p.Metric); err != nil {
 		return config, err
 	}
 	return config, nil

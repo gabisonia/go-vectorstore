@@ -1,5 +1,29 @@
 # Performance and verification
 
+## L1 distance and index verification
+
+```sh
+go test -race -tags=integration -run 'L1|IndexCapability|ModelContract/capabilities' \
+  -v -timeout=3m ./stores/postgres
+```
+
+Shared tests check known L1 distances and inverse-distance scores, thresholds,
+paging, filters, zero vectors, text queries and hybrid RRF semantics for float32
+and float16. Capability tests create and validate all fourteen advertised physical
+index combinations. Local validation rejects unsupported L1/IVFFlat choices,
+including text-search tuning before embedding.
+
+The HNSW fixture stores 1,000 four-dimensional vectors from a fixed seed, compares
+indexed top-ten results with exact L1 search, and verifies the actual generated
+query uses each precision's index. It requires recall@10 of at least 0.90 with
+`ef_search=100`; a local PostgreSQL 18 run achieved 1.00 for both precisions.
+It also checks that a stored zero vector is found through the index. This is a
+small regression fixture, not a production recall or latency prediction.
+
+Additional PostgreSQL checks cover additive L1 index migrations, manual review of
+metric changes, the Record API and missing extension prerequisites without changing
+shared extension objects.
+
 ## Half-precision vector verification
 
 Run the precision checks against a disposable PostgreSQL instance:
