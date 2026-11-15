@@ -154,6 +154,9 @@ func (c *PostgresCollection) buildSearchPlan(vector []float32, topK int, opts ve
 	if err := c.validateVector(vector); err != nil {
 		return searchPlan{}, err
 	}
+	if defaultMetric(c.metric) == vectordata.DistanceL1 && opts.IVFFlat != nil {
+		return searchPlan{}, fmt.Errorf("%w: IVFFlat tuning is unavailable for L1 distance", vectordata.ErrInvalidSearchOptions)
+	}
 	settings, iterative, err := searchSettings(opts)
 	if err != nil {
 		return searchPlan{}, err

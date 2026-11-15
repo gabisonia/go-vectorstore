@@ -28,6 +28,8 @@ func TestScoreFromDistance(t *testing.T) {
 	}{
 		{name: "cosine", metric: DistanceCosine, distance: 0.25, want: 0.75},
 		{name: "l2", metric: DistanceL2, distance: 3, want: 0.25},
+		{name: "l1", metric: DistanceL1, distance: 3, want: 0.25},
+		{name: "l1 zero", metric: DistanceL1, distance: 0, want: 1},
 		{name: "inner product", metric: DistanceInnerProduct, distance: -0.8, want: 0.8},
 		{name: "unknown", metric: "custom", distance: 2, want: -2},
 	}
@@ -42,7 +44,7 @@ func TestScoreFromDistance(t *testing.T) {
 }
 
 func TestDistanceMetricValidate(t *testing.T) {
-	for _, metric := range []DistanceMetric{DistanceCosine, DistanceL2, DistanceInnerProduct} {
+	for _, metric := range []DistanceMetric{DistanceCosine, DistanceL2, DistanceInnerProduct, DistanceL1} {
 		t.Run(string(metric), func(t *testing.T) {
 			if err := metric.Validate(); err != nil {
 				t.Fatalf("Validate: %v", err)

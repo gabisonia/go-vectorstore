@@ -180,6 +180,15 @@ interface is present, including native keys/data, generated keys, metrics, index
 and hybrid search. Providers without metadata continue to run the other contract
 checks.
 
+Use `VectorIndexCapabilities` to report supported method/metric/precision tuples
+and positive indexed dimension limits; coarse lists do not imply every combination
+is valid. Keep discovery local, return an independent slice, and derive validation
+and metadata from the same rules. An omitted detailed list remains compatible with
+existing providers. The conformance runner creates and validates every advertised
+tuple. L1-capable providers also run expected-distance, score, threshold, paging
+and text-search checks; hybrid scores retain RRF semantics. PostgreSQL rejects L1
+with IVFFlat indexes or tuning before storage/embedding work.
+
 Native `TypeUUID` and `TypeBytes` properties are explicit schema choices; preserve
 existing string/JSON inference. `NormalizeModelData` canonicalizes UUID values and
 copies byte buffers; `CloneModelRecord` protects mutable read values. Preserve the

@@ -345,6 +345,13 @@ func (c *Collection) Delete(ctx context.Context, keys []any) (int64, error) {
 	return count, nil
 }
 func distance(a, b []float32, metric vectordata.DistanceMetric) float64 {
+	if metric == vectordata.DistanceL1 {
+		var sum float64
+		for i, x := range a {
+			sum += math.Abs(float64(x) - float64(b[i]))
+		}
+		return sum
+	}
 	var dot, aa, bb, sum float64
 	for i, x := range a {
 		xx, yy := float64(x), float64(b[i])

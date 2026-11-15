@@ -95,7 +95,9 @@ See [the model API guide](docs/model-api.md) for collection lifecycle, explicit
 schemas, native UUID/int64 keys, UUID/byte data properties, multiple vectors, iterator APIs, embeddings and
 PostgreSQL hybrid search. Models can opt into float16 (`halfvec`) storage with
 `precision=float16` while keeping `[]float32` inputs and outputs. Stores also expose optional `CapabilityProvider`
-metadata for supported keys, data types, metrics, indexes and hybrid search.
+metadata for supported keys, data types, metrics, index combinations and hybrid search.
+Both providers support Manhattan (`DistanceL1`) search; PostgreSQL supports L1 HNSW
+indexes and rejects unsupported L1/IVFFlat combinations before database work.
 PostgreSQL offers [model migration planning and explicit additive application](docs/migrations.md)
 with schema drift detection, reviewable SQL and backfill/re-embedding classifications.
 Original `Record`/`Collection` callers remain compatible.

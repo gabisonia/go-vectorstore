@@ -4,7 +4,7 @@ import "fmt"
 
 func (m DistanceMetric) Validate() error {
 	switch m {
-	case DistanceCosine, DistanceL2, DistanceInnerProduct:
+	case DistanceCosine, DistanceL2, DistanceInnerProduct, DistanceL1:
 		return nil
 	default:
 		return fmt.Errorf("%w: unsupported distance metric %q", ErrSchemaMismatch, m)

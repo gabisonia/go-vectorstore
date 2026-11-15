@@ -162,6 +162,11 @@ func (c *ModelCollection) planMigrationTx(ctx context.Context, tx pgx.Tx, indexe
 	if usesHalfVectors(c.definition) && !halfvec {
 		plan.Steps = append([]vectordata.MigrationStep{{Kind: vectordata.MigrationPrerequisite, Manual: true, Description: "float16 storage requires pgvector 0.7+ and a visible halfvec type"}}, plan.Steps...)
 	}
+	prerequisites, err := l1MigrationPrerequisites(ctx, tx, c.definition)
+	if err != nil {
+		return plan, err
+	}
+	plan.Steps = append(prerequisites, plan.Steps...)
 	if len(plan.Issues) > 0 {
 		// Desired deltas remain visible as descriptions, without SQL against drifted storage.
 		for i := range plan.Steps {

@@ -62,7 +62,7 @@ names, names over 63 bytes, and the reserved `__vs_` prefix are rejected.
 | --- | --- |
 | `key` | `name=<storage name>`, `type=string|int64|uuid`, `generated` |
 | `data` | `name=<storage name>`, `type=<data type>`, `optional`, `index`, `fulltext` |
-| `vector` | `name=<storage name>`, `dimensions=<n>`, `precision=float32|float16`, `metric=cosine|l2|inner_product`, `index`, `method=hnsw|ivfflat`, `source=<data field>` |
+| `vector` | `name=<storage name>`, `dimensions=<n>`, `precision=float32|float16`, `metric=cosine|l2|inner_product|l1`, `index`, `method=hnsw|ivfflat`, `source=<data field>` |
 | `-` | Ignore the field |
 
 Untagged fields are ignored when inferring a definition. Exported fields and
@@ -151,13 +151,14 @@ if provider, ok := store.(vectordata.CapabilityProvider); ok {
 ```
 
 Both providers report string/int64/UUID keys, generated int64 keys, all nine
-portable data types, and cosine/L2/inner-product metrics.
+portable data types, and cosine/L2/inner-product/L1 metrics.
 `VectorPrecisions` reports `VectorFloat32` and `VectorFloat16` on both providers;
 PostgreSQL float16 storage requires pgvector 0.7+ and a visible `halfvec` type.
 
 | Feature | Memory | PostgreSQL |
 | --- | --- | --- |
 | `VectorIndexMethods` | None | HNSW, IVFFlat |
+| `VectorIndexCapabilities` | None | Supported method/metric/precision combinations and dimension limits |
 | `IndexedDataTypes` | None | String, int64, float64, bool, time, string array, UUID, bytes |
 | `FullTextIndexing` | False | True, for string properties |
 | `HybridSearch` | False | True |
@@ -166,7 +167,25 @@ PostgreSQL float16 storage requires pgvector 0.7+ and a visible `halfvec` type.
 
 Index fields describe physical acceleration. Memory still accepts index hints
 for portability. Generic JSON indexing remains unsupported; provider-specific
-indexes are outside this metadata. Empty slices mean no support for that feature.
+indexes are outside this metadata. Except for the detailed combination list below,
+empty slices mean no support for that feature.
+
+The coarse method, metric and precision lists do not imply every combination is
+supported. Inspect `VectorIndexCapabilities` for physical index compatibility:
+
+```go
+for _, index := range caps.VectorIndexCapabilities {
+    fmt.Printf("%s / %s / %s: up to %d dimensions\n",
+        index.Method, index.Metric, index.Precision, index.MaxDimensions)
+}
+```
+
+PostgreSQL reports HNSW for all four metrics and IVFFlat for cosine/L2/inner
+product, each with float32 (2,000 indexed dimensions) and float16 (4,000).
+Unsupported PostgreSQL combinations fail before database access. A third-party
+provider with a nil detailed list has not reported combinations; use its schema
+validation rather than assuming a cross product. Memory reports no physical
+indexes and continues to accept index hints for portability.
 
 Discovery does not access the database or check deployment versions, permissions,
 health, collection definitions or embedder configuration. A hybrid-capable
@@ -267,6 +286,31 @@ explicit Go semantics, not interchangeable with every provider-specific .NET
 score threshold. HNSW/IVFFlat tuning is passed as
 `postgres.SearchTuning` through `ProviderOptions`; unknown provider options are
 rejected. Transaction-local settings do not leak to other pooled requests.
+
+For Manhattan distance, use `DistanceL1` or a `metric=l1` tag:
+
+```go
+Embedding []float32 `vectordata:"vector,dimensions=3,metric=l1,index"`
+```
+
+L1 distance is the sum of absolute component differences, and its similarity score
+is `1 / (1 + distance)`. Zero vectors are valid. For example, distance 3 has score
+0.25, while identical vectors have distance 0 and score 1. Distance thresholds
+remain upper bounds on raw distance; score thresholds remain lower bounds on
+similarity. Memory and PostgreSQL support L1 with both precisions, including
+text-generated queries and PostgreSQL hybrid search. Hybrid scores still use RRF.
+
+PostgreSQL uses `<+>` for L1 search and `vector_l1_ops`/`halfvec_l1_ops` for HNSW.
+This workflow requires pgvector 0.7+ with the required operators/classes visible.
+Model creation checks their availability, and migration planning reports missing
+prerequisites. L1 with an IVFFlat index returns `ErrSchemaMismatch`; IVFFlat tuning
+on L1 searches returns `ErrInvalidSearchOptions` before text embedding. These rules
+also apply to the float32 Record API. See
+[pgvector's HNSW support](https://github.com/pgvector/pgvector#hnsw).
+
+Adding an HNSW index to an existing L1 model is supported by additive migrations.
+Changing an existing property's metric requires manual semantic review and index
+rebuilds; `ApplyMigration` rejects that change.
 
 ## Vector storage precision
 
