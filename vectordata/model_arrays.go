@@ -1,8 +1,10 @@
 package vectordata
 
 import (
+	"encoding"
 	"fmt"
 	"reflect"
+	"time"
 )
 
 // ArrayElementType reports the scalar type of a native array property. JSON and
@@ -17,6 +19,10 @@ func (t DataType) ArrayElementType() (DataType, bool) {
 		return TypeFloat64, true
 	case TypeBoolArray:
 		return TypeBool, true
+	case TypeUUIDArray:
+		return TypeUUID, true
+	case TypeTimeArray:
+		return TypeTime, true
 	default:
 		return "", false
 	}
@@ -30,6 +36,10 @@ func nativeArrayKind(typ reflect.Type, element DataType) bool {
 		return typ.Kind() >= reflect.Int && typ.Kind() <= reflect.Int64 || typ.Kind() == reflect.Float32 || typ.Kind() == reflect.Float64
 	case TypeBool:
 		return typ.Kind() == reflect.Bool
+	case TypeUUID:
+		return typ.Kind() == reflect.String || typ.Implements(reflect.TypeFor[encoding.TextMarshaler]()) || typ.Implements(reflect.TypeFor[fmt.Stringer]())
+	case TypeTime:
+		return typ.ConvertibleTo(reflect.TypeFor[time.Time]())
 	}
 	return false
 }
@@ -57,13 +67,17 @@ func normalizeNativeArray(value any, p DataProperty) (any, error) {
 		out = reflect.MakeSlice(reflect.TypeFor[[]float64](), v.Len(), v.Len())
 	case TypeBoolArray:
 		out = reflect.MakeSlice(reflect.TypeFor[[]bool](), v.Len(), v.Len())
+	case TypeUUIDArray:
+		out = reflect.MakeSlice(reflect.TypeFor[[]string](), v.Len(), v.Len())
+	case TypeTimeArray:
+		out = reflect.MakeSlice(reflect.TypeFor[[]time.Time](), v.Len(), v.Len())
 	}
 	for i := 0; i < v.Len(); i++ {
 		item := v.Index(i).Interface()
 		if isNilValue(item) {
 			return invalid("native arrays cannot contain NULL elements")
 		}
-		normalized, err := normalizeData(item, DataProperty{Name: p.Name, Type: element})
+		normalized, err := NormalizeModelArrayElement(item, p.Type)
 		if err != nil {
 			return nil, fmt.Errorf("property %q element %d: %w", p.Name, i, err)
 		}
@@ -82,6 +96,17 @@ func NormalizeModelArrayElement(value any, arrayType DataType) (any, error) {
 	}
 	if isNilValue(value) {
 		return nil, nil
+	}
+	if arrayType == TypeTimeArray {
+		v := reflect.ValueOf(value)
+		if !v.Type().ConvertibleTo(reflect.TypeFor[time.Time]()) {
+			return nil, fmt.Errorf("%w: timestamp array elements must be time.Time values", ErrInvalidRecord)
+		}
+		instant := v.Convert(reflect.TypeFor[time.Time]()).Interface().(time.Time).UTC()
+		if instant.Year() < 1 || instant.Year() > 9999 {
+			return nil, fmt.Errorf("%w: timestamp array UTC years must be between 1 and 9999", ErrInvalidRecord)
+		}
+		return instant.Truncate(time.Microsecond), nil
 	}
 	return normalizeData(value, DataProperty{Type: element})
 }

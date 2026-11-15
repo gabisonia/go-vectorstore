@@ -79,7 +79,8 @@ return keys in input order; input models are not mutated. Assign the returned ke
 before upserting the same model again. Generated keys can have gaps.
 
 Data types are `string`, `int64`, `float64`, `bool`, `time`, `string_array`, `json`,
-`uuid`, `bytes`, `int64_array`, `float64_array`, and `bool_array`. Pointer data fields
+`uuid`, `bytes`, `int64_array`, `float64_array`, `bool_array`, `uuid_array`, and
+`time_array`. Pointer data fields
 are optional. Nonoptional fields reject nil values.
 JSON numbers retain their precision as `json.Number`. Dynamic records use logical
 property names in `ModelRecord.Data` and `ModelRecord.Vectors`.
@@ -126,7 +127,7 @@ registrations do not silently change. Adding optional native fields is supported
 by additive migrations; changing an existing JSON/string/native mapping requires
 manual conversion and backfill review.
 
-Numeric and boolean arrays are also opt-in:
+Numeric, boolean, UUID and timestamp arrays are also opt-in:
 
 ```go
 type Measurements struct {
@@ -134,6 +135,8 @@ type Measurements struct {
     Codes  []int64   `vectordata:"data,type=int64_array,optional,index"`
     Values []float64 `vectordata:"data,type=float64_array,optional,index"`
     Flags  []bool    `vectordata:"data,type=bool_array,optional,index"`
+    Owners []string  `vectordata:"data,type=uuid_array,optional,index"`
+    Dates  []time.Time `vectordata:"data,type=time_array,optional,index"`
     Legacy []int64   `vectordata:"data"` // Retains JSON storage.
 }
 filter := vectordata.Contains(vectordata.Column("Codes"), int64(42))
@@ -148,11 +151,26 @@ including named slice/element aliases. Integer bounds and floating-point
 finiteness are checked; typed reads reject values outside the destination range.
 Dynamic records may also supply `[]any` with valid non-null scalar elements.
 
+`TypeUUIDArray` maps to `uuid[]` and returns canonical `[]string` values in dynamic
+records. Its elements follow the same strict UUID validation and typed text mapping
+as scalar UUID properties. Typed fields support strings, string aliases, and UUID
+types with value text formatting and pointer text decoding.
+
+`TypeTimeArray` maps to `timestamp with time zone[]` (`timestamptz[]`) and returns
+`[]time.Time`. Typed fields accept `time.Time` or defined types convertible to it,
+including named slice types. Elements normalize to UTC and truncate sub-microsecond
+precision before storage and filtering, so timezone-equivalent instants compare
+identically in both providers. UTC years must be 1–9999; strings, infinities and
+out-of-range instants are rejected. This normalization applies to timestamp arrays;
+scalar `TypeTime` behavior is unchanged.
+
 For these new types, nil slices are SQL NULL for optional fields and invalid for
 required fields. Non-nil empty slices stay empty arrays. Elements cannot be NULL,
 and floats cannot be NaN or infinite. Buffers are copied on writes and reads.
-Existing string-array nil-slice behavior is unchanged. Unannotated numeric and
-boolean slices continue to use JSON; registrations do not change implicitly.
+Existing string-array nil-slice behavior is unchanged. Unannotated numeric,
+boolean and timestamp slices continue to use JSON; unannotated string slices
+remain `string_array`. UUID arrays require an explicit type. Registrations do not
+change implicitly.
 
 `Contains` tests one scalar element with a GIN-compatible typed predicate. `Eq`
 and `In` compare whole arrays, preserving order and duplicates. NULL arrays retain
@@ -191,7 +209,7 @@ if provider, ok := store.(vectordata.CapabilityProvider); ok {
 }
 ```
 
-Both providers report string/int64/UUID keys, generated int64 keys, all twelve
+Both providers report string/int64/UUID keys, generated int64 keys, all fourteen
 portable data types, and cosine/L2/inner-product/L1 metrics.
 `VectorPrecisions` reports `VectorFloat32` and `VectorFloat16` on both providers;
 PostgreSQL float16 storage requires pgvector 0.7+ and a visible `halfvec` type.
@@ -200,7 +218,7 @@ PostgreSQL float16 storage requires pgvector 0.7+ and a visible `halfvec` type.
 | --- | --- | --- |
 | `VectorIndexMethods` | None | HNSW, IVFFlat |
 | `VectorIndexCapabilities` | None | Supported method/metric/precision combinations and dimension limits |
-| `IndexedDataTypes` | None | String, int64, float64, bool, time, UUID, bytes, native string/numeric/bool arrays |
+| `IndexedDataTypes` | None | String, int64, float64, bool, time, UUID, bytes, native string/numeric/bool/UUID/timestamp arrays |
 | `FullTextIndexing` | False | True, for string properties |
 | `HybridSearch` | False | True |
 | `MigrationPlanning` | False | True, plan-only |

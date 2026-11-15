@@ -37,6 +37,8 @@ const (
 	TypeInt64Array   DataType = "int64_array"
 	TypeFloat64Array DataType = "float64_array"
 	TypeBoolArray    DataType = "bool_array"
+	TypeUUIDArray    DataType = "uuid_array"
+	TypeTimeArray    DataType = "time_array"
 )
 
 type KeyProperty struct {
@@ -251,7 +253,7 @@ func (d CollectionDefinition) Normalize() (CollectionDefinition, error) {
 			return fail("invalid or duplicate data property")
 		}
 		switch p.Type {
-		case TypeString, TypeInt64, TypeFloat64, TypeBool, TypeJSON, TypeTime, TypeStringArray, TypeUUID, TypeBytes, TypeInt64Array, TypeFloat64Array, TypeBoolArray:
+		case TypeString, TypeInt64, TypeFloat64, TypeBool, TypeJSON, TypeTime, TypeStringArray, TypeUUID, TypeBytes, TypeInt64Array, TypeFloat64Array, TypeBoolArray, TypeUUIDArray, TypeTimeArray:
 		default:
 			return fail("unsupported data property type")
 		}
@@ -418,7 +420,7 @@ func normalizeData(value any, p DataProperty) (any, error) {
 		return nil, fmt.Errorf("%w: invalid %s data property %q", ErrInvalidRecord, p.Type, p.Name)
 	}
 	switch p.Type {
-	case TypeInt64Array, TypeFloat64Array, TypeBoolArray:
+	case TypeInt64Array, TypeFloat64Array, TypeBoolArray, TypeUUIDArray, TypeTimeArray:
 		return normalizeNativeArray(value, p)
 	case TypeUUID:
 		if isNilValue(value) {
@@ -494,8 +496,9 @@ func normalizeData(value any, p DataProperty) (any, error) {
 }
 
 // NormalizeModelData validates a native property value and copies mutable values.
-// UUID values become canonical strings; nil byte/numeric/bool slices become SQL
-// NULL only for optional properties, while non-nil empty slices stay empty values.
+// UUID values become canonical strings; timestamp arrays use UTC microseconds.
+// Nil byte slices and explicit native arrays (except legacy string_array) become
+// SQL NULL only for optional properties; non-nil empty slices stay empty values.
 func NormalizeModelData(value any, p DataProperty) (any, error) {
 	return normalizeData(value, p)
 }

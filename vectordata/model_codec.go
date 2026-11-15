@@ -67,6 +67,11 @@ func inferDataType(t reflect.Type) DataType {
 	return TypeJSON
 }
 
+func uuidFieldType(typ reflect.Type) bool {
+	textValue := typ.Implements(reflect.TypeFor[encoding.TextMarshaler]()) || typ.Implements(reflect.TypeFor[fmt.Stringer]())
+	return typ.Kind() == reflect.String || textValue && reflect.PointerTo(typ).Implements(reflect.TypeFor[encoding.TextUnmarshaler]())
+}
+
 // DefinitionFor reads vectordata tags. Roles are key, data, or vector. Options:
 // name=<storage name>, type=<type>, generated, optional, index, fulltext,
 // dimensions=<n>, precision=float32|float16, metric=<metric>, source=<data field>, method=hnsw|ivfflat.
@@ -231,8 +236,7 @@ func NewStructCodec[T any](definition *CollectionDefinition) (*StructCodec[T], e
 		}
 		valid := p.Type == TypeJSON || inferDataType(field.Type) == p.Type
 		if p.Type == TypeUUID {
-			textValue := typ.Implements(reflect.TypeFor[encoding.TextMarshaler]()) || typ.Implements(reflect.TypeFor[fmt.Stringer]())
-			valid = typ.Kind() == reflect.String || textValue && reflect.PointerTo(typ).Implements(reflect.TypeFor[encoding.TextUnmarshaler]())
+			valid = uuidFieldType(typ)
 		}
 		if p.Type == TypeBytes {
 			valid = typ.Kind() == reflect.Slice && typ.Elem().Kind() == reflect.Uint8
@@ -241,6 +245,9 @@ func NewStructCodec[T any](definition *CollectionDefinition) (*StructCodec[T], e
 			valid = typ.Kind() == reflect.Slice && nativeArrayKind(typ.Elem(), element)
 			if p.Type == TypeFloat64Array && valid {
 				valid = typ.Elem().Kind() == reflect.Float32 || typ.Elem().Kind() == reflect.Float64
+			}
+			if p.Type == TypeUUIDArray && valid {
+				valid = uuidFieldType(typ.Elem())
 			}
 		}
 		if !valid {
@@ -384,6 +391,41 @@ func assignModelValue(target reflect.Value, value any) error {
 	decoder.UseNumber()
 	return decoder.Decode(target.Addr().Interface())
 }
+
+// Structured native elements need their Go conversion/text decoding rather than
+// a JSON round-trip (defined time.Time types need not implement JSON methods).
+func assignStructuredArray(target reflect.Value, value any, kind DataType) error {
+	if isNilValue(value) {
+		return nil
+	}
+	if target.Kind() == reflect.Pointer {
+		if target.IsNil() {
+			target.Set(reflect.New(target.Type().Elem()))
+		}
+		return assignStructuredArray(target.Elem(), value, kind)
+	}
+	source := reflect.ValueOf(value)
+	if source.Kind() != reflect.Slice || target.Kind() != reflect.Slice {
+		return fmt.Errorf("expected native array slice")
+	}
+	out := reflect.MakeSlice(target.Type(), source.Len(), source.Len())
+	for i := 0; i < source.Len(); i++ {
+		normalized, err := NormalizeModelArrayElement(source.Index(i).Interface(), kind)
+		if err != nil {
+			return err
+		}
+		if normalized == nil {
+			return fmt.Errorf("%w: native arrays cannot contain NULL elements", ErrInvalidRecord)
+		}
+		if kind == TypeTimeArray {
+			out.Index(i).Set(reflect.ValueOf(normalized).Convert(target.Type().Elem()))
+		} else if err := assignModelValue(out.Index(i), normalized); err != nil {
+			return err
+		}
+	}
+	target.Set(out)
+	return nil
+}
 func (c *StructCodec[T]) Decode(record ModelRecord) (T, error) {
 	var zero T
 	root := reflect.New(c.typ).Elem()
@@ -403,7 +445,13 @@ func (c *StructCodec[T]) Decode(record ModelRecord) (T, error) {
 				value = record.Vectors[field.name]
 			}
 		}
-		if err := assignModelValue(target, value); err != nil {
+		var assignErr error
+		if field.dataType == TypeUUIDArray || field.dataType == TypeTimeArray {
+			assignErr = assignStructuredArray(target, value, field.dataType)
+		} else {
+			assignErr = assignModelValue(target, value)
+		}
+		if err := assignErr; err != nil {
 			return zero, fmt.Errorf("decode field %q: %w", field.name, err)
 		}
 	}

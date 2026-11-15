@@ -183,6 +183,10 @@ func (c *ModelCollection) columns(alias string, vectors bool) []string {
 		if p.Type == vectordata.TypeJSON || p.Type == vectordata.TypeUUID {
 			column += "::text"
 		}
+		if p.Type == vectordata.TypeUUIDArray {
+			// Preserve array dimensions while exposing canonical UUID strings.
+			column += "::text[]"
+		}
 		columns = append(columns, column)
 	}
 	if vectors {

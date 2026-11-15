@@ -198,7 +198,8 @@ does this through `filtersql.FilterSQLConfig.NormalizeColumnValue` without casti
 indexed columns to text. `conformance.Run` exercises advertised UUID/byte support,
 including aliases, typed mapping, nulls, sorting, filters and buffer ownership.
 
-`TypeInt64Array`, `TypeFloat64Array` and `TypeBoolArray` are explicit native array
+`TypeInt64Array`, `TypeFloat64Array`, `TypeBoolArray`, `TypeUUIDArray` and
+`TypeTimeArray` are explicit native array
 choices; preserve existing JSON inference. `DataType.ArrayElementType` identifies
 native arrays, while `NormalizeModelData` validates/copies whole values and
 `NormalizeModelArrayElement` canonicalizes membership operands. Preserve NULL vs
@@ -206,7 +207,13 @@ non-nil empty arrays, reject NULL elements and non-finite floats, and copy mutab
 read values. PostgreSQL preserves dimensions while scanning so unsupported shapes
 are rejected rather than flattened. Use trusted `ArrayElementTypes` casts and
 `NormalizeArrayElement` in `filtersql.FilterSQLConfig` to type membership operands
-without casting indexed columns. The shared suite checks all three types, null
+without casting indexed columns. UUID elements use canonical strings; timestamp
+elements use UTC with microsecond precision and UTC years 1–9999. Apply these
+normalizations to writes, reads and filter operands. Scalar timestamps keep their
+existing behavior. PostgreSQL casts UUID arrays to `text[]` only in read
+projections, preserving array dimensions and leaving indexed predicates native.
+Typed decoding must support text-mapped UUIDs and defined `time.Time` types without
+depending on JSON methods. The shared suite checks all five types, null
 semantics, aliases, filters, search, atomic failures and legacy JSON round trips.
 
 Advertise supported `VectorPrecisions` explicitly. The Go vector API stays float32;
