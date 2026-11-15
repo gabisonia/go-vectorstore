@@ -69,7 +69,7 @@ func (c *ModelCollection) searchValuePlan(literal any, top int, opts vectordata.
 	if err := vectordata.ValidateModelSearchOptions(top, opts); err != nil {
 		return "", nil, p, err
 	}
-	_, _, relaxed, err := modelTuning(opts.ProviderOptions, p.Metric)
+	_, _, relaxed, err := modelVectorTuning(opts.ProviderOptions, p)
 	if err != nil {
 		return "", nil, p, err
 	}
@@ -143,7 +143,7 @@ func (c *ModelCollection) SearchText(ctx context.Context, text string, top int, 
 	if err := vectordata.ValidateModelFilter(opts.Filter, c.definition); err != nil {
 		return nil, err
 	}
-	if _, _, _, err := modelTuning(opts.ProviderOptions, p.Metric); err != nil {
+	if _, _, _, err := modelVectorTuning(opts.ProviderOptions, p); err != nil {
 		return nil, err
 	}
 	vector, err := vectordata.EmbedQuery(ctx, text, p, c.options)
@@ -161,7 +161,7 @@ type scoreScanner struct {
 func (s scoreScanner) Scan(targets ...any) error { return s.row.Scan(append(targets, s.score)...) }
 func (c *ModelCollection) runSearch(ctx context.Context, sql string, args []any, p vectordata.VectorProperty, opts vectordata.ModelSearchOptions, fusion bool, yield func(vectordata.ModelSearchResult, error) bool) {
 	report := func(err error) { yield(vectordata.ModelSearchResult{}, c.operation("search", err)) }
-	settings, iterative, _, err := modelTuning(opts.ProviderOptions, p.Metric)
+	settings, iterative, _, err := modelVectorTuning(opts.ProviderOptions, p)
 	if err != nil {
 		report(err)
 		return
@@ -271,7 +271,7 @@ func (c *ModelCollection) validateHybridOptions(keywords string, top int, opts v
 	if err := vectordata.ValidateModelFilter(opts.Filter, c.definition); err != nil {
 		return config, err
 	}
-	if _, _, _, err := modelTuning(opts.ProviderOptions, p.Metric); err != nil {
+	if _, _, _, err := modelVectorTuning(opts.ProviderOptions, p); err != nil {
 		return config, err
 	}
 	return config, nil

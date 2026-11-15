@@ -103,6 +103,9 @@ indexes and rejects unsupported L1/IVFFlat combinations before database work.
 Models can also use packed `BinaryVector` fields with `kind=binary`, Hamming
 distance and `SearchBinary`. PostgreSQL provides native `bit(n)` storage,
 HNSW/IVFFlat indexes and binary hybrid search.
+Sparse models use `SparseVector` with zero-based coordinates, `kind=sparse`, and
+`SearchSparse`. Both providers support cosine/L2/inner-product/L1 sparse search;
+PostgreSQL adds `sparsevec(n)` storage, HNSW indexes and sparse hybrid search.
 PostgreSQL offers [model migration planning and explicit additive application](docs/migrations.md)
 with schema drift detection, reviewable SQL and backfill/re-embedding classifications.
 Original `Record`/`Collection` callers remain compatible.

@@ -23,6 +23,7 @@ type structField struct {
 	role     string
 	dataType DataType
 	binary   bool
+	sparse   bool
 }
 
 // StructCodec resolves field mappings once at construction, not once per record.
@@ -75,7 +76,7 @@ func uuidFieldType(typ reflect.Type) bool {
 
 // DefinitionFor reads vectordata tags. Roles are key, data, or vector. Options:
 // name=<storage name>, type=<type>, generated, optional, index, fulltext,
-// dimensions=<n>, kind=dense|binary, precision=float32|float16, metric=<metric>, source=<data field>, method=hnsw|ivfflat.
+// dimensions=<n>, kind=dense|binary|sparse, precision=float32|float16, metric=<metric>, source=<data field>, method=hnsw|ivfflat.
 func DefinitionFor[T any]() (CollectionDefinition, error) {
 	t, _, err := modelType[T]()
 	if err != nil {
@@ -269,6 +270,10 @@ func NewStructCodec[T any](definition *CollectionDefinition) (*StructCodec[T], e
 			want = reflect.TypeFor[BinaryVector]()
 			codec.fields[len(codec.fields)-1].binary = true
 		}
+		if p.Kind == VectorSparse {
+			want = reflect.TypeFor[SparseVector]()
+			codec.fields[len(codec.fields)-1].sparse = true
+		}
 		if field.Type != want {
 			return nil, fmt.Errorf("%w: vector field %q must be %s", ErrSchemaMismatch, p.Name, want)
 		}
@@ -329,6 +334,11 @@ func (c *StructCodec[T]) Encode(value T) (ModelRecord, error) {
 				b := v.Interface().(BinaryVector)
 				b.Bytes = append([]byte(nil), b.Bytes...)
 				out.BinaryVectors[field.name] = b
+			} else if field.sparse {
+				if out.SparseVectors == nil {
+					out.SparseVectors = map[string]SparseVector{}
+				}
+				out.SparseVectors[field.name] = cloneSparse(v.Interface().(SparseVector))
 			} else {
 				out.Vectors[field.name] = append([]float32(nil), v.Interface().([]float32)...)
 			}
@@ -467,6 +477,10 @@ func (c *StructCodec[T]) Decode(record ModelRecord) (T, error) {
 				if b, ok := record.BinaryVectors[field.name]; ok {
 					b.Bytes = append([]byte(nil), b.Bytes...)
 					value = b
+				}
+			} else if field.sparse {
+				if v, ok := record.SparseVectors[field.name]; ok {
+					value = cloneSparse(v)
 				}
 			} else if record.Vectors != nil {
 				value = record.Vectors[field.name]

@@ -24,6 +24,7 @@ func runCapabilities(t *testing.T, factory Factory) {
 	t.Run("native_data", func(t *testing.T) { runNativeData(t, factory, caps) })
 	t.Run("vector_precisions", func(t *testing.T) { runVectorPrecisions(t, factory, caps) })
 	t.Run("binary_vectors", func(t *testing.T) { runBinaryVectors(t, factory, caps) })
+	t.Run("sparse_vectors", func(t *testing.T) { runSparseVectors(t, factory, caps) })
 	if caps.Backend == "" || len(caps.KeyTypes) == 0 {
 		t.Fatal("capabilities must identify the backend and supported keys")
 	}
@@ -180,6 +181,9 @@ func runCapabilities(t *testing.T, factory Factory) {
 	}
 	for i, index := range caps.VectorIndexCapabilities {
 		validRepresentation := index.Kind == vectordata.VectorBinary && index.Precision == "" && slices.Contains(caps.VectorKinds, vectordata.VectorBinary) || index.Kind != vectordata.VectorBinary && slices.Contains(caps.VectorPrecisions, index.Precision)
+		if index.Kind == vectordata.VectorSparse {
+			validRepresentation = validRepresentation && slices.Contains(caps.VectorKinds, vectordata.VectorSparse) && index.MaxNonZero > 0
+		}
 		if index.MaxDimensions <= 0 || !slices.Contains(caps.DistanceMetrics, index.Metric) || !validRepresentation || !slices.Contains(caps.VectorIndexMethods, index.Method) {
 			t.Fatalf("inconsistent index capability: %+v", index)
 		}

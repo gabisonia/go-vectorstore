@@ -61,7 +61,7 @@ type VectorProperty struct {
 	Name, StorageName string
 	Dimensions        int
 	Kind              VectorKind `json:",omitempty"`
-	// Dense precision defaults to float32; binary properties leave it unset.
+	// Dense/sparse precision defaults to float32; binary properties leave it unset.
 	// The canonical default stays empty so existing
 	// serialized model registrations remain unchanged.
 	Precision VectorPrecision `json:",omitempty"`
@@ -90,6 +90,7 @@ type ModelRecord struct {
 	Data          map[string]any
 	Vectors       map[string][]float32
 	BinaryVectors map[string]BinaryVector `json:",omitempty"`
+	SparseVectors map[string]SparseVector `json:",omitempty"`
 }
 
 // Embedder generates one vector for each input, preserving input order. Implementations must honor ctx.
@@ -288,7 +289,7 @@ func (d CollectionDefinition) Normalize() (CollectionDefinition, error) {
 		switch p.Kind {
 		case "", VectorDense:
 			p.Kind = ""
-		case VectorBinary:
+		case VectorBinary, VectorSparse:
 		default:
 			return fail("unsupported vector kind")
 		}
@@ -298,6 +299,11 @@ func (d CollectionDefinition) Normalize() (CollectionDefinition, error) {
 			}
 		} else if p.Metric == DistanceHamming {
 			return fail("Hamming distance requires a binary vector")
+		}
+		if p.Kind == VectorSparse {
+			if p.Precision != "" && p.Precision != VectorFloat32 || p.SourceProperty != "" || !isNilValue(p.Embedder) || p.Dimensions > MaxSparseDimensions || p.Index != nil && p.Index.Method == IndexMethodIVFFlat {
+				return fail("sparse vectors require float32, explicit values, at most 1 billion dimensions, and HNSW indexes")
+			}
 		}
 		switch p.Precision {
 		case "", VectorFloat32:
@@ -587,7 +593,7 @@ func PrepareModelRecords(ctx context.Context, d CollectionDefinition, opts Model
 		for name, vector := range r.Vectors {
 			found := false
 			for _, p := range d.Vectors {
-				found = found || p.Name == name && p.Kind != VectorBinary
+				found = found || p.Name == name && p.Kind != VectorBinary && p.Kind != VectorSparse
 			}
 			if !found {
 				return nil, fmt.Errorf("%w: unknown vector property %q", ErrInvalidRecord, name)
@@ -604,6 +610,16 @@ func PrepareModelRecords(ctx context.Context, d CollectionDefinition, opts Model
 			}
 		}
 		for _, p := range d.Vectors {
+			if p.Kind == VectorSparse {
+				v, err := NormalizeSparseVector(r.SparseVectors[p.Name], p)
+				if err != nil {
+					return nil, fmt.Errorf("%w: record %d: %w", ErrInvalidRecord, i, err)
+				}
+				if out[i].SparseVectors == nil {
+					out[i].SparseVectors = map[string]SparseVector{}
+				}
+				out[i].SparseVectors[p.Name] = v
+			}
 			if p.Kind == VectorBinary {
 				v, err := NormalizeBinaryVector(r.BinaryVectors[p.Name], p)
 				if err != nil {
@@ -615,9 +631,18 @@ func PrepareModelRecords(ctx context.Context, d CollectionDefinition, opts Model
 				out[i].BinaryVectors[p.Name] = v
 			}
 		}
+		for name := range r.SparseVectors {
+			found := false
+			for _, p := range d.Vectors {
+				found = found || p.Name == name && p.Kind == VectorSparse
+			}
+			if !found {
+				return nil, fmt.Errorf("%w: unknown/non-sparse property %q", ErrInvalidRecord, name)
+			}
+		}
 	}
 	for _, p := range d.Vectors {
-		if p.Kind == VectorBinary {
+		if p.Kind == VectorBinary || p.Kind == VectorSparse {
 			continue
 		}
 		var positions []int
@@ -687,8 +712,8 @@ func EmbedQuery(ctx context.Context, text string, p VectorProperty, opts ModelCo
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if p.Kind == VectorBinary {
-		return nil, fmt.Errorf("%w: binary queries require an explicit BinaryVector", ErrUnsupported)
+	if p.Kind == VectorBinary || p.Kind == VectorSparse {
+		return nil, fmt.Errorf("%w: binary/sparse queries require explicit vector values", ErrUnsupported)
 	}
 	if _, err := opts.WithDefaults(ModelCollectionOptions{}); err != nil {
 		return nil, err

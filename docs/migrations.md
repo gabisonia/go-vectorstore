@@ -116,6 +116,8 @@ a freshly reviewed no-op plan can be applied successfully.
 | Add a vector | Same stages, with embedding/backfill flags |
 | Add/convert a binary vector | Required `bit(n)` storage needs manual backfill; dense-to-binary conversions require explicit re-embedding/conversion review |
 | Add a binary vector index | Compatible HNSW/IVFFlat `bit_hamming_ops` indexes support additive application after operator/opclass checks |
+| Add/convert a sparse vector | Required `sparsevec(n)` fields and representation changes need manual backfill/re-embedding review |
+| Add a sparse HNSW index | Additive if stored vectors have at most 1,000 nonzeros; planning scans compact sparse serialization sizes and reports manual backfill for oversized rows |
 | Relax nullability | `DROP NOT NULL` |
 | Require a nullable property | Manual null backfill/verification, then `SET NOT NULL` |
 | Rename storage with a stable logical property | `RENAME COLUMN`; rebuild affected managed index names |

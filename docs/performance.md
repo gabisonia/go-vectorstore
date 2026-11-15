@@ -1,5 +1,25 @@
 # Performance and verification
 
+## Sparse vector verification
+
+```sh
+go test -race -run 'Sparse' ./vectordata ./stores/memory ./stores/postgres
+go test -race -tags=integration -run 'Sparse|ModelContract/capabilities/sparse_vectors' \
+  -timeout=3m ./stores/postgres
+```
+
+Shared tests check canonical zero-based coordinates, buffer ownership, dimensions,
+finite values, duplicates/ordering, zero-vector rules, all four distances, typed
+mapping, mixed models, filters, paging, thresholds, projections, iterators,
+hybrid search, cancellation and atomic failures. Distance tests compare against
+an independent dense oracle while declaring a billion-dimensional sparse space.
+PostgreSQL tests cover all sparse HNSW classes, actual generated SQL/index
+eligibility, single-connection iterator cleanup, mixed transport, 16,000-entry
+storage and separate 1,000-nonzero index limits. Index planning detects oversized
+rows and stale reviews. Storage/schema drift, manual representation conversions,
+missing prerequisites and malformed sparse text are also checked. These establish
+behavior and index eligibility, without a production throughput or recall claim.
+
 ## Binary vector verification
 
 ```sh

@@ -406,6 +406,7 @@ func (c *Collection) searchRecords(ctx context.Context, top int, opts vectordata
 		if !opts.IncludeVectors {
 			r.Vectors = nil
 			r.BinaryVectors = nil
+			r.SparseVectors = nil
 		}
 		out = append(out, vectordata.ModelSearchResult{Record: r, Distance: d, Score: score, ScoreKind: vectordata.ScoreSimilarity})
 	}

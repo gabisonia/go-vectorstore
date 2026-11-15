@@ -54,7 +54,7 @@ func (c *ModelCollection) Upsert(ctx context.Context, records []vectordata.Model
 func (c *ModelCollection) write(ctx context.Context, records []vectordata.ModelRecord, upsert bool) ([]any, error) {
 	dimensions := 0
 	for _, p := range c.definition.Vectors {
-		if p.Kind == vectordata.VectorBinary {
+		if p.Kind == vectordata.VectorBinary || p.Kind == vectordata.VectorSparse {
 			continue
 		}
 		dimensions += min(p.Dimensions, minBinaryVectorValues-dimensions)
@@ -149,6 +149,10 @@ func (c *ModelCollection) writeStatement(r vectordata.ModelRecord, upsert, useBi
 		column := quoteIdent(p.StorageName)
 		columns = append(columns, column)
 		updates = append(updates, column+"=EXCLUDED."+column)
+		if p.Kind == vectordata.VectorSparse {
+			values = append(values, bind(sparseLiteral(r.SparseVectors[p.Name]), "::sparsevec"))
+			continue
+		}
 		if p.Kind == vectordata.VectorBinary {
 			values = append(values, bind(binaryWriteValue(r.BinaryVectors[p.Name]), "::"+vectorColumnType(p)))
 			continue
@@ -316,6 +320,17 @@ func (c *ModelCollection) scan(row modelScanner, vectors, withDistance bool) (ve
 	if vectors {
 		r.Vectors = map[string][]float32{}
 		for i, p := range c.definition.Vectors {
+			if p.Kind == vectordata.VectorSparse {
+				v, err := parseSparseText(vectorTexts[i], p)
+				if err != nil {
+					return r, 0, err
+				}
+				if r.SparseVectors == nil {
+					r.SparseVectors = map[string]vectordata.SparseVector{}
+				}
+				r.SparseVectors[p.Name] = v
+				continue
+			}
 			if p.Kind == vectordata.VectorBinary {
 				if !binaryValues[i].Valid {
 					return r, 0, fmt.Errorf("%w: NULL binary vector %q", vectordata.ErrInvalidVector, p.Name)
