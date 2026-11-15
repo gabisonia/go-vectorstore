@@ -23,6 +23,45 @@ The CGO-disabled command verifies embedded storage can run without a C toolchain
 SQLite queries/searches materialize the whole collection; these checks establish
 correctness, not an ANN throughput claim. See [SQLite costs](sqlite.md#query-costs-and-provider-limits).
 
+## SQLite batch lookup and count verification
+
+```sh
+go test -race -run 'TestGetMany|TestLookup|TestInvalidUTF8|TestExclusiveReadDeadlines' ./stores/sqlite
+go test -run '^$' -bench BenchmarkSQLiteRead -benchmem -benchtime=100ms -count=3 ./stores/sqlite
+```
+
+The benchmark compares direct reads with explicit reference cases using the former
+full-snapshot/memory-engine paths in the same binary. Setup/inserts are outside
+the timer. Each record has a string property and a 128-component dense vector;
+the lookup always requests four keys (two distinct hits, one missing key and one
+duplicate), excluding vector projections. This isolates growth in collection size
+from growth in request/result size.
+
+Local medians of three runs on Apple M3 Pro, darwin/arm64, Go 1.25.0:
+
+| Records | Operation | Snapshot reference | Direct path | Reference B/op | Direct B/op |
+| --- | --- | --- | --- | --- | --- |
+| 100 | GetMany | 1.74 ms | 60.4 µs | 848,823 | 18,030 |
+| 10,000 | GetMany | 170.12 ms | 61.6 µs | 85,442,664 | 18,013 |
+| 100 | Count, no filter | 1.63 ms | 13.6 µs | 851,410 | 1,072 |
+| 10,000 | Count, no filter | 169.90 ms | 433.1 µs | 86,488,184 | 1,080 |
+
+The reference cases at 10,000 records execute one iteration per measurement, so
+those timings are coarse. These local, cache-dependent results are regression
+measurements, not production latency guarantees. Unfiltered Count still scans
+index entries as collections grow; its Go allocations do not grow with payload
+size. GetMany work follows the requested keys and matching payloads. Filtered
+counts, queries and vector searches still use full snapshots.
+
+Tests exercise more than two key batches, deduplication/native-key aliases,
+missing collections/records, schema validation on empty results, vector
+projections/ownership, selected-payload validation, error cleanup and cancellation.
+A real-driver query hook commits through a second connection between batches,
+verifying one read snapshot and that reads do not reserve the writer lock.
+EXPLAIN QUERY PLAN checks the record primary index for lookups and the covering
+collection index for counts. An unrelated damaged payload also confirms that
+these paths decode only the records they need.
+
 ## Sparse vector verification
 
 ```sh

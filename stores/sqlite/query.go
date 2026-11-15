@@ -63,13 +63,7 @@ func (c *Collection) engine(ctx context.Context) (*memory.Collection, error) {
 	if err != nil {
 		return nil, err
 	}
-	d := c.definition.Clone()
-	// Replaying already embedded records must never call a user embedder, even
-	// when an optional vector is absent and the source property is present.
-	for i := range d.Vectors {
-		d.Vectors[i].SourceProperty = ""
-		d.Vectors[i].Embedder = nil
-	}
+	d := c.readDefinition()
 	base, err := memory.New().EnsureModelCollection(ctx, c.name, d, vectordata.ModelCollectionOptions{})
 	if err != nil {
 		return nil, err
@@ -79,13 +73,24 @@ func (c *Collection) engine(ctx context.Context) (*memory.Collection, error) {
 	}
 	return base.(*memory.Collection), nil
 }
+
+// readDefinition disables automatic embeddings when validating stored records.
+func (c *Collection) readDefinition() vectordata.CollectionDefinition {
+	d := c.definition.Clone()
+	// Replaying already embedded records must never call a user embedder, even
+	// when an optional vector is absent and the source property is present.
+	for i := range d.Vectors {
+		d.Vectors[i].SourceProperty = ""
+		d.Vectors[i].Embedder = nil
+	}
+	return d
+}
 func (c *Collection) Get(ctx context.Context, key any, opts vectordata.RetrievalOptions) (record vectordata.ModelRecord, err error) {
 	defer func() { err = c.operation("get", err) }()
-	key, err = c.definition.NormalizeKey(key)
+	token, err := c.lookupToken(key)
 	if err != nil {
 		return record, err
 	}
-	token := keyToken(key)
 	records, err := c.read(ctx, &token)
 	if err != nil {
 		return record, err
@@ -94,20 +99,6 @@ func (c *Collection) Get(ctx context.Context, key any, opts vectordata.Retrieval
 		return record, vectordata.ErrNotFound
 	}
 	return vectordata.CloneModelRecord(records[0], c.definition, opts.IncludeVectors), nil
-}
-func (c *Collection) GetMany(ctx context.Context, keys []any, opts vectordata.RetrievalOptions) ([]vectordata.ModelRecord, error) {
-	values := make([]any, len(keys))
-	for i, key := range keys {
-		v, err := c.definition.NormalizeKey(key)
-		if err != nil {
-			return nil, c.operation("get_many", err)
-		}
-		values[i] = v
-	}
-	if len(values) == 0 {
-		return []vectordata.ModelRecord{}, ctx.Err()
-	}
-	return c.Query(ctx, vectordata.In(vectordata.Column(c.definition.Key.Name), values...), len(values), vectordata.QueryOptions{IncludeVectors: opts.IncludeVectors})
 }
 func (c *Collection) Query(ctx context.Context, filter vectordata.Filter, top int, opts vectordata.QueryOptions) (records []vectordata.ModelRecord, err error) {
 	defer func() { err = c.operation("query", err) }()
@@ -149,6 +140,9 @@ func (c *Collection) Count(ctx context.Context, filter vectordata.Filter) (count
 	defer func() { err = c.operation("count", err) }()
 	if err = vectordata.ValidateModelFilter(filter, c.definition); err != nil {
 		return 0, err
+	}
+	if filter == nil {
+		return retryBusy(ctx, func() (int64, error) { return c.countAll(ctx) })
 	}
 	engine, err := c.engine(ctx)
 	if err != nil {

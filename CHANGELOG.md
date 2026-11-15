@@ -2,7 +2,16 @@
 
 ## Unreleased
 
+### Performance
+
+- Use indexed, bounded SQLite GetMany lookups in a single read snapshot and SQL
+  COUNT for unfiltered counts, avoiding full-collection payload reconstruction.
+
+
 ### Fixed
+
+- Reject invalid UTF-8 lookup/delete keys in SQLite so they cannot alias valid
+  replacement-character keys through JSON encoding.
 
 - Honor SQLite context cancellation and deadlines during lock contention. Lock
   acquisition and side-effect-free reads use cancelable waits capped at five

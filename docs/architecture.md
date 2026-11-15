@@ -334,8 +334,9 @@ See [model-api.md](model-api.md) for the contract and current feature scope.
 SQLite persists collection registrations, canonical records, and generated-key
 sequences in a database file. Parameterized SQL, foreign-key cascades and immediate
 write transactions make batch changes atomic across handles. WAL and FULL
-synchronization are configured on each connection. Reads load metadata and records
-in one SQL snapshot, release the connection, then evaluate portable queries and
-exact search through the memory engine. Runtime embedders are cleared during
+synchronization are configured on each connection. GetMany performs indexed key
+lookups within one deferred read snapshot, and unfiltered Count uses SQL counting
+without decoding payloads. Query, filtered Count and exact search load a snapshot,
+release the connection, then use the memory engine. Runtime embedders are cleared during
 snapshot replay. Native values are decoded by declared type, with a separate SQL
 NULL marker for JSON properties. See [sqlite.md](sqlite.md) for workload limits.
