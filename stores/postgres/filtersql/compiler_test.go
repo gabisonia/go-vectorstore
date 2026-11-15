@@ -30,3 +30,21 @@ func TestNativeNormalizerPreservesJSONSemantics(t *testing.T) {
 		t.Fatalf("normalizer error: %v", err)
 	}
 }
+
+func TestNativeArrayMembershipCasts(t *testing.T) {
+	cfg := FilterSQLConfig{ColumnExpr: map[string]string{"Ints": "t.i", "Floats": "t.f", "Flags": "t.b"}, ArrayColumns: map[string]bool{"Ints": true, "Floats": true, "Flags": true}, ArrayElementTypes: map[string]string{"Ints": "bigint", "Floats": "double precision", "Flags": "boolean"}}
+	for _, tt := range []struct {
+		field, cast string
+		value       any
+	}{{"Ints", "bigint", int64(2)}, {"Floats", "double precision", 0.25}, {"Flags", "boolean", false}} {
+		sql, args, _, err := CompileFilterSQL(ContainsFilter{Field: FieldRef{Kind: FieldColumn, Name: tt.field}, Value: tt.value}, cfg, 2)
+		want := "(" + cfg.ColumnExpr[tt.field] + " @> ARRAY[$2::" + tt.cast + "])"
+		if err != nil || sql != want || !reflect.DeepEqual(args, []any{tt.value}) {
+			t.Fatalf("membership %s: SQL=%s args=%v error=%v", tt.field, sql, args, err)
+		}
+	}
+	cfg.NormalizeArrayElement = func(string, any) (any, error) { return nil, errors.New("invalid member") }
+	if _, _, _, err := CompileFilterSQL(ContainsFilter{Field: FieldRef{Kind: FieldColumn, Name: "Ints"}, Value: "bad"}, cfg, 1); !errors.Is(err, ErrInvalidFilter) {
+		t.Fatalf("membership normalization error: %v", err)
+	}
+}

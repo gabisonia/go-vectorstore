@@ -14,6 +14,10 @@ const numericTextPattern = filterast.NumericTextPattern
 type FilterSQLConfig struct {
 	JSONColumnExpr map[string]string
 	ArrayColumns   map[string]bool
+	// ArrayElementTypes supplies trusted SQL scalar types for membership operands.
+	// Leave a type unset to retain the original uncast string-array expression.
+	ArrayElementTypes     map[string]string
+	NormalizeArrayElement func(string, any) (any, error)
 	// ColumnExpr maps logical column names to pre-quoted SQL expressions.
 	ColumnExpr map[string]string
 	// NormalizeColumnValue optionally canonicalizes native values before binding.
@@ -73,10 +77,22 @@ func (c *filterCompiler) compile(f Filter) (string, error) {
 			return "", err
 		}
 		if !metadata {
-			if !c.cfg.ArrayColumns[strings.TrimSpace(node.Field.Name)] {
+			name := strings.TrimSpace(node.Field.Name)
+			if !c.cfg.ArrayColumns[name] {
 				return "", fmt.Errorf("%w: Contains requires an array property", ErrInvalidFilter)
 			}
-			return fmt.Sprintf("(%s @> ARRAY[%s])", expr, c.bind(node.Value)), nil
+			value := node.Value
+			if c.cfg.NormalizeArrayElement != nil {
+				value, err = c.cfg.NormalizeArrayElement(name, value)
+				if err != nil {
+					return "", fmt.Errorf("%w: invalid membership value: %v", ErrInvalidFilter, err)
+				}
+			}
+			ph := c.bind(value)
+			if typ := c.cfg.ArrayElementTypes[name]; typ != "" {
+				ph += "::" + typ
+			}
+			return fmt.Sprintf("(%s @> ARRAY[%s])", expr, ph), nil
 		}
 		ph, err := c.bindJSONB(node.Value)
 		if err != nil {

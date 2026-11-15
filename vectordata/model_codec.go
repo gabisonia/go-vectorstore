@@ -237,6 +237,12 @@ func NewStructCodec[T any](definition *CollectionDefinition) (*StructCodec[T], e
 		if p.Type == TypeBytes {
 			valid = typ.Kind() == reflect.Slice && typ.Elem().Kind() == reflect.Uint8
 		}
+		if element, array := p.Type.ArrayElementType(); array && p.Type != TypeStringArray {
+			valid = typ.Kind() == reflect.Slice && nativeArrayKind(typ.Elem(), element)
+			if p.Type == TypeFloat64Array && valid {
+				valid = typ.Elem().Kind() == reflect.Float32 || typ.Elem().Kind() == reflect.Float64
+			}
+		}
 		if !valid {
 			return nil, fmt.Errorf("%w: field %q type conflicts with definition", ErrSchemaMismatch, p.Name)
 		}

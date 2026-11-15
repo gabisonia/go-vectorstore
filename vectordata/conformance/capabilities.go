@@ -18,6 +18,7 @@ func runCapabilities(t *testing.T, factory Factory) {
 		t.Skip("provider does not expose optional capability metadata")
 	}
 	caps := provider.Capabilities()
+	t.Run("native_arrays", func(t *testing.T) { runNativeArrays(t, factory, caps) })
 	t.Run("native_data", func(t *testing.T) { runNativeData(t, factory, caps) })
 	t.Run("vector_precisions", func(t *testing.T) { runVectorPrecisions(t, factory, caps) })
 	if caps.Backend == "" || len(caps.KeyTypes) == 0 {
@@ -30,6 +31,7 @@ func runCapabilities(t *testing.T, factory Factory) {
 		vectordata.TypeBool: true, vectordata.TypeTime: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
 		vectordata.TypeStringArray: []string{"news"}, vectordata.TypeJSON: map[string]any{"rank": 1},
 		vectordata.TypeUUID: "8f516db6-38ca-4e8f-ad79-d71b015f5419", vectordata.TypeBytes: []byte{0, 1, 255},
+		vectordata.TypeInt64Array: []int64{1, 42}, vectordata.TypeFloat64Array: []float64{0.25, 2.5}, vectordata.TypeBoolArray: []bool{true, false},
 	}
 	keys := map[vectordata.KeyType]any{vectordata.KeyString: "key", vectordata.KeyInt64: int64(42), vectordata.KeyUUID: "8f516db6-38ca-4e8f-ad79-d71b015f5419"}
 	for _, kind := range caps.KeyTypes {

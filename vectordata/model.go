@@ -25,15 +25,18 @@ const (
 type DataType string
 
 const (
-	TypeString      DataType = "string"
-	TypeInt64       DataType = "int64"
-	TypeFloat64     DataType = "float64"
-	TypeBool        DataType = "bool"
-	TypeJSON        DataType = "json"
-	TypeTime        DataType = "time"
-	TypeStringArray DataType = "string_array"
-	TypeUUID        DataType = "uuid"
-	TypeBytes       DataType = "bytes"
+	TypeString       DataType = "string"
+	TypeInt64        DataType = "int64"
+	TypeFloat64      DataType = "float64"
+	TypeBool         DataType = "bool"
+	TypeJSON         DataType = "json"
+	TypeTime         DataType = "time"
+	TypeStringArray  DataType = "string_array"
+	TypeUUID         DataType = "uuid"
+	TypeBytes        DataType = "bytes"
+	TypeInt64Array   DataType = "int64_array"
+	TypeFloat64Array DataType = "float64_array"
+	TypeBoolArray    DataType = "bool_array"
 )
 
 type KeyProperty struct {
@@ -248,7 +251,7 @@ func (d CollectionDefinition) Normalize() (CollectionDefinition, error) {
 			return fail("invalid or duplicate data property")
 		}
 		switch p.Type {
-		case TypeString, TypeInt64, TypeFloat64, TypeBool, TypeJSON, TypeTime, TypeStringArray, TypeUUID, TypeBytes:
+		case TypeString, TypeInt64, TypeFloat64, TypeBool, TypeJSON, TypeTime, TypeStringArray, TypeUUID, TypeBytes, TypeInt64Array, TypeFloat64Array, TypeBoolArray:
 		default:
 			return fail("unsupported data property type")
 		}
@@ -415,6 +418,8 @@ func normalizeData(value any, p DataProperty) (any, error) {
 		return nil, fmt.Errorf("%w: invalid %s data property %q", ErrInvalidRecord, p.Type, p.Name)
 	}
 	switch p.Type {
+	case TypeInt64Array, TypeFloat64Array, TypeBoolArray:
+		return normalizeNativeArray(value, p)
 	case TypeUUID:
 		if isNilValue(value) {
 			if p.Optional {
@@ -489,8 +494,8 @@ func normalizeData(value any, p DataProperty) (any, error) {
 }
 
 // NormalizeModelData validates a native property value and copies mutable values.
-// UUID values become canonical strings; nil byte slices become SQL NULL only for
-// optional properties, while non-nil empty slices remain empty binary values.
+// UUID values become canonical strings; nil byte/numeric/bool slices become SQL
+// NULL only for optional properties, while non-nil empty slices stay empty values.
 func NormalizeModelData(value any, p DataProperty) (any, error) {
 	return normalizeData(value, p)
 }
@@ -665,7 +670,8 @@ func ValidateModelQuery(d CollectionDefinition, top int, opts QueryOptions) erro
 		for _, p := range d.Data {
 			if p.Name == sort.Property {
 				found = true
-				if p.Type == TypeJSON || p.Type == TypeStringArray {
+				_, array := p.Type.ArrayElementType()
+				if p.Type == TypeJSON || array {
 					return fmt.Errorf("%w: ordering JSON or array properties is provider-specific", ErrUnsupported)
 				}
 			}

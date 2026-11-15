@@ -79,12 +79,13 @@ return keys in input order; input models are not mutated. Assign the returned ke
 before upserting the same model again. Generated keys can have gaps.
 
 Data types are `string`, `int64`, `float64`, `bool`, `time`, `string_array`, `json`,
-`uuid`, and `bytes`. Pointer data fields are optional. Nonoptional fields reject nil values.
+`uuid`, `bytes`, `int64_array`, `float64_array`, and `bool_array`. Pointer data fields
+are optional. Nonoptional fields reject nil values.
 JSON numbers retain their precision as `json.Number`. Dynamic records use logical
 property names in `ModelRecord.Data` and `ModelRecord.Vectors`.
 
 PostgreSQL uses native columns, B-tree indexes for scalar `index` properties,
-GIN indexes for indexed string arrays, GIN full-text indexes for `fulltext`
+GIN indexes for indexed native arrays, GIN full-text indexes for `fulltext`
 strings, and optional per-vector HNSW/IVFFlat indexes. JSON properties currently
 require provider-specific indexes and reject the generic `index` flag.
 
@@ -115,7 +116,7 @@ Providers copy buffers on writes and reads, so callers can reuse their buffers.
 Native UUID/byte properties support equality, membership, existence, ordered
 comparisons and query ordering, with the usual SQL null semantics. UUID comparisons
 use canonical UUID order; bytes use unsigned lexicographic order, including prefix
-length. `Contains` remains string-array membership, not byte substring matching.
+length. `Contains` means native array membership, not byte substring matching.
 The `index` flag creates a B-tree index for either native type. Memory applies the
 same validation and comparison rules without physical indexes.
 
@@ -124,6 +125,46 @@ without `type=bytes` remain JSON values (base64 for `[]byte`). Existing models a
 registrations do not silently change. Adding optional native fields is supported
 by additive migrations; changing an existing JSON/string/native mapping requires
 manual conversion and backfill review.
+
+Numeric and boolean arrays are also opt-in:
+
+```go
+type Measurements struct {
+    ID     string    `vectordata:"key"`
+    Codes  []int64   `vectordata:"data,type=int64_array,optional,index"`
+    Values []float64 `vectordata:"data,type=float64_array,optional,index"`
+    Flags  []bool    `vectordata:"data,type=bool_array,optional,index"`
+    Legacy []int64   `vectordata:"data"` // Retains JSON storage.
+}
+filter := vectordata.Contains(vectordata.Column("Codes"), int64(42))
+_ = filter
+```
+
+`TypeInt64Array`, `TypeFloat64Array` and `TypeBoolArray` map to PostgreSQL
+`bigint[]`, `double precision[]` and `boolean[]`. Dynamic reads return `[]int64`,
+`[]float64` and `[]bool`. Typed integer fields can use integer slices, floating
+fields can use float32/float64 slices, and boolean fields can use bool slices,
+including named slice/element aliases. Integer bounds and floating-point
+finiteness are checked; typed reads reject values outside the destination range.
+Dynamic records may also supply `[]any` with valid non-null scalar elements.
+
+For these new types, nil slices are SQL NULL for optional fields and invalid for
+required fields. Non-nil empty slices stay empty arrays. Elements cannot be NULL,
+and floats cannot be NaN or infinite. Buffers are copied on writes and reads.
+Existing string-array nil-slice behavior is unchanged. Unannotated numeric and
+boolean slices continue to use JSON; registrations do not change implicitly.
+
+`Contains` tests one scalar element with a GIN-compatible typed predicate. `Eq`
+and `In` compare whole arrays, preserving order and duplicates. NULL arrays retain
+SQL unknown behavior under negated membership; an empty array contains nothing.
+A NULL membership operand matches no native element. Portable array ordering and
+ordered array comparisons are unsupported. Arrays written directly through SQL
+must be one-dimensional with lower bound 1 and non-null, finite elements;
+unsupported shapes/values are rejected on read.
+
+Adding optional native array fields and their requested GIN indexes is supported
+by additive migrations. Required additions need backfill; changing JSON or an
+existing native array type requires manual conversion review.
 
 Models use strict schema validation: columns, types, nullability, identity and
 primary-key shape must match. Existing indexes are checked for conflicts.
@@ -150,7 +191,7 @@ if provider, ok := store.(vectordata.CapabilityProvider); ok {
 }
 ```
 
-Both providers report string/int64/UUID keys, generated int64 keys, all nine
+Both providers report string/int64/UUID keys, generated int64 keys, all twelve
 portable data types, and cosine/L2/inner-product/L1 metrics.
 `VectorPrecisions` reports `VectorFloat32` and `VectorFloat16` on both providers;
 PostgreSQL float16 storage requires pgvector 0.7+ and a visible `halfvec` type.
@@ -159,7 +200,7 @@ PostgreSQL float16 storage requires pgvector 0.7+ and a visible `halfvec` type.
 | --- | --- | --- |
 | `VectorIndexMethods` | None | HNSW, IVFFlat |
 | `VectorIndexCapabilities` | None | Supported method/metric/precision combinations and dimension limits |
-| `IndexedDataTypes` | None | String, int64, float64, bool, time, string array, UUID, bytes |
+| `IndexedDataTypes` | None | String, int64, float64, bool, time, UUID, bytes, native string/numeric/bool arrays |
 | `FullTextIndexing` | False | True, for string properties |
 | `HybridSearch` | False | True |
 | `MigrationPlanning` | False | True, plan-only |
@@ -247,7 +288,8 @@ syntax. Nested JSON keys, including empty/whitespace keys, are literal.
 
 Operators include `Eq`, `Ne`, `In`, `Gt`, `Gte`, `Lt`, `Lte`, `Contains`, `Exists`,
 `And`, `Or`, and `Not`. `Contains` means array membership, not substring matching.
-String-array predicates use a GIN-compatible PostgreSQL containment expression.
+Native-array membership uses a GIN-compatible PostgreSQL containment expression,
+with typed scalar parameters for numeric and boolean arrays.
 
 The filter contract preserves SQL-style unknown/null behavior under negation:
 a missing JSON path does not match `Eq(path,nil)` or its negation. A present JSON

@@ -45,7 +45,8 @@ func ValidateModelFilter(filter Filter, d CollectionDefinition) error {
 			}
 			for _, p := range d.Data {
 				if p.Name == ref.Name {
-					if contains && p.Type != TypeStringArray {
+					_, array := p.Type.ArrayElementType()
+					if contains && !array {
 						return fmt.Errorf("%w: Contains requires an array property", ErrInvalidFilter)
 					}
 					return nil
@@ -101,16 +102,23 @@ func ValidateModelFilter(filter Filter, d CollectionDefinition) error {
 			if property.Name != ref.Name {
 				continue
 			}
-			if (property.Type == TypeUUID || property.Type == TypeBytes) && isNilValue(value) {
+			_, array := property.Type.ArrayElementType()
+			if (property.Type == TypeUUID || property.Type == TypeBytes || array && property.Type != TypeStringArray) && isNilValue(value) {
 				if ordered {
 					return invalid(fmt.Errorf("ordered comparisons require a value"))
 				}
 				return nil
 			}
-			if ordered && (property.Type == TypeJSON || property.Type == TypeStringArray || property.Type == TypeBool) {
+			if ordered && (property.Type == TypeJSON || array || property.Type == TypeBool) {
 				return invalid(fmt.Errorf("property is not an ordered scalar"))
 			}
 			if contains {
+				if property.Type != TypeStringArray {
+					if _, err := NormalizeModelArrayElement(value, property.Type); err != nil {
+						return invalid(err)
+					}
+					return nil
+				}
 				if _, ok := value.(string); !ok {
 					return invalid(fmt.Errorf("string array membership requires a string"))
 				}
@@ -522,6 +530,13 @@ func modelTruth(filter Filter, r ModelRecord, d CollectionDefinition) (truth, er
 		needle := f.Value
 		if jsonPath {
 			needle = normalize(f.Field, needle)
+		} else {
+			for _, property := range d.Data {
+				if property.Name == strings.TrimSpace(f.Field.Name) && property.Type != TypeStringArray {
+					needle, _ = NormalizeModelArrayElement(needle, property.Type)
+					break
+				}
+			}
 		}
 		for i := 0; i < array.Len(); i++ {
 			if modelEqual(array.Index(i).Interface(), needle) {
@@ -602,6 +617,18 @@ func CloneModelRecord(r ModelRecord, d CollectionDefinition, vectors bool) Model
 		case TypeBytes:
 			if buffer, ok := value.([]byte); ok {
 				value = append([]byte{}, buffer...)
+			}
+		case TypeInt64Array:
+			if array, ok := value.([]int64); ok {
+				value = append([]int64{}, array...)
+			}
+		case TypeFloat64Array:
+			if array, ok := value.([]float64); ok {
+				value = append([]float64{}, array...)
+			}
+		case TypeBoolArray:
+			if array, ok := value.([]bool); ok {
+				value = append([]bool{}, array...)
 			}
 		}
 		out.Data[p.Name] = value
