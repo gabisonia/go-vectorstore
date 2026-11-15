@@ -43,6 +43,7 @@ func runNativeArrays(t *testing.T, factory Factory, caps vectordata.ProviderCapa
 		{vectordata.TypeTimeArray, []arrayInstant{arrayInstant(instant), arrayInstant(instant.Add(100 * time.Nanosecond))}, []time.Time{canonical, canonical}, []time.Time{}, []time.Time(nil), []time.Time{canonical.Add(time.Hour)}, instant.In(time.FixedZone("other", -18000)), []time.Time{time.Date(10000, 1, 1, 0, 0, 0, 0, time.UTC)}, "not a timestamp"},
 		{vectordata.TypeDateOnlyArray, []vectordata.DateOnly{"2024-02-29", "2024-02-29"}, []string{"2024-02-29", "2024-02-29"}, []string{}, []string(nil), []string{"2026-01-01"}, vectordata.DateOnly("2024-02-29"), []string{"2026-02-29"}, "today"},
 		{vectordata.TypeTimeOnlyArray, []vectordata.TimeOnly{"09:02:03.123456789", "09:02:03.123456999"}, []string{"09:02:03.123456", "09:02:03.123456"}, []string{}, []string(nil), []string{"10:00:00"}, vectordata.TimeOnly("09:02:03.123456001"), []string{"24:00:00"}, "09:02:03Z"},
+		{vectordata.TypeDecimalArray, decimalValues{"0.100", "1e-28", "0.100"}, []vectordata.Decimal{"0.1", "0.0000000000000000000000000001", "0.1"}, []vectordata.Decimal{}, []vectordata.Decimal(nil), []vectordata.Decimal{"2"}, decimalText("1e-1"), []any{1, nil}, 0.1},
 	} {
 		t.Run(string(tt.kind), func(t *testing.T) {
 			if !slices.Contains(caps.DataTypes, tt.kind) {

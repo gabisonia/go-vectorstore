@@ -126,7 +126,7 @@ func (c *ModelCollection) writeStatement(r vectordata.ModelRecord, upsert, useBi
 		if p.Type == vectordata.TypeBytes {
 			cast = "::bytea"
 		}
-		if p.Type == vectordata.TypeDateOnly || p.Type == vectordata.TypeTimeOnly {
+		if p.Type == vectordata.TypeDateOnly || p.Type == vectordata.TypeTimeOnly || p.Type == vectordata.TypeDecimal {
 			cast = "::" + dataSQLType(p.Type)
 		}
 		if _, array := p.Type.ArrayElementType(); array && p.Type != vectordata.TypeStringArray {
@@ -183,11 +183,11 @@ func (c *ModelCollection) columns(alias string, vectors bool) []string {
 	columns := []string{key}
 	for _, p := range c.definition.Data {
 		column := qualify(p.StorageName)
-		if p.Type == vectordata.TypeJSON || p.Type == vectordata.TypeUUID {
+		if p.Type == vectordata.TypeJSON || p.Type == vectordata.TypeUUID || p.Type == vectordata.TypeDecimal {
 			column += "::text"
 		}
-		if p.Type == vectordata.TypeUUIDArray {
-			// Preserve array dimensions while exposing canonical UUID strings.
+		if p.Type == vectordata.TypeUUIDArray || p.Type == vectordata.TypeDecimalArray {
+			// Preserve dimensions while exposing exact UUID/decimal text.
 			column += "::text[]"
 		}
 		columns = append(columns, column)
@@ -255,6 +255,13 @@ func (c *ModelCollection) scan(row modelScanner, vectors, withDistance bool) (ve
 		if p.Type == vectordata.TypeDateOnly || p.Type == vectordata.TypeTimeOnly {
 			var err error
 			value, err = decodeCalendarValue(value, p.Type)
+			if err != nil {
+				return r, 0, err
+			}
+		}
+		if value != nil && p.Type == vectordata.TypeDecimal {
+			var err error
+			value, err = vectordata.NormalizeModelData(value, p)
 			if err != nil {
 				return r, 0, err
 			}
@@ -352,7 +359,7 @@ func (c *ModelCollection) filterConfig() filtersql.FilterSQLConfig {
 				native[p.Name] = p
 			}
 		}
-		if p.Type == vectordata.TypeUUID || p.Type == vectordata.TypeBytes || p.Type == vectordata.TypeDateOnly || p.Type == vectordata.TypeTimeOnly {
+		if p.Type == vectordata.TypeUUID || p.Type == vectordata.TypeBytes || p.Type == vectordata.TypeDateOnly || p.Type == vectordata.TypeTimeOnly || p.Type == vectordata.TypeDecimal {
 			native[p.Name] = p
 		}
 	}

@@ -228,6 +228,19 @@ dates, infinities and 24:00:00 on read. Preserve existing inference and timestam
 behavior; shared calendar and native-array tests cover filters, search and typed
 round trips, with PostgreSQL-specific migration and index-plan checks.
 
+`TypeDecimal`/`TypeDecimalArray` preserve exact values with a 96-bit coefficient,
+separate sign and scale 0–28. Use `NormalizeModelData` for scalar/whole-array
+values and `NormalizeModelArrayElement` for scalar membership operands. Dynamic
+values are canonical `Decimal`/`[]Decimal`; strings, `json.Number` and integers
+are accepted, while floating-point inputs and values requiring rounding fail.
+Compare decimals numerically, without float64 conversion or lexical string order.
+Typed fields support string types and aliases. Native storage remains opt-in;
+legacy float/string/JSON mappings must not change implicitly. PostgreSQL uses
+unconstrained `numeric`/`numeric[]`, B-tree/GIN indexes, and text read projections
+that retain array dimensions and reject non-finite/out-of-range SQL values.
+Shared tests cover exact fractions, numeric ordering, filters, search, typed
+mapping, ownership, atomic failures and legacy JSON precision.
+
 Advertise supported `VectorPrecisions` explicitly. The Go vector API stays float32;
 `NormalizeModelVector` validates and rounds float16 values. It returns a new slice
 for float16 and the original slice for float32, so copy float32 inputs before

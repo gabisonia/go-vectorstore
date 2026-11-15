@@ -27,6 +27,8 @@ func (t DataType) ArrayElementType() (DataType, bool) {
 		return TypeDateOnly, true
 	case TypeTimeOnlyArray:
 		return TypeTimeOnly, true
+	case TypeDecimalArray:
+		return TypeDecimal, true
 	default:
 		return "", false
 	}
@@ -46,6 +48,8 @@ func nativeArrayKind(typ reflect.Type, element DataType) bool {
 		return typ.ConvertibleTo(reflect.TypeFor[time.Time]())
 	case TypeDateOnly, TypeTimeOnly:
 		return typ.Kind() == reflect.String
+	case TypeDecimal:
+		return typ.Kind() == reflect.String || typ.Kind() >= reflect.Int && typ.Kind() <= reflect.Uint64
 	}
 	return false
 }
@@ -77,6 +81,8 @@ func normalizeNativeArray(value any, p DataProperty) (any, error) {
 		out = reflect.MakeSlice(reflect.TypeFor[[]string](), v.Len(), v.Len())
 	case TypeTimeArray:
 		out = reflect.MakeSlice(reflect.TypeFor[[]time.Time](), v.Len(), v.Len())
+	case TypeDecimalArray:
+		out = reflect.MakeSlice(reflect.TypeFor[[]Decimal](), v.Len(), v.Len())
 	}
 	for i := 0; i < v.Len(); i++ {
 		item := v.Index(i).Interface()
