@@ -1,4 +1,4 @@
-# Upgrading to v0.4.0
+# Upgrading model collections
 
 **v0.4.0 was published on November 15, 2026**, following v0.3.1.
 See the [release notes](https://github.com/gabisonia/go-vectorstore/releases/tag/v0.4.0)
@@ -7,6 +7,17 @@ and [changelog](../CHANGELOG.md).
 ```sh
 go get github.com/gabisonia/go-vectorstore@v0.4.0
 ```
+
+## v0.4.1 hardening update
+
+This source prepares v0.4.1; consult GitHub releases for publication status.
+The patch preserves public APIs and SQLite format 1, adds cancellation/recovery
+checks, optimizes memory/SQLite exact search and SQLite reads, and expands samples
+and AI documentation. Upgrade to the latest published 0.4.x patch, pin it, and
+validate your workload. PostgreSQL iterators now report cancellation instead of
+continuing to yield buffered rows, including cancellation during the last item if
+the consumer continues iteration. See [release policy](releases.md) and
+[production operation](production.md).
 
 ## Existing Record API applications
 

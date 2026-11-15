@@ -23,8 +23,9 @@ Each README describes expected output, flags, stored fixtures, and cleanup.
 Deterministic embedders are instructional fixtures, not semantic models. Remote
 modes require explicit opt-in and can incur provider charges. The original Record
 API examples remain supported; new model applications should start with the typed
-samples. The new samples are available on master and will ship in the next tag;
-their library calls use APIs available in v0.4.0.
+samples. The new samples are on master and included in source versions from v0.4.1;
+their library calls use APIs available in v0.4.0. Consult GitHub releases for
+published tags.
 
 ## Verification
 

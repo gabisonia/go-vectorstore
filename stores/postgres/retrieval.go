@@ -109,6 +109,10 @@ func (c *PostgresCollection) QueryIter(ctx context.Context, filter vectordata.Fi
 		defer rows.Close()
 		projection := vectordata.Projection{IncludeVector: opts.IncludeVectors, IncludeMetadata: true, IncludeContent: true}
 		for rows.Next() {
+			if err := ctx.Err(); err != nil {
+				report(err)
+				return
+			}
 			r, err := c.scanSearchResult(rows, projection)
 			if err != nil {
 				report(err)
@@ -119,6 +123,8 @@ func (c *PostgresCollection) QueryIter(ctx context.Context, filter vectordata.Fi
 			}
 		}
 		if err := rows.Err(); err != nil {
+			report(err)
+		} else if err := ctx.Err(); err != nil {
 			report(err)
 		}
 	}

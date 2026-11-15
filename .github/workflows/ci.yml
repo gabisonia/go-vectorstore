@@ -25,6 +25,15 @@ jobs:
           cache: true
       - name: Test with race detection
         run: go test -race -timeout=5m ./...
+      - name: Run bounded fuzz campaigns
+        run: bash scripts/test-fuzz.sh 3s
+      - name: Retain failing fuzz inputs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: failing-fuzz-corpus-${{ matrix.go }}
+          path: '**/testdata/fuzz/**'
+          if-no-files-found: ignore
       - name: Check documentation links and executable quickstart
         run: python3 scripts/check-docs.py
       - name: Run credential-free sample smoke tests

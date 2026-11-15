@@ -32,6 +32,14 @@ git remote add origin "$scratch/remote.git"
 git commit -q --allow-empty -m initial
 first="$(git rev-parse HEAD)"
 
+printf '1.2.3\n' > VERSION
+printf '# Changelog\n\n## v1.2.3\n' > CHANGELOG.md
+bash "$script" verify-source v1.2.3
+if bash "$script" verify-source v1.2.4 > /dev/null 2>&1; then fail 'Mismatched source version accepted'; fi
+printf '# Changelog\n\n## v1.2.30\n' > CHANGELOG.md
+if bash "$script" verify-source v1.2.3 > /dev/null 2>&1; then fail 'Missing changelog entry accepted'; fi
+printf '# Changelog\n\n## v1.2.3 — 2026-01-01\n' > CHANGELOG.md
+bash "$script" verify-source v1.2.3
 bash "$script" verify-tag v1.2.3
 bash "$script" publish-tag v1.2.3 > /dev/null 2>&1
 bash "$script" publish-tag v1.2.3 > /dev/null 2>&1

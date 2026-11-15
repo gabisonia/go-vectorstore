@@ -1,6 +1,7 @@
 // Package sqlite provides durable embedded model collections with exact search.
-// Get/GetMany and unfiltered Count use direct SQL. Query, filtered Count and
-// searches evaluate a consistent in-memory snapshot. No native ANN, full-text
+// Get/GetMany and unfiltered Count use direct SQL. Query/filtered Count materialize
+// a snapshot; exact search streams a read snapshot through bounded ranking.
+// No native ANN, full-text
 // indexes, hybrid search, or automatic schema migrations are provided.
 package sqlite
 

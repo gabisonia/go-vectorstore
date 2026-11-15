@@ -12,8 +12,8 @@ This file describes contributing to this repository.
 - `samples`: runnable workflows; sample-only helpers live in `samples/internal`.
 - `docs`: usage, provider limits, migrations, architecture and measured performance.
 
-The module requires Go 1.25+. `VERSION` and CHANGELOG describe published versions;
-master may contain unreleased changes. Keep the original Record API compatible.
+The module requires Go 1.25+. `VERSION` selects the source version being prepared or tagged; CHANGELOG describes
+its changes. Verify tag availability in GitHub releases; master can be newer. Keep the original Record API compatible.
 
 ## Local verification
 
@@ -22,6 +22,7 @@ Run checks appropriate to the changed paths:
 ```sh
 go test -race -timeout=5m ./...
 go vet ./...
+bash scripts/test-fuzz.sh 3s
 python3 scripts/check-docs.py
 bash scripts/test-samples.sh
 bash .github/scripts/release_test.sh
@@ -72,5 +73,7 @@ behavior; normal tests use deterministic embedders and local HTTP stand-ins.
 [docs/model-api.md](docs/model-api.md) is the model usage reference;
 [docs/parity.md](docs/parity.md) describes provider differences;
 [docs/migrations.md](docs/migrations.md) describes migration semantics.
+[docs/production.md](docs/production.md), [docs/releases.md](docs/releases.md) and
+[SECURITY.md](SECURITY.md) define operational, compatibility and reporting policy.
 `llms.txt` is a discovery index, not a second API specification. Keep its version
 and links aligned with VERSION, docs and executable examples.

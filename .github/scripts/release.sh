@@ -41,10 +41,33 @@ verify_tag() {
   fi
 }
 
+verify_source() {
+  local tag="$1" root expected line found=false
+  root="$(git rev-parse --show-toplevel)"
+  expected="$(resolve_version "$(cat "$root/VERSION")")"
+  if [[ "$tag" != "$expected" ]]; then
+    printf 'Release %s does not match VERSION %s\n' "$tag" "$expected" >&2
+    return 1
+  fi
+  while IFS= read -r line; do
+    case "$line" in
+      "## $tag"|"## $tag — "*) found=true ;;
+    esac
+  done < "$root/CHANGELOG.md"
+  if [[ "$found" != true ]]; then
+    printf 'CHANGELOG.md has no entry for %s\n' "$tag" >&2
+    return 1
+  fi
+}
+
 case "${1:-}" in
   resolve)
     [[ "$#" -eq 2 ]] || exit 2
     resolve_version "$2"
+    ;;
+  verify-source)
+    [[ "$#" -eq 2 ]] || exit 2
+    verify_source "$2"
     ;;
   verify-tag)
     [[ "$#" -eq 2 ]] || exit 2
@@ -59,7 +82,7 @@ case "${1:-}" in
     git push origin "refs/tags/$2"
     ;;
   *)
-    printf 'Usage: release.sh {resolve|verify-tag|publish-tag} VERSION\n' >&2
+    printf 'Usage: release.sh {resolve|verify-source|verify-tag|publish-tag} VERSION\n' >&2
     exit 2
     ;;
 esac

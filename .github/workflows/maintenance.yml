@@ -1,0 +1,41 @@
+name: Scheduled hardening
+
+on:
+  schedule:
+    - cron: '23 8 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  vulnerabilities:
+    name: Weekly vulnerability scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache: true
+      - run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 -test -tags=integration ./...
+
+  fuzz:
+    name: Extended fuzz campaign
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache: true
+      - run: bash scripts/test-fuzz.sh 60s
+      - name: Retain failing fuzz inputs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: failing-fuzz-corpus
+          path: '**/testdata/fuzz/**'
+          if-no-files-found: ignore

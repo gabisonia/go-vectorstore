@@ -493,6 +493,10 @@ func (c *ModelCollection) QueryIter(ctx context.Context, filter vectordata.Filte
 		}
 		defer rows.Close()
 		for rows.Next() {
+			if err := ctx.Err(); err != nil {
+				yield(vectordata.ModelRecord{}, c.operation("query", err))
+				return
+			}
 			r, _, err := c.scan(rows, opts.IncludeVectors, false)
 			if err != nil {
 				yield(vectordata.ModelRecord{}, c.operation("query", err))
@@ -503,6 +507,8 @@ func (c *ModelCollection) QueryIter(ctx context.Context, filter vectordata.Filte
 			}
 		}
 		if err := rows.Err(); err != nil {
+			yield(vectordata.ModelRecord{}, c.operation("query", err))
+		} else if err := ctx.Err(); err != nil {
 			yield(vectordata.ModelRecord{}, c.operation("query", err))
 		}
 	}
