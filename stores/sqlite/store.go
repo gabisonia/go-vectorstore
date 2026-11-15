@@ -1,6 +1,7 @@
 // Package sqlite provides durable embedded model collections with exact search.
-// Queries and searches evaluate a consistent in-memory snapshot. No native ANN,
-// full-text indexes, hybrid search, or automatic schema migrations are provided.
+// Get/GetMany and unfiltered Count use direct SQL. Query, filtered Count and
+// searches evaluate a consistent in-memory snapshot. No native ANN, full-text
+// indexes, hybrid search, or automatic schema migrations are provided.
 package sqlite
 
 import (
@@ -302,9 +303,9 @@ func (c *Collection) write(ctx context.Context, records []vectordata.ModelRecord
 }
 func (c *Collection) Delete(ctx context.Context, keys []any) (count int64, err error) {
 	defer func() { err = c.operation("delete", err) }()
-	normalized := make([]any, len(keys))
+	normalized := make([]string, len(keys))
 	for i, key := range keys {
-		normalized[i], err = c.definition.NormalizeKey(key)
+		normalized[i], err = c.lookupToken(key)
 		if err != nil {
 			return 0, err
 		}
@@ -321,7 +322,7 @@ func (c *Collection) Delete(ctx context.Context, keys []any) (count int64, err e
 		return 0, err
 	}
 	for _, key := range normalized {
-		result, e := tx.ExecContext(ctx, `DELETE FROM __vectorstore_records WHERE collection=? AND key=?`, c.name, keyToken(key))
+		result, e := tx.ExecContext(ctx, `DELETE FROM __vectorstore_records WHERE collection=? AND key=?`, c.name, key)
 		if e != nil {
 			return 0, e
 		}

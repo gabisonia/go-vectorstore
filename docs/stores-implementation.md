@@ -218,11 +218,13 @@ synchronization and foreign keys. Context-aware retries wait up to five seconds
 for transaction acquisition or a side-effect-free read. Write statements and
 commits are not replayed. Immediate write transactions
 commit records and generated-key sequences together. Reads check registration and
-load records with one consistent SQL snapshot; Get selects a single key directly.
-Query, GetMany, Count and search replay the whole collection through the shared
+load records with one consistent SQL snapshot. Get selects a single key directly;
+GetMany uses indexed, bounded key batches in a deferred read transaction.
+Unfiltered Count uses a schema-checked SQL count without decoding payloads.
+Query, filtered Count and search replay the whole collection through the shared
 memory engine after clearing runtime embedding sources. This releases the SQL
 connection before user iteration and prevents embeddings during snapshot replay.
 
-Those operations cost O(collection size) memory and scan work. Index hints are
+Snapshot replay costs O(collection size) memory and scan work. Index hints are
 accepted for portability; SQLite advertises no physical property/vector indexes,
 full-text/hybrid search or migrations. See [SQLite storage and limits](sqlite.md).

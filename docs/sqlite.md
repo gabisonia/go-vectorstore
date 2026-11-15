@@ -65,14 +65,26 @@ its locking semantics; see the upstream [WAL restrictions](https://www.sqlite.or
 
 ## Query costs and provider limits
 
-Get fetches one record directly. Query, GetMany, Count, and all search operations
-load a consistent snapshot of the entire collection into memory, release the SQL
-connection, and use the shared exact-search engine. Snapshot replay never invokes
-an embedder. Iterators materialize that snapshot before yielding and hold no open
-SQL cursor while application code runs. This costs O(collection size) memory and
-scan work; vector search also evaluates distance for each candidate. It suits
-bounded embedded workloads. Benchmark realistic sizes before selecting it for
-large collections or concurrent query services.
+Get fetches one record directly. GetMany normalizes/deduplicates native keys and
+uses the collection/key primary index in chunks of at most 500 keys. Metadata and
+all chunks use one deferred read transaction, so results stay on the same WAL
+snapshot while other connections can write. Only matching payloads are decoded
+and validated; missing keys are omitted, duplicates collapse, and ordering is
+unspecified. The connection is released before results reach the caller.
+
+Count with a nil filter uses SQL COUNT over the collection's record index, with
+schema/format validation in the same statement. It does not deserialize payloads
+and uses bounded Go memory; counting still scans the matching index entries and
+can grow with collection size. These fast paths do not invoke embedders.
+
+Query, filtered Count, and all search operations load a consistent snapshot of the
+entire collection into memory, release the SQL connection, and use the shared
+exact-search engine. Snapshot replay never invokes an embedder. Iterators
+materialize that snapshot before yielding and hold no open SQL cursor while
+application code runs. These operations cost O(collection size) memory and scan
+work; vector search also evaluates distance for each candidate. Benchmark
+realistic sizes before selecting the provider for large collections or concurrent
+query services. See the [read benchmarks](performance.md#sqlite-batch-lookup-and-count-verification).
 
 Index flags are accepted as portability hints; no physical property/vector
 indexes, ANN acceleration, full-text search, hybrid search, PostgreSQL tuning,
