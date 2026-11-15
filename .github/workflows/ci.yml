@@ -25,6 +25,10 @@ jobs:
           cache: true
       - name: Test with race detection
         run: go test -race -timeout=5m ./...
+      - name: Check documentation links and executable quickstart
+        run: python3 scripts/check-docs.py
+      - name: Run credential-free sample smoke tests
+        run: bash scripts/test-samples.sh
       - name: Vet
         run: go vet ./...
       - name: Test release tooling
@@ -47,7 +51,7 @@ jobs:
       - name: Run Postgres integration tests with race detection
         env:
           PGVECTOR_TEST_IMAGE: pgvector/pgvector:pg${{ matrix.postgres }}
-        run: go test -race -tags=integration -timeout=5m ./stores/postgres
+        run: go test -race -tags=integration -timeout=5m ./stores/postgres ./samples/recipes
 
   vulnerabilities:
     name: Vulnerability scan

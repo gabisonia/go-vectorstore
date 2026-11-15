@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+### Documentation and samples
+
+- Add typed semantic-search and RAG samples with memory/SQLite/PostgreSQL setup,
+  credential-free fixtures, opt-in OpenAI adapters and cited retrieval context.
+- Add focused named-vector, iterator/cancellation, capability, PostgreSQL hybrid
+  and migration-preview recipes, executable Go examples and CI sample/doc checks.
+- Add a version-aware AI usage guide, contributor AGENTS.md and llms.txt discovery
+  index; label the original Record API demos and document sample cleanup.
+
 ### Performance
 
 - Bound memory/SQLite exact-search ranking to top + Skip candidates, preserving

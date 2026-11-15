@@ -1,5 +1,9 @@
 # Semantic Search Sample
 
+This example uses the supported original PostgreSQL Record API. For new model
+applications, see [typed-search](../typed-search/README.md), which also has a
+credential-free fixture mode.
+
 This sample indexes 3 fake articles into Postgres (`pgvector`) and runs semantic search using OpenAI embeddings.
 
 ## Run With Docker Compose (app in container)
@@ -30,7 +34,6 @@ docker compose down
 ```bash
 cd samples/semantic-search
 export OPENAI_API_KEY=your_key_here
-go get github.com/gabisonia/go-vectorstore/vectordata@latest
 
 docker compose up -d postgres
 go run . -q "how can I reduce cloud costs?" -category backend

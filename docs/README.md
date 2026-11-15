@@ -5,6 +5,9 @@ and memory, plus the original PostgreSQL Record API.
 
 ## Using the library
 
+- [AI usage guide](ai-guide.md): version-aware recipes, a complete executable quickstart, and common integration mistakes
+- [Discovery index](../llms.txt): concise links for tools consuming repository documentation
+
 - [Model API](model-api.md): schemas, typed/native keys and data, optional named vectors, filters, embeddings, search and iterators
 - [SQLite provider](sqlite.md): setup, persistence, concurrency and snapshot-scan limits
 - [Provider and .NET parity](parity.md): implemented workflows, provider capabilities and deliberate differences
