@@ -41,6 +41,8 @@ func runNativeArrays(t *testing.T, factory Factory, caps vectordata.ProviderCapa
 		{vectordata.TypeBoolArray, arrayFlags{true, false, true}, []bool{true, false, true}, []bool{}, []bool(nil), []bool{true}, arrayFlag(false), []any{true, 1}, 1},
 		{vectordata.TypeUUIDArray, []nativeUUID{{strings.ToUpper(nativeUUIDA)}, {nativeUUIDA}}, []string{nativeUUIDA, nativeUUIDA}, []string{}, []nativeUUID(nil), []string{nativeUUIDB}, nativeUUID{strings.ToUpper(nativeUUIDA)}, []string{"invalid"}, "invalid"},
 		{vectordata.TypeTimeArray, []arrayInstant{arrayInstant(instant), arrayInstant(instant.Add(100 * time.Nanosecond))}, []time.Time{canonical, canonical}, []time.Time{}, []time.Time(nil), []time.Time{canonical.Add(time.Hour)}, instant.In(time.FixedZone("other", -18000)), []time.Time{time.Date(10000, 1, 1, 0, 0, 0, 0, time.UTC)}, "not a timestamp"},
+		{vectordata.TypeDateOnlyArray, []vectordata.DateOnly{"2024-02-29", "2024-02-29"}, []string{"2024-02-29", "2024-02-29"}, []string{}, []string(nil), []string{"2026-01-01"}, vectordata.DateOnly("2024-02-29"), []string{"2026-02-29"}, "today"},
+		{vectordata.TypeTimeOnlyArray, []vectordata.TimeOnly{"09:02:03.123456789", "09:02:03.123456999"}, []string{"09:02:03.123456", "09:02:03.123456"}, []string{}, []string(nil), []string{"10:00:00"}, vectordata.TimeOnly("09:02:03.123456001"), []string{"24:00:00"}, "09:02:03Z"},
 	} {
 		t.Run(string(tt.kind), func(t *testing.T) {
 			if !slices.Contains(caps.DataTypes, tt.kind) {

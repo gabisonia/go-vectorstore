@@ -23,6 +23,10 @@ func (t DataType) ArrayElementType() (DataType, bool) {
 		return TypeUUID, true
 	case TypeTimeArray:
 		return TypeTime, true
+	case TypeDateOnlyArray:
+		return TypeDateOnly, true
+	case TypeTimeOnlyArray:
+		return TypeTimeOnly, true
 	default:
 		return "", false
 	}
@@ -40,6 +44,8 @@ func nativeArrayKind(typ reflect.Type, element DataType) bool {
 		return typ.Kind() == reflect.String || typ.Implements(reflect.TypeFor[encoding.TextMarshaler]()) || typ.Implements(reflect.TypeFor[fmt.Stringer]())
 	case TypeTime:
 		return typ.ConvertibleTo(reflect.TypeFor[time.Time]())
+	case TypeDateOnly, TypeTimeOnly:
+		return typ.Kind() == reflect.String
 	}
 	return false
 }
@@ -67,7 +73,7 @@ func normalizeNativeArray(value any, p DataProperty) (any, error) {
 		out = reflect.MakeSlice(reflect.TypeFor[[]float64](), v.Len(), v.Len())
 	case TypeBoolArray:
 		out = reflect.MakeSlice(reflect.TypeFor[[]bool](), v.Len(), v.Len())
-	case TypeUUIDArray:
+	case TypeUUIDArray, TypeDateOnlyArray, TypeTimeOnlyArray:
 		out = reflect.MakeSlice(reflect.TypeFor[[]string](), v.Len(), v.Len())
 	case TypeTimeArray:
 		out = reflect.MakeSlice(reflect.TypeFor[[]time.Time](), v.Len(), v.Len())

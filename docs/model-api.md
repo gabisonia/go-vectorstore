@@ -80,7 +80,8 @@ before upserting the same model again. Generated keys can have gaps.
 
 Data types are `string`, `int64`, `float64`, `bool`, `time`, `string_array`, `json`,
 `uuid`, `bytes`, `int64_array`, `float64_array`, `bool_array`, `uuid_array`, and
-`time_array`. Pointer data fields
+`time_array`, `date_only`, `time_only`, `date_only_array`, and `time_only_array`.
+Pointer data fields
 are optional. Nonoptional fields reject nil values.
 JSON numbers retain their precision as `json.Number`. Dynamic records use logical
 property names in `ModelRecord.Data` and `ModelRecord.Vectors`.
@@ -184,6 +185,51 @@ Adding optional native array fields and their requested GIN indexes is supported
 by additive migrations. Required additions need backfill; changing JSON or an
 existing native array type requires manual conversion review.
 
+Date-only and time-only values are opt-in calendar properties, separate from
+timestamp instants:
+
+```go
+type Appointment struct {
+    ID       string                `vectordata:"key"`
+    Day      vectordata.DateOnly    `vectordata:"data,type=date_only,index"`
+    Starts   *vectordata.TimeOnly   `vectordata:"data,type=time_only,index"`
+    Holidays []vectordata.DateOnly  `vectordata:"data,type=date_only_array,optional,index"`
+    Slots    []string              `vectordata:"data,type=time_only_array,optional,index"`
+}
+day, err := vectordata.ParseDateOnly("2024-02-29")
+_ = day
+_ = err
+clock, err := vectordata.ParseTimeOnly("09:02:03.123456789") // 09:02:03.123456
+_ = clock
+_ = err
+```
+
+`TypeDateOnly` maps to PostgreSQL `date`; `TypeTimeOnly` maps to
+`time without time zone`. Their array counterparts map to `date[]` and
+`time without time zone[]`. Dynamic records return canonical `string`/`[]string`
+values. Typed fields accept strings and string aliases, including the provided
+`DateOnly`/`TimeOnly` helpers, and slices of these types. Pointers make scalar
+properties optional. The helpers provide text/JSON mapping and parsing; native
+storage still requires an explicit tag or `DataProperty.Type`.
+
+Dates require exactly `YYYY-MM-DD`, valid Gregorian days and years 1–9999.
+Clock times require `HH:MM:SS` with an optional 1–9 digit fractional second and
+normalize to `HH:MM:SS.ffffff` by truncating sub-microsecond precision. Clock
+times range from midnight through `23:59:59.999999`; offsets, timezone suffixes,
+leap seconds and `24:00:00` are rejected. Neither type accepts `time.Time` values
+or implicitly extracts a date/time from a timestamp. Empty strings and zero-valued
+helper strings are invalid calendar values; use nil pointers for optional NULLs.
+PostgreSQL values outside these bounds, including date infinities, are rejected
+on read. Native reads are independent of session `DateStyle` and `TimeZone`.
+
+Scalar calendar fields support equality, membership, ordered comparisons and
+sorting, with B-tree indexes when requested. Arrays support the native array
+filters, NULL/empty distinction and GIN indexes described above. Invalid values
+fail before writes. Existing string/string-array/JSON inference, timestamp
+properties and registrations retain their existing behavior. Optional additions
+are additive migrations; required fields need backfill, and conversions from
+existing strings, timestamps or JSON require manual migration review.
+
 Models use strict schema validation: columns, types, nullability, identity and
 primary-key shape must match. Existing indexes are checked for conflicts.
 Definitions are registered in the provider's reserved `__vectorstore_models`
@@ -209,7 +255,7 @@ if provider, ok := store.(vectordata.CapabilityProvider); ok {
 }
 ```
 
-Both providers report string/int64/UUID keys, generated int64 keys, all fourteen
+Both providers report string/int64/UUID keys, generated int64 keys, all eighteen
 portable data types, and cosine/L2/inner-product/L1 metrics.
 `VectorPrecisions` reports `VectorFloat32` and `VectorFloat16` on both providers;
 PostgreSQL float16 storage requires pgvector 0.7+ and a visible `halfvec` type.
@@ -218,7 +264,7 @@ PostgreSQL float16 storage requires pgvector 0.7+ and a visible `halfvec` type.
 | --- | --- | --- |
 | `VectorIndexMethods` | None | HNSW, IVFFlat |
 | `VectorIndexCapabilities` | None | Supported method/metric/precision combinations and dimension limits |
-| `IndexedDataTypes` | None | String, int64, float64, bool, time, UUID, bytes, native string/numeric/bool/UUID/timestamp arrays |
+| `IndexedDataTypes` | None | String, int64, float64, bool, time, UUID, bytes, date-only/time-only values and native arrays |
 | `FullTextIndexing` | False | True, for string properties |
 | `HybridSearch` | False | True |
 | `MigrationPlanning` | False | True, plan-only |

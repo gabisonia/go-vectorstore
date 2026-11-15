@@ -3,12 +3,13 @@
 ## Native array verification
 
 ```sh
-go test -race -tags=integration -run 'NativeArray|TimestampArrays|ModelContract/capabilities/native_arrays' \
+go test -race -tags=integration -run 'NativeArray|TimestampArrays|Calendar|ModelContract/capabilities/(native_arrays|calendar_data)' \
   -v -timeout=3m ./stores/postgres
-go test -race -run 'NativeArray|StructuredArray' ./vectordata
+go test -race -run 'NativeArray|StructuredArray|Calendar' ./vectordata
 ```
 
-Shared tests cover integer, floating-point, boolean, UUID and timestamp array round trips, aliases,
+Shared tests cover integer, floating-point, boolean, UUID, timestamp, date-only and
+time-only array round trips, aliases,
 NULL vs empty arrays, whole-array equality/membership, scalar membership and
 negation, filtered vector/hybrid search, mutable-buffer ownership and atomic
 failure on invalid elements. Typed tests preserve legacy JSON slice mappings and
@@ -28,6 +29,13 @@ rows. It explains the actual generated retrieval SQL with sequential scans disab
 inside a transaction, verifies each typed predicate can use its GIN index, and
 checks results under ordinary execution. This proves index eligibility rather
 than predicting production planner choices, latency or selectivity.
+
+Calendar-specific checks cover leap dates, year boundaries, strict ISO parsing,
+clock microsecond truncation, typed/null mapping, sorting, filtered vector/hybrid
+search and legacy string/timestamp fields. PostgreSQL tests verify B-tree and GIN
+index eligibility, additive migrations, required/backfill and conversion
+classification, session date/time settings, and rejection of date infinities,
+out-of-range years, 24:00:00 and unsupported array shapes.
 
 ## L1 distance and index verification
 

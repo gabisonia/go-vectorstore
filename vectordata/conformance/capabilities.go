@@ -19,6 +19,7 @@ func runCapabilities(t *testing.T, factory Factory) {
 	}
 	caps := provider.Capabilities()
 	t.Run("native_arrays", func(t *testing.T) { runNativeArrays(t, factory, caps) })
+	t.Run("calendar_data", func(t *testing.T) { runCalendarData(t, factory, caps) })
 	t.Run("native_data", func(t *testing.T) { runNativeData(t, factory, caps) })
 	t.Run("vector_precisions", func(t *testing.T) { runVectorPrecisions(t, factory, caps) })
 	if caps.Backend == "" || len(caps.KeyTypes) == 0 {
@@ -34,6 +35,10 @@ func runCapabilities(t *testing.T, factory Factory) {
 		vectordata.TypeInt64Array: []int64{1, 42}, vectordata.TypeFloat64Array: []float64{0.25, 2.5}, vectordata.TypeBoolArray: []bool{true, false},
 		vectordata.TypeUUIDArray: []string{"8f516db6-38ca-4e8f-ad79-d71b015f5419"}, vectordata.TypeTimeArray: []time.Time{time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)},
 	}
+	examples[vectordata.TypeDateOnly] = "2026-07-01"
+	examples[vectordata.TypeTimeOnly] = "09:02:03.123456"
+	examples[vectordata.TypeDateOnlyArray] = []string{"2026-07-01"}
+	examples[vectordata.TypeTimeOnlyArray] = []string{"09:02:03.123456"}
 	keys := map[vectordata.KeyType]any{vectordata.KeyString: "key", vectordata.KeyInt64: int64(42), vectordata.KeyUUID: "8f516db6-38ca-4e8f-ad79-d71b015f5419"}
 	for _, kind := range caps.KeyTypes {
 		t.Run(string(kind), func(t *testing.T) {
