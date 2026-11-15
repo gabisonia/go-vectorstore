@@ -33,6 +33,17 @@ func NumericLiteral(v any) (string, bool, error) {
 			return "", true, fmt.Errorf("%w: invalid numeric value: %v", ErrInvalidFilter, err)
 		}
 		return string(encoded), true, nil
+	case json.Marshaler:
+		// Exact numeric helpers can retain their precision through JSON without
+		// depending on core model types here. Non-number JSON stays nonnumeric.
+		encoded, err := json.Marshal(v)
+		if err != nil {
+			return "", true, fmt.Errorf("%w: invalid numeric value: %v", ErrInvalidFilter, err)
+		}
+		if len(encoded) > 0 && (encoded[0] == '-' || encoded[0] >= '0' && encoded[0] <= '9') {
+			return string(encoded), true, nil
+		}
+		return "", false, nil
 	default:
 		return "", false, nil
 	}

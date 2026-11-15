@@ -3,13 +3,13 @@
 ## Native array verification
 
 ```sh
-go test -race -tags=integration -run 'NativeArray|TimestampArrays|Calendar|ModelContract/capabilities/(native_arrays|calendar_data)' \
+go test -race -tags=integration -run 'NativeArray|TimestampArrays|Calendar|Decimal|ModelContract/capabilities/(native_arrays|calendar_data|decimals)' \
   -v -timeout=3m ./stores/postgres
-go test -race -run 'NativeArray|StructuredArray|Calendar' ./vectordata
+go test -race -run 'NativeArray|StructuredArray|Calendar|Decimal' ./vectordata
 ```
 
 Shared tests cover integer, floating-point, boolean, UUID, timestamp, date-only and
-time-only array round trips, aliases,
+time-only and exact decimal array round trips, aliases,
 NULL vs empty arrays, whole-array equality/membership, scalar membership and
 negation, filtered vector/hybrid search, mutable-buffer ownership and atomic
 failure on invalid elements. Typed tests preserve legacy JSON slice mappings and
@@ -36,6 +36,13 @@ search and legacy string/timestamp fields. PostgreSQL tests verify B-tree and GI
 index eligibility, additive migrations, required/backfill and conversion
 classification, session date/time settings, and rejection of date infinities,
 out-of-range years, 24:00:00 and unsupported array shapes.
+
+Decimal checks verify exact values beyond float64 precision, all supported scales
+at the maximum positive/negative coefficient, canonicalization, numeric sorting,
+JSON number mapping and rejection of floating-point input. PostgreSQL tests cover
+text/binary vector transport, B-tree/GIN index eligibility, migration/backfill
+classification, scale-coercing schema drift, and rejection of non-finite or
+out-of-range direct-SQL values and unsupported numeric array shapes.
 
 ## L1 distance and index verification
 

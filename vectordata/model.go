@@ -43,6 +43,8 @@ const (
 	TypeTimeOnly      DataType = "time_only"
 	TypeDateOnlyArray DataType = "date_only_array"
 	TypeTimeOnlyArray DataType = "time_only_array"
+	TypeDecimal       DataType = "decimal"
+	TypeDecimalArray  DataType = "decimal_array"
 )
 
 type KeyProperty struct {
@@ -257,7 +259,7 @@ func (d CollectionDefinition) Normalize() (CollectionDefinition, error) {
 			return fail("invalid or duplicate data property")
 		}
 		switch p.Type {
-		case TypeString, TypeInt64, TypeFloat64, TypeBool, TypeJSON, TypeTime, TypeStringArray, TypeUUID, TypeBytes, TypeInt64Array, TypeFloat64Array, TypeBoolArray, TypeUUIDArray, TypeTimeArray, TypeDateOnly, TypeTimeOnly, TypeDateOnlyArray, TypeTimeOnlyArray:
+		case TypeString, TypeInt64, TypeFloat64, TypeBool, TypeJSON, TypeTime, TypeStringArray, TypeUUID, TypeBytes, TypeInt64Array, TypeFloat64Array, TypeBoolArray, TypeUUIDArray, TypeTimeArray, TypeDateOnly, TypeTimeOnly, TypeDateOnlyArray, TypeTimeOnlyArray, TypeDecimal, TypeDecimalArray:
 		default:
 			return fail("unsupported data property type")
 		}
@@ -424,8 +426,16 @@ func normalizeData(value any, p DataProperty) (any, error) {
 		return nil, fmt.Errorf("%w: invalid %s data property %q", ErrInvalidRecord, p.Type, p.Name)
 	}
 	switch p.Type {
-	case TypeInt64Array, TypeFloat64Array, TypeBoolArray, TypeUUIDArray, TypeTimeArray, TypeDateOnlyArray, TypeTimeOnlyArray:
+	case TypeInt64Array, TypeFloat64Array, TypeBoolArray, TypeUUIDArray, TypeTimeArray, TypeDateOnlyArray, TypeTimeOnlyArray, TypeDecimalArray:
 		return normalizeNativeArray(value, p)
+	case TypeDecimal:
+		if isNilValue(value) {
+			if p.Optional {
+				return nil, nil
+			}
+			return invalid()
+		}
+		return normalizeDecimal(value)
 	case TypeDateOnly, TypeTimeOnly:
 		if isNilValue(value) {
 			if p.Optional {

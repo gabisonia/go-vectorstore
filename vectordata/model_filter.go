@@ -103,7 +103,7 @@ func ValidateModelFilter(filter Filter, d CollectionDefinition) error {
 				continue
 			}
 			_, array := property.Type.ArrayElementType()
-			if (property.Type == TypeUUID || property.Type == TypeBytes || property.Type == TypeDateOnly || property.Type == TypeTimeOnly || array && property.Type != TypeStringArray) && isNilValue(value) {
+			if (property.Type == TypeUUID || property.Type == TypeBytes || property.Type == TypeDateOnly || property.Type == TypeTimeOnly || property.Type == TypeDecimal || array && property.Type != TypeStringArray) && isNilValue(value) {
 				if ordered {
 					return invalid(fmt.Errorf("ordered comparisons require a value"))
 				}
@@ -233,6 +233,8 @@ func modelField(r ModelRecord, ref FieldRef) (any, bool, bool) {
 func modelNumber(value any) (*big.Rat, bool) {
 	var s string
 	switch v := value.(type) {
+	case Decimal:
+		s = v.String()
 	case json.Number:
 		s = v.String()
 	case string:
@@ -633,6 +635,10 @@ func CloneModelRecord(r ModelRecord, d CollectionDefinition, vectors bool) Model
 		case TypeTimeArray:
 			if array, ok := value.([]time.Time); ok {
 				value = append([]time.Time{}, array...)
+			}
+		case TypeDecimalArray:
+			if array, ok := value.([]Decimal); ok {
+				value = append([]Decimal{}, array...)
 			}
 		}
 		out.Data[p.Name] = value

@@ -238,7 +238,7 @@ func NewStructCodec[T any](definition *CollectionDefinition) (*StructCodec[T], e
 		if p.Type == TypeUUID {
 			valid = uuidFieldType(typ)
 		}
-		if p.Type == TypeDateOnly || p.Type == TypeTimeOnly {
+		if p.Type == TypeDateOnly || p.Type == TypeTimeOnly || p.Type == TypeDecimal {
 			valid = typ.Kind() == reflect.String
 		}
 		if p.Type == TypeBytes {
@@ -251,6 +251,9 @@ func NewStructCodec[T any](definition *CollectionDefinition) (*StructCodec[T], e
 			}
 			if p.Type == TypeUUIDArray && valid {
 				valid = uuidFieldType(typ.Elem())
+			}
+			if p.Type == TypeDecimalArray && valid {
+				valid = typ.Elem().Kind() == reflect.String
 			}
 		}
 		if !valid {
@@ -449,7 +452,7 @@ func (c *StructCodec[T]) Decode(record ModelRecord) (T, error) {
 			}
 		}
 		var assignErr error
-		if field.dataType == TypeUUIDArray || field.dataType == TypeTimeArray || field.dataType == TypeDateOnlyArray || field.dataType == TypeTimeOnlyArray {
+		if field.dataType == TypeUUIDArray || field.dataType == TypeTimeArray || field.dataType == TypeDateOnlyArray || field.dataType == TypeTimeOnlyArray || field.dataType == TypeDecimalArray {
 			assignErr = assignStructuredArray(target, value, field.dataType)
 		} else {
 			assignErr = assignModelValue(target, value)

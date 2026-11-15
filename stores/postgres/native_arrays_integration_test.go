@@ -25,6 +25,7 @@ func arrayProperties() []vectordata.DataProperty {
 		{Name: "Times", Type: vectordata.TypeTimeArray, Optional: true, IsIndexed: true},
 		{Name: "Dates", Type: vectordata.TypeDateOnlyArray, Optional: true, IsIndexed: true},
 		{Name: "Clocks", Type: vectordata.TypeTimeOnlyArray, Optional: true, IsIndexed: true},
+		{Name: "Decimals", Type: vectordata.TypeDecimalArray, Optional: true, IsIndexed: true},
 	}
 }
 
@@ -62,6 +63,7 @@ func TestIntegrationNativeArrayMigrationAndTransport(t *testing.T) {
 		record.Data["Times"] = []time.Time{instant}
 		record.Data["Dates"] = []vectordata.DateOnly{"2024-02-29"}
 		record.Data["Clocks"] = []vectordata.TimeOnly{"09:02:03.123456789"}
+		record.Data["Decimals"] = []string{"9007199254740993.000000001", "1e-28"}
 		if _, err := c.writeEncoded(ctx, []vectordata.ModelRecord{record}, true, binary); err != nil {
 			t.Fatalf("binary=%v array write: %v", binary, err)
 		}
@@ -74,6 +76,9 @@ func TestIntegrationNativeArrayMigrationAndTransport(t *testing.T) {
 		}
 		if !reflect.DeepEqual(row.Data["Dates"], []string{"2024-02-29"}) || !reflect.DeepEqual(row.Data["Clocks"], []string{"09:02:03.123456"}) {
 			t.Fatalf("binary=%v calendar array read: %v", binary, row)
+		}
+		if !reflect.DeepEqual(row.Data["Decimals"], []vectordata.Decimal{"9007199254740993.000000001", "0.0000000000000000000000000001"}) {
+			t.Fatalf("binary=%v decimal array read: %v", binary, row)
 		}
 	}
 	// A different native array type is storage drift even though both use array_ops.
@@ -150,6 +155,7 @@ func TestIntegrationNativeArrayGINPlans(t *testing.T) {
 		times := []time.Time{time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC).Add(time.Duration(i) * time.Hour)}
 		dates := []string{time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC).AddDate(0, 0, i).Format(time.DateOnly)}
 		clocks := []string{time.Date(1, 1, 1, 0, 0, 0, 0, time.UTC).Add(time.Duration(i) * time.Second).Format(time.TimeOnly)}
+		decimals := []vectordata.Decimal{vectordata.Decimal(strconv.Itoa(i))}
 		if i%100 == 0 {
 			ints = append(ints, -7)
 			floats = append(floats, 0.25)
@@ -158,8 +164,9 @@ func TestIntegrationNativeArrayGINPlans(t *testing.T) {
 			times = append(times, timeNeedle)
 			dates = append(dates, "2024-02-29")
 			clocks = append(clocks, "09:02:03.123456")
+			decimals = append(decimals, "9007199254740993.000000001")
 		}
-		records[i] = vectordata.ModelRecord{Key: strconv.Itoa(i), Data: map[string]any{"Ints": ints, "Floats": floats, "Flags": flags, "UUIDs": uuids, "Times": times, "Dates": dates, "Clocks": clocks}}
+		records[i] = vectordata.ModelRecord{Key: strconv.Itoa(i), Data: map[string]any{"Ints": ints, "Floats": floats, "Flags": flags, "UUIDs": uuids, "Times": times, "Dates": dates, "Clocks": clocks, "Decimals": decimals}}
 	}
 	if _, err := c.Insert(ctx, records); err != nil {
 		t.Fatal(err)
@@ -174,7 +181,7 @@ func TestIntegrationNativeArrayGINPlans(t *testing.T) {
 	for _, tt := range []struct {
 		field  string
 		needle any
-	}{{"Ints", int16(-7)}, {"Floats", float32(0.25)}, {"Flags", false}, {"UUIDs", strings.ToUpper(uuidNeedle)}, {"Times", timeNeedle.In(time.FixedZone("other", -18000)).Add(789 * time.Nanosecond)}, {"Dates", vectordata.DateOnly("2024-02-29")}, {"Clocks", vectordata.TimeOnly("09:02:03.123456789")}} {
+	}{{"Ints", int16(-7)}, {"Floats", float32(0.25)}, {"Flags", false}, {"UUIDs", strings.ToUpper(uuidNeedle)}, {"Times", timeNeedle.In(time.FixedZone("other", -18000)).Add(789 * time.Nanosecond)}, {"Dates", vectordata.DateOnly("2024-02-29")}, {"Clocks", vectordata.TimeOnly("09:02:03.123456789")}, {"Decimals", vectordata.Decimal("9007199254740993.0000000010")}} {
 		t.Run(tt.field, func(t *testing.T) {
 			filter := vectordata.Contains(vectordata.Column(tt.field), tt.needle)
 			sql, args, err := c.queryPlan(filter, 100, vectordata.QueryOptions{})
@@ -257,6 +264,14 @@ func TestIntegrationNativeArrayRejectsOutOfBandShapes(t *testing.T) {
 		{"Clocks", "ARRAY[['09:02:03']]::time[]"},
 		{"Clocks", "'[0:0]={09:02:03}'::time[]"},
 		{"Clocks", "ARRAY['24:00:00']::time[]"},
+		{"Decimals", "ARRAY[1,NULL]::numeric[]"},
+		{"Decimals", "ARRAY[[1,2]]::numeric[]"},
+		{"Decimals", "'[0:0]={1}'::numeric[]"},
+		{"Decimals", "ARRAY['NaN']::numeric[]"},
+		{"Decimals", "ARRAY['Infinity']::numeric[]"},
+		{"Decimals", "ARRAY['-Infinity']::numeric[]"},
+		{"Decimals", "ARRAY['1e-29']::numeric[]"},
+		{"Decimals", "ARRAY['79228162514264337593543950336']::numeric[]"},
 	} {
 		t.Run(tt.field+tt.expression, func(t *testing.T) {
 			if _, err := store.pool.Exec(ctx, "INSERT INTO "+c.table()+" (\"ID\","+quoteIdent(tt.field)+") VALUES ('bad',"+tt.expression+") ON CONFLICT (\"ID\") DO UPDATE SET "+quoteIdent(tt.field)+"=EXCLUDED."+quoteIdent(tt.field)); err != nil {

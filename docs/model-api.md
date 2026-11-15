@@ -79,8 +79,9 @@ return keys in input order; input models are not mutated. Assign the returned ke
 before upserting the same model again. Generated keys can have gaps.
 
 Data types are `string`, `int64`, `float64`, `bool`, `time`, `string_array`, `json`,
-`uuid`, `bytes`, `int64_array`, `float64_array`, `bool_array`, `uuid_array`, and
-`time_array`, `date_only`, `time_only`, `date_only_array`, and `time_only_array`.
+`uuid`, `bytes`, `int64_array`, `float64_array`, `bool_array`, `uuid_array`,
+`time_array`, `date_only`, `time_only`, `date_only_array`, `time_only_array`,
+`decimal`, and `decimal_array`.
 Pointer data fields
 are optional. Nonoptional fields reject nil values.
 JSON numbers retain their precision as `json.Number`. Dynamic records use logical
@@ -230,6 +231,46 @@ properties and registrations retain their existing behavior. Optional additions
 are additive migrations; required fields need backfill, and conversions from
 existing strings, timestamps or JSON require manual migration review.
 
+Exact decimal properties and arrays are also opt-in:
+
+```go
+type Product struct {
+    ID       string                 `vectordata:"key"`
+    Price    vectordata.Decimal     `vectordata:"data,type=decimal,index"`
+    Discount *vectordata.Decimal    `vectordata:"data,type=decimal"`
+    History  []vectordata.Decimal   `vectordata:"data,type=decimal_array,optional,index"`
+}
+price, err := vectordata.ParseDecimal("9007199254740993.000000001")
+_ = price
+_ = err
+```
+
+`TypeDecimal` maps to unconstrained PostgreSQL `numeric`, avoiding database scale
+rounding. `TypeDecimalArray` maps to `numeric[]`. Dynamic records return canonical
+`Decimal`/`[]Decimal` values. Typed fields accept string types, including `Decimal`,
+string aliases and `json.Number`, and their slices. Dynamic writes and filters
+also accept signed/unsigned integers and integer slices; floating-point inputs
+are rejected so binary floating-point conversion cannot silently change a price.
+
+Values match the [.NET decimal value range](https://learn.microsoft.com/en-us/dotnet/api/system.decimal):
+a coefficient from 0 through 79228162514264337593543950335, a separate sign, and
+scale 0–28. Parsing accepts decimal text with an optional signed exponent,
+canonicalizes redundant zeros/exponents and negative zero, and rejects any value
+requiring rounding or outside these bounds. Display scale and trailing zeros are
+not preserved. Use `"0"` for zero; the zero-valued helper string is invalid.
+NaN, infinity, whitespace and rational fractions such as `1/3` are invalid.
+PostgreSQL values outside the portable range are rejected on read.
+
+`Decimal` supports text mapping and encodes as an exact JSON number. JSON decoding
+accepts numbers, rejecting quoted strings and null; use pointers for optional
+values. The helper does not implement decimal arithmetic. Storage, comparisons,
+sorting and filters never convert through `float64`. Scalars use B-tree indexes;
+array membership uses GIN, with the same NULL/empty and whole-array equality rules
+as other native arrays. Decimal operands in JSON-path comparisons also retain
+numeric semantics and exact precision. Existing string, float and JSON inference is unchanged.
+Optional additions support additive migrations; required fields need backfill,
+and conversions from existing floats, strings or JSON require manual review.
+
 Models use strict schema validation: columns, types, nullability, identity and
 primary-key shape must match. Existing indexes are checked for conflicts.
 Definitions are registered in the provider's reserved `__vectorstore_models`
@@ -255,7 +296,7 @@ if provider, ok := store.(vectordata.CapabilityProvider); ok {
 }
 ```
 
-Both providers report string/int64/UUID keys, generated int64 keys, all eighteen
+Both providers report string/int64/UUID keys, generated int64 keys, all twenty
 portable data types, and cosine/L2/inner-product/L1 metrics.
 `VectorPrecisions` reports `VectorFloat32` and `VectorFloat16` on both providers;
 PostgreSQL float16 storage requires pgvector 0.7+ and a visible `halfvec` type.
@@ -264,7 +305,7 @@ PostgreSQL float16 storage requires pgvector 0.7+ and a visible `halfvec` type.
 | --- | --- | --- |
 | `VectorIndexMethods` | None | HNSW, IVFFlat |
 | `VectorIndexCapabilities` | None | Supported method/metric/precision combinations and dimension limits |
-| `IndexedDataTypes` | None | String, int64, float64, bool, time, UUID, bytes, date-only/time-only values and native arrays |
+| `IndexedDataTypes` | None | String, int64, float64, bool, time, UUID, bytes, date-only/time-only values, decimals and native arrays |
 | `FullTextIndexing` | False | True, for string properties |
 | `HybridSearch` | False | True |
 | `MigrationPlanning` | False | True, plan-only |
@@ -353,7 +394,7 @@ syntax. Nested JSON keys, including empty/whitespace keys, are literal.
 Operators include `Eq`, `Ne`, `In`, `Gt`, `Gte`, `Lt`, `Lte`, `Contains`, `Exists`,
 `And`, `Or`, and `Not`. `Contains` means array membership, not substring matching.
 Native-array membership uses a GIN-compatible PostgreSQL containment expression,
-with typed scalar parameters for numeric and boolean arrays.
+with typed scalar parameters for native arrays, including exact decimals.
 
 The filter contract preserves SQL-style unknown/null behavior under negation:
 a missing JSON path does not match `Eq(path,nil)` or its negation. A present JSON
