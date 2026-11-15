@@ -9,4 +9,7 @@ Runnable end-to-end demos live here.
 
 [`model-store`](model-store/README.md) demonstrates the typed model API with
 struct tags and automatic embeddings. Run `go run ./samples/model-store` with no
-API key, or pass `-dsn` to use PostgreSQL.
+API key, pass `-sqlite /tmp/models.db` for SQLite, or `-dsn` for PostgreSQL.
+
+[`sqlite-store`](sqlite-store/README.md) demonstrates persistent typed records,
+optional vectors, and array set filters without a server or API key.

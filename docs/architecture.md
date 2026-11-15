@@ -8,8 +8,10 @@ The project is split into two layers:
 
 - `vectordata`: backend-agnostic contracts and primitives
 - `stores/postgres`: PostgreSQL + pgvector implementation
+- `stores/sqlite`: durable embedded model storage with exact snapshot search
+- `stores/memory`: transient exact-search model implementation
 
-This keeps the public API stable while allowing additional storage engines later.
+Providers share model contracts, portable filter evaluation, and a conformance suite.
 
 ## 2) Core Data Model
 
@@ -270,9 +272,9 @@ Vector write validation also matches `ErrInvalidRecord`, while preserving
 
 ## 12) Current Scope and Limits
 
-Current MVP scope:
+Current scope:
 
-- Postgres + pgvector backend
+- PostgreSQL + pgvector and embedded SQLite backends
 - original Record API: one vector per collection
 - model API: native keys, data properties, and multiple named vectors
 - in-memory model provider for development and shared contract tests
@@ -307,3 +309,13 @@ in `stores/postgres/filtersql`. The original compiler entry point remains a
 compatibility shim. Embedding generation is optional and batched per property;
 PostgreSQL hybrid search combines full-text and vector candidates with RRF.
 See [model-api.md](model-api.md) for the contract and current feature scope.
+
+
+SQLite persists collection registrations, canonical records, and generated-key
+sequences in a database file. Parameterized SQL, foreign-key cascades and immediate
+write transactions make batch changes atomic across handles. WAL and FULL
+synchronization are configured on each connection. Reads load metadata and records
+in one SQL snapshot, release the connection, then evaluate portable queries and
+exact search through the memory engine. Runtime embedders are cleared during
+snapshot replay. Native values are decoded by declared type, with a separate SQL
+NULL marker for JSON properties. See [sqlite.md](sqlite.md) for workload limits.

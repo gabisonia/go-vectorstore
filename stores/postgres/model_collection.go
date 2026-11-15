@@ -149,6 +149,10 @@ func (c *ModelCollection) writeStatement(r vectordata.ModelRecord, upsert, useBi
 		column := quoteIdent(p.StorageName)
 		columns = append(columns, column)
 		updates = append(updates, column+"=EXCLUDED."+column)
+		if p.Optional && !vectordata.HasModelVector(r, p) {
+			values = append(values, bind(nil, "::"+vectorColumnType(p)))
+			continue
+		}
 		if p.Kind == vectordata.VectorSparse {
 			values = append(values, bind(sparseLiteral(r.SparseVectors[p.Name]), "::sparsevec"))
 			continue
@@ -233,7 +237,7 @@ func (c *ModelCollection) scan(row modelScanner, vectors, withDistance bool) (ve
 			targets = append(targets, &data[i])
 		}
 	}
-	vectorTexts := make([]string, len(c.definition.Vectors))
+	vectorTexts := make([]*string, len(c.definition.Vectors))
 	binaryValues := make([]pgtype.Bits, len(c.definition.Vectors))
 	if vectors {
 		for i := range vectorTexts {
@@ -320,8 +324,14 @@ func (c *ModelCollection) scan(row modelScanner, vectors, withDistance bool) (ve
 	if vectors {
 		r.Vectors = map[string][]float32{}
 		for i, p := range c.definition.Vectors {
+			if p.Kind != vectordata.VectorBinary && vectorTexts[i] == nil {
+				if p.Optional {
+					continue
+				}
+				return r, 0, fmt.Errorf("%w: NULL vector %q", vectordata.ErrInvalidVector, p.Name)
+			}
 			if p.Kind == vectordata.VectorSparse {
-				v, err := parseSparseText(vectorTexts[i], p)
+				v, err := parseSparseText(*vectorTexts[i], p)
 				if err != nil {
 					return r, 0, err
 				}
@@ -333,6 +343,9 @@ func (c *ModelCollection) scan(row modelScanner, vectors, withDistance bool) (ve
 			}
 			if p.Kind == vectordata.VectorBinary {
 				if !binaryValues[i].Valid {
+					if p.Optional {
+						continue
+					}
 					return r, 0, fmt.Errorf("%w: NULL binary vector %q", vectordata.ErrInvalidVector, p.Name)
 				}
 				v, err := vectordata.NormalizeBinaryVector(vectordata.BinaryVector{Bytes: binaryValues[i].Bytes, Dimensions: int(binaryValues[i].Len)}, p)
@@ -345,7 +358,7 @@ func (c *ModelCollection) scan(row modelScanner, vectors, withDistance bool) (ve
 				r.BinaryVectors[p.Name] = v
 				continue
 			}
-			v, err := parseVectorText(vectorTexts[i])
+			v, err := parseVectorText(*vectorTexts[i])
 			if err != nil {
 				return r, 0, err
 			}

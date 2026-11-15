@@ -243,7 +243,11 @@ func (c *ModelCollection) EnsureExists(ctx context.Context) (err error) {
 		columns = append(columns, sql)
 	}
 	for _, p := range d.Vectors {
-		columns = append(columns, quoteIdent(p.StorageName)+" "+vectorColumnType(p)+" NOT NULL")
+		column := quoteIdent(p.StorageName) + " " + vectorColumnType(p)
+		if !p.Optional {
+			column += " NOT NULL"
+		}
+		columns = append(columns, column)
 	}
 	if _, err := tx.Exec(ctx, "CREATE TABLE IF NOT EXISTS "+c.table()+" ("+strings.Join(columns, ", ")+")"); err != nil {
 		return err
@@ -338,7 +342,7 @@ func (c *ModelCollection) validateSchema(ctx context.Context, tx pgx.Tx) error {
 		want[p.StorageName] = col{dataSQLType(p.Type), !p.Optional, ""}
 	}
 	for _, p := range c.definition.Vectors {
-		want[p.StorageName] = col{vectorColumnType(p), true, ""}
+		want[p.StorageName] = col{vectorColumnType(p), !p.Optional, ""}
 	}
 	if len(want) != len(actual) {
 		return fmt.Errorf("%w: collection columns differ from definition", vectordata.ErrSchemaMismatch)

@@ -127,6 +127,7 @@ func DefinitionFor[T any]() (CollectionDefinition, error) {
 			allowedFlags["fulltext"] = true
 			allowedValues["type"] = true
 		case "vector":
+			allowedFlags["optional"] = true
 			allowedFlags["index"] = true
 			for _, key := range []string{"dimensions", "precision", "metric", "source", "method", "kind"} {
 				allowedValues[key] = true
@@ -167,7 +168,7 @@ func DefinitionFor[T any]() (CollectionDefinition, error) {
 			if err != nil {
 				return d, fmt.Errorf("%w: vector %q requires dimensions", ErrSchemaMismatch, f.Name)
 			}
-			p := VectorProperty{Name: f.Name, StorageName: values["name"], Dimensions: dimensions, Kind: VectorKind(values["kind"]), Precision: VectorPrecision(values["precision"]), Metric: DistanceMetric(values["metric"]), SourceProperty: values["source"]}
+			p := VectorProperty{Optional: flags["optional"] || f.Type.Kind() == reflect.Pointer, Name: f.Name, StorageName: values["name"], Dimensions: dimensions, Kind: VectorKind(values["kind"]), Precision: VectorPrecision(values["precision"]), Metric: DistanceMetric(values["metric"]), SourceProperty: values["source"]}
 			if flags["index"] || values["method"] != "" {
 				p.Index = &VectorIndexOptions{Method: IndexMethod(values["method"])}
 			}
@@ -274,7 +275,11 @@ func NewStructCodec[T any](definition *CollectionDefinition) (*StructCodec[T], e
 			want = reflect.TypeFor[SparseVector]()
 			codec.fields[len(codec.fields)-1].sparse = true
 		}
-		if field.Type != want {
+		typ := field.Type
+		if typ.Kind() == reflect.Pointer && p.Optional {
+			typ = typ.Elem()
+		}
+		if typ != want {
 			return nil, fmt.Errorf("%w: vector field %q must be %s", ErrSchemaMismatch, p.Name, want)
 		}
 	}
@@ -327,6 +332,12 @@ func (c *StructCodec[T]) Encode(value T) (ModelRecord, error) {
 				out.Key = v.Interface()
 			}
 		case "vector":
+			if v.Kind() == reflect.Pointer {
+				if v.IsNil() {
+					continue
+				}
+				v = v.Elem()
+			}
 			if field.binary {
 				if out.BinaryVectors == nil {
 					out.BinaryVectors = map[string]BinaryVector{}
@@ -340,7 +351,9 @@ func (c *StructCodec[T]) Encode(value T) (ModelRecord, error) {
 				}
 				out.SparseVectors[field.name] = cloneSparse(v.Interface().(SparseVector))
 			} else {
-				out.Vectors[field.name] = append([]float32(nil), v.Interface().([]float32)...)
+				if !v.IsNil() {
+					out.Vectors[field.name] = append([]float32{}, v.Interface().([]float32)...)
+				}
 			}
 		case "data":
 			for v.Kind() == reflect.Pointer {
@@ -482,8 +495,8 @@ func (c *StructCodec[T]) Decode(record ModelRecord) (T, error) {
 				if v, ok := record.SparseVectors[field.name]; ok {
 					value = cloneSparse(v)
 				}
-			} else if record.Vectors != nil {
-				value = record.Vectors[field.name]
+			} else if vector := record.Vectors[field.name]; vector != nil {
+				value = append([]float32{}, vector...)
 			}
 		}
 		var assignErr error

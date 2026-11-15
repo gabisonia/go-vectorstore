@@ -12,6 +12,7 @@ import (
 
 	"github.com/gabisonia/go-vectorstore/stores/memory"
 	"github.com/gabisonia/go-vectorstore/stores/postgres"
+	"github.com/gabisonia/go-vectorstore/stores/sqlite"
 	"github.com/gabisonia/go-vectorstore/vectordata"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -26,8 +27,12 @@ type Hotel struct {
 
 func run() error {
 	dsn := flag.String("dsn", "", "Optional PostgreSQL connection string; defaults to in-memory storage")
+	sqlitePath := flag.String("sqlite", "", "Optional SQLite database file; mutually exclusive with -dsn")
 	batchSize := flag.Int("embedding-batch-size", 2, "Maximum texts per embedding request (0 uses one request per property)")
 	flag.Parse()
+	if *dsn != "" && *sqlitePath != "" {
+		return fmt.Errorf("use either -dsn or -sqlite")
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	embedder := vectordata.EmbeddingFunc(func(ctx context.Context, inputs []string) ([][]float32, error) {
@@ -63,6 +68,13 @@ func run() error {
 			return err
 		}
 		store = provider
+	} else if *sqlitePath != "" {
+		provider, err := sqlite.Open(ctx, *sqlitePath, sqlite.StoreOptions{Embedder: embedder, EmbeddingBatchSize: *batchSize})
+		if err != nil {
+			return err
+		}
+		defer provider.Close()
+		store = provider
 	} else {
 		provider, err := memory.NewWithOptions(memory.StoreOptions{Embedder: embedder, EmbeddingBatchSize: *batchSize})
 		if err != nil {
@@ -79,7 +91,7 @@ func run() error {
 		return err
 	}
 	fmt.Printf("Inserted hotel keys: %v\n", keys)
-	matches, err := hotels.SearchText(ctx, "quiet", 2, vectordata.ModelSearchOptions{Filter: vectordata.Contains(vectordata.Column("Tags"), "nature")})
+	matches, err := hotels.SearchText(ctx, "quiet", 2, vectordata.ModelSearchOptions{Filter: vectordata.ContainsAny(vectordata.Column("Tags"), "nature", "quiet")})
 	if err != nil {
 		return err
 	}

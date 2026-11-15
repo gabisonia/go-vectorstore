@@ -60,7 +60,9 @@ type DataProperty struct {
 type VectorProperty struct {
 	Name, StorageName string
 	Dimensions        int
-	Kind              VectorKind `json:",omitempty"`
+	// Optional permits a missing vector; searches exclude records without the selected vector.
+	Optional bool       `json:",omitempty"`
+	Kind     VectorKind `json:",omitempty"`
 	// Dense/sparse precision defaults to float32; binary properties leave it unset.
 	// The canonical default stays empty so existing
 	// serialized model registrations remain unchanged.
@@ -598,7 +600,9 @@ func PrepareModelRecords(ctx context.Context, d CollectionDefinition, opts Model
 			if !found {
 				return nil, fmt.Errorf("%w: unknown vector property %q", ErrInvalidRecord, name)
 			}
-			out[i].Vectors[name] = append([]float32(nil), vector...)
+			if vector != nil {
+				out[i].Vectors[name] = append([]float32{}, vector...)
+			}
 		}
 		for name := range r.BinaryVectors {
 			found := false
@@ -611,7 +615,11 @@ func PrepareModelRecords(ctx context.Context, d CollectionDefinition, opts Model
 		}
 		for _, p := range d.Vectors {
 			if p.Kind == VectorSparse {
-				v, err := NormalizeSparseVector(r.SparseVectors[p.Name], p)
+				raw, present := r.SparseVectors[p.Name]
+				if !present && p.Optional {
+					continue
+				}
+				v, err := NormalizeSparseVector(raw, p)
 				if err != nil {
 					return nil, fmt.Errorf("%w: record %d: %w", ErrInvalidRecord, i, err)
 				}
@@ -621,7 +629,11 @@ func PrepareModelRecords(ctx context.Context, d CollectionDefinition, opts Model
 				out[i].SparseVectors[p.Name] = v
 			}
 			if p.Kind == VectorBinary {
-				v, err := NormalizeBinaryVector(r.BinaryVectors[p.Name], p)
+				raw, present := r.BinaryVectors[p.Name]
+				if !present && p.Optional {
+					continue
+				}
+				v, err := NormalizeBinaryVector(raw, p)
 				if err != nil {
 					return nil, fmt.Errorf("%w: record %d: %w", ErrInvalidRecord, i, err)
 				}
@@ -648,7 +660,11 @@ func PrepareModelRecords(ctx context.Context, d CollectionDefinition, opts Model
 		var positions []int
 		var inputs []string
 		for i := range out {
-			if len(out[i].Vectors[p.Name]) == 0 && p.SourceProperty != "" {
+			if out[i].Vectors[p.Name] == nil && p.Optional && (p.SourceProperty == "" || out[i].Data[p.SourceProperty] == nil) {
+				delete(out[i].Vectors, p.Name)
+				continue
+			}
+			if len(out[i].Vectors[p.Name]) == 0 && p.SourceProperty != "" && (!p.Optional || out[i].Vectors[p.Name] == nil) {
 				value, ok := out[i].Data[p.SourceProperty].(string)
 				if !ok {
 					return nil, fmt.Errorf("%w: missing embedding source %q", ErrInvalidRecord, p.SourceProperty)
@@ -779,4 +795,18 @@ func ValidateModelQuery(d CollectionDefinition, top int, opts QueryOptions) erro
 		}
 	}
 	return nil
+}
+
+// HasModelVector reports presence without interpreting zero-valued vector components.
+func HasModelVector(r ModelRecord, p VectorProperty) bool {
+	switch p.Kind {
+	case VectorBinary:
+		_, ok := r.BinaryVectors[p.Name]
+		return ok
+	case VectorSparse:
+		_, ok := r.SparseVectors[p.Name]
+		return ok
+	default:
+		return r.Vectors[p.Name] != nil
+	}
 }

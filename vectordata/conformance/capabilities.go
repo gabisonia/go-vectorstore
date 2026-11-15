@@ -18,6 +18,7 @@ func runCapabilities(t *testing.T, factory Factory) {
 		t.Skip("provider does not expose optional capability metadata")
 	}
 	caps := provider.Capabilities()
+	t.Run("optional_vectors", func(t *testing.T) { runOptionalVectors(t, factory, caps) })
 	t.Run("native_arrays", func(t *testing.T) { runNativeArrays(t, factory, caps) })
 	t.Run("calendar_data", func(t *testing.T) { runCalendarData(t, factory, caps) })
 	t.Run("decimals", func(t *testing.T) { runDecimals(t, factory, caps) })

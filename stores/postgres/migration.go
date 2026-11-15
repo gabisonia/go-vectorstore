@@ -230,7 +230,7 @@ func definitionColumns(d vectordata.CollectionDefinition) map[string]migrationCo
 		columns[p.StorageName] = migrationColumn{typ: dataSQLType(p.Type), required: !p.Optional}
 	}
 	for _, p := range d.Vectors {
-		columns[p.StorageName] = migrationColumn{typ: vectorColumnType(p), required: true}
+		columns[p.StorageName] = migrationColumn{typ: vectorColumnType(p), required: !p.Optional}
 	}
 	return columns
 }

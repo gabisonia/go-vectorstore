@@ -25,8 +25,10 @@ type VectorIndexCapability struct {
 // particular collection or deployment enables them. Unless stated otherwise,
 // empty slices mean no support. Built-in providers return caller-owned slices.
 type ProviderCapabilities struct {
-	Backend  string
-	KeyTypes []KeyType
+	// OptionalVectors permits SQL NULL / missing values for every supported vector kind.
+	OptionalVectors bool
+	Backend         string
+	KeyTypes        []KeyType
 	// GeneratedKeyTypes is the subset of KeyTypes that supports automatic keys.
 	GeneratedKeyTypes []KeyType
 	DataTypes         []DataType

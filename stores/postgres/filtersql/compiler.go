@@ -71,6 +71,10 @@ func (c *filterCompiler) compile(f Filter) (string, error) {
 		return c.compileCompare(node.Field, node.Value, ">=")
 	case LteFilter:
 		return c.compileCompare(node.Field, node.Value, "<=")
+	case filterast.ContainsAnyFilter:
+		return c.compileContainsMany(node.Field, node.Values, false)
+	case filterast.ContainsAllFilter:
+		return c.compileContainsMany(node.Field, node.Values, true)
 	case ContainsFilter:
 		expr, metadata, path, err := c.resolveField(node.Field)
 		if err != nil {
@@ -404,3 +408,50 @@ var (
 	numericLiteral    = filterast.NumericLiteral
 	isNilValue        = filterast.IsNilValue
 )
+
+func (c *filterCompiler) compileContainsMany(field FieldRef, values []any, all bool) (string, error) {
+	expr, metadata, path, err := c.resolveField(field)
+	if err != nil {
+		return "", err
+	}
+	if metadata {
+		if len(values) == 0 {
+			if !all {
+				return "FALSE", nil
+			}
+			return "(COALESCE(jsonb_typeof(" + metadataPathJSONBExpr(expr, path) + ") = 'array', FALSE))", nil
+		}
+		children := make([]Filter, len(values))
+		for i, v := range values {
+			children[i] = filterast.Contains(field, v)
+		}
+		op := "OR"
+		if all {
+			op = "AND"
+		}
+		return c.compileLogical(op, children)
+	}
+	name := strings.TrimSpace(field.Name)
+	if !c.cfg.ArrayColumns[name] {
+		return "", fmt.Errorf("%w: array property required", ErrInvalidFilter)
+	}
+	typ := c.cfg.ArrayElementTypes[name]
+	if typ == "" {
+		typ = "text"
+	}
+	operands := make([]string, len(values))
+	for i, v := range values {
+		if c.cfg.NormalizeArrayElement != nil {
+			v, err = c.cfg.NormalizeArrayElement(name, v)
+			if err != nil {
+				return "", fmt.Errorf("%w: invalid membership value: %v", ErrInvalidFilter, err)
+			}
+		}
+		operands[i] = c.bind(v) + "::" + typ
+	}
+	op := "&&"
+	if all {
+		op = "@>"
+	}
+	return "(" + expr + " " + op + " ARRAY[" + strings.Join(operands, ",") + "]::" + typ + "[])", nil
+}

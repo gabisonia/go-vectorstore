@@ -62,7 +62,7 @@ names, names over 63 bytes, and the reserved `__vs_` prefix are rejected.
 | --- | --- |
 | `key` | `name=<storage name>`, `type=string|int64|uuid`, `generated` |
 | `data` | `name=<storage name>`, `type=<data type>`, `optional`, `index`, `fulltext` |
-| `vector` | `name=<storage name>`, `dimensions=<n>`, `kind=dense\|binary\|sparse`, `precision=float32\|float16`, `metric=cosine\|l2\|inner_product\|l1\|hamming`, `index`, `method=hnsw\|ivfflat`, `source=<data field>` |
+| `vector` | `name=<storage name>`, `dimensions=<n>`, `kind=dense\|binary\|sparse`, `precision=float32\|float16`, `metric=cosine\|l2\|inner_product\|l1\|hamming`, `index`, `method=hnsw\|ivfflat`, `source=<data field>`, `optional` |
 | `-` | Ignore the field |
 
 Untagged fields are ignored when inferring a definition. Exported fields and
@@ -556,7 +556,7 @@ embedders must honor cancellation and be safe for concurrent use.
 ## Binary vectors
 
 Binary vectors are explicit model properties with packed bytes and an exact bit
-length. They support Hamming distance in both providers:
+length. They support Hamming distance in all three providers:
 
 ```go
 type Image struct {
@@ -613,7 +613,7 @@ operator/index availability and exact bit lengths.
 ## Sparse vectors
 
 Sparse vectors store only nonzero coordinates and support cosine, L2, inner
-product and L1 distance in both providers:
+product and L1 distance in all three providers:
 
 ```go
 type Document struct {
@@ -686,13 +686,13 @@ Results have `ScoreKind=ScoreRRF`; their score thresholds apply to fusion scores
 not vector similarity. Raw vector distance is still returned. Fusion scores
 should not be compared with ordinary vector similarity scores.
 
-The memory provider performs exact vector search and does not implement hybrid
+The memory and SQLite providers perform exact vector search and do not implement hybrid
 search. Typed calls return `ErrUnsupported` for this optional capability. Index
-hints are accepted for portability but do not create approximate indexes in memory.
+hints are accepted for portability but do not create physical indexes in either provider. See [SQLite storage and limits](sqlite.md).
 
 ## Verification and scope
 
-`vectordata/conformance.Run` exercises shared provider behavior. Both memory tests
+`vectordata/conformance.Run` exercises shared provider behavior. Memory and SQLite tests
 and PostgreSQL integration tests run it, including key types, identity keys,
 filters, nulls, projections, paging, thresholds, atomicity, and lifecycle.
 PostgreSQL-specific tests cover typed mapping, embedding generation, hybrid
@@ -703,8 +703,68 @@ expected-result edge cases also run as part of `conformance.Run`. See
 measurements and model index-plan checks. Keep production database integration
 tests even when using memory for development.
 
-This is a Go adaptation of the main model-driven workflows, not binary or full
-feature parity with every .NET provider. Additional distance metrics,
-server-side embedding generation, and automatic model migrations remain
-outside the initial model API. Existing Record API callers can adopt models
+This is a Go adaptation of the main model-driven workflows. See the
+[parity checklist](parity.md) for supported workflows, Go-specific differences,
+and remaining provider limitations. Existing Record API callers can adopt models
 collection by collection.
+
+
+## Optional vectors
+
+Set `VectorProperty.Optional=true`, tag a dense slice with `optional`, or use
+`*[]float32`, `*BinaryVector`, or `*SparseVector` fields. Pointer vector fields
+infer optionality; explicit definitions must also mark them optional. The default
+remains required for compatibility with existing registrations.
+
+```go
+type PartialDocument struct {
+    ID string `vectordata:"key"`
+    Embedding []float32 `vectordata:"vector,dimensions=3,optional"`
+    Bits *vectordata.BinaryVector `vectordata:"vector,dimensions=9,kind=binary"`
+    Sparse *vectordata.SparseVector `vectordata:"vector,dimensions=1000,kind=sparse"`
+}
+```
+
+In dynamic records, absent/nil dense slices and missing binary/sparse map entries
+represent NULL. Non-nil empty dense slices and present zero-valued binary/sparse
+structs are validated and rejected. A valid zero sparse vector for L2/L1/inner
+product is still a present vector. IncludeVectors reads omit missing entries;
+typed reads preserve nil pointers and slices. Writes replace the complete record,
+so an upsert with a missing optional vector clears the previous value.
+
+When an optional dense property has a `SourceProperty`, a missing vector is
+embedded when its source is a string. A missing/NULL source leaves the vector
+NULL. An explicit non-nil malformed vector fails validation before embedding.
+Required-vector embedding behavior is unchanged.
+
+All vector search variants exclude records without the selected property before
+ranking, thresholds, and paging. PostgreSQL hybrid search also excludes them from
+both candidate lists, including otherwise matching keyword records. Other vector
+properties may be absent in a returned record. Query, Get, and Count retain such
+records. Search queries themselves still require a valid vector.
+
+PostgreSQL creates nullable native vector/halfvec/bit/sparsevec columns. Adding a
+new optional vector is an additive migration; existing nullability changes need a
+separate reviewed procedure. See [migration planning](migrations.md).
+
+## Array set filters
+
+```go
+any := vectordata.ContainsAny(vectordata.Column("Tags"), "quiet", "nature")
+all := vectordata.ContainsAll(vectordata.Column("Tags"), "quiet", "nature")
+jsonAny := vectordata.ContainsAny(vectordata.DataPath("Details", "tags"), "quiet")
+```
+
+Operands are variadic elements, not a whole slice; expand `[]any` with `...`.
+Native array operands use the same element normalization as Contains, including
+UUIDs, timestamp/calendar values, and exact decimals. Duplicates do not change
+results. PostgreSQL compiles native arrays to `&&` (any) and `@>` (all), allowing
+GIN indexes on indexed native array properties to participate. JSON paths compare
+whole array elements with the existing Contains equality semantics; nested JSON
+arrays are single elements, rather than flattened containment.
+
+Any with zero operands is false for non-NULL native arrays; All is true. Native
+NULL arrays yield SQL UNKNOWN for both, including under Not, and do not match.
+A native NULL operand never matches an element. JSON null elements can match a
+nil operand. Missing, scalar, or null JSON paths return false for both helpers;
+All with zero operands matches JSON arrays, including empty arrays.

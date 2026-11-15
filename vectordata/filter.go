@@ -38,3 +38,13 @@ func Exists(field FieldRef) Filter                      { return filterast.Exist
 func And(children ...Filter) Filter                     { return filterast.And(children...) }
 func Or(children ...Filter) Filter                      { return filterast.Or(children...) }
 func Not(child Filter) Filter                           { return filterast.Not(child) }
+
+type ContainsAnyFilter = filterast.ContainsAnyFilter
+type ContainsAllFilter = filterast.ContainsAllFilter
+
+func ContainsAny(field FieldRef, values ...any) Filter {
+	return filterast.ContainsAny(field, values...)
+}
+func ContainsAll(field FieldRef, values ...any) Filter {
+	return filterast.ContainsAll(field, values...)
+}

@@ -48,3 +48,21 @@ func TestNativeArrayMembershipCasts(t *testing.T) {
 		t.Fatalf("membership normalization error: %v", err)
 	}
 }
+
+func TestArraySetNativePredicates(t *testing.T) {
+	cfg := FilterSQLConfig{ColumnExpr: map[string]string{"Ints": "t.i"}, ArrayColumns: map[string]bool{"Ints": true}, ArrayElementTypes: map[string]string{"Ints": "bigint"}}
+	for _, tt := range []struct {
+		filter Filter
+		want   string
+		values []any
+	}{
+		{filterast.ContainsAny(filterast.Column("Ints"), 1, 2), "(t.i && ARRAY[$3::bigint,$4::bigint]::bigint[])", []any{1, 2}},
+		{filterast.ContainsAll(filterast.Column("Ints"), 1, 2), "(t.i @> ARRAY[$3::bigint,$4::bigint]::bigint[])", []any{1, 2}},
+		{filterast.ContainsAll(filterast.Column("Ints")), "(t.i @> ARRAY[]::bigint[])", nil},
+	} {
+		sql, args, next, err := CompileFilterSQL(tt.filter, cfg, 3)
+		if err != nil || sql != tt.want || !reflect.DeepEqual(args, tt.values) || next != 3+len(tt.values) {
+			t.Fatalf("SQL=%s args=%v next=%d err=%v", sql, args, next, err)
+		}
+	}
+}
