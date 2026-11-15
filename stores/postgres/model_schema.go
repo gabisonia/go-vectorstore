@@ -175,6 +175,10 @@ func dataSQLType(t vectordata.DataType) string {
 		return "double precision[]"
 	case vectordata.TypeBoolArray:
 		return "boolean[]"
+	case vectordata.TypeUUIDArray:
+		return "uuid[]"
+	case vectordata.TypeTimeArray:
+		return "timestamp with time zone[]"
 	case vectordata.TypeUUID:
 		return "uuid"
 	case vectordata.TypeBytes:

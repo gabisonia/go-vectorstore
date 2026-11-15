@@ -610,7 +610,7 @@ func CloneModelRecord(r ModelRecord, d CollectionDefinition, vectors bool) Model
 			if value == nil {
 				value = JSONNull{}
 			}
-		case TypeStringArray:
+		case TypeStringArray, TypeUUIDArray:
 			if array, ok := value.([]string); ok {
 				value = append([]string{}, array...)
 			}
@@ -629,6 +629,10 @@ func CloneModelRecord(r ModelRecord, d CollectionDefinition, vectors bool) Model
 		case TypeBoolArray:
 			if array, ok := value.([]bool); ok {
 				value = append([]bool{}, array...)
+			}
+		case TypeTimeArray:
+			if array, ok := value.([]time.Time); ok {
+				value = append([]time.Time{}, array...)
 			}
 		}
 		out.Data[p.Name] = value

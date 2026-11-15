@@ -6,7 +6,9 @@ import (
 	"math"
 	"reflect"
 	"slices"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/gabisonia/go-vectorstore/vectordata"
 )
@@ -28,11 +30,8 @@ type nativeArrayModel struct {
 }
 
 func runNativeArrays(t *testing.T, factory Factory, caps vectordata.ProviderCapabilities) {
-	for _, kind := range []vectordata.DataType{vectordata.TypeInt64Array, vectordata.TypeFloat64Array, vectordata.TypeBoolArray} {
-		if !slices.Contains(caps.DataTypes, kind) {
-			t.Skip("native arrays are not advertised")
-		}
-	}
+	instant := time.Date(2026, 7, 1, 9, 2, 3, 123456789, time.FixedZone("offset", 7200))
+	canonical := time.Date(2026, 7, 1, 7, 2, 3, 123456000, time.UTC)
 	for _, tt := range []struct {
 		kind                                                         vectordata.DataType
 		input, want, empty, null, other, needle, badArray, badNeedle any
@@ -40,8 +39,13 @@ func runNativeArrays(t *testing.T, factory Factory, caps vectordata.ProviderCapa
 		{vectordata.TypeInt64Array, arrayIntegers{1, 2, 2, -4}, []int64{1, 2, 2, -4}, []int64{}, []int64(nil), []int64{3, 4}, arrayInteger(2), []any{1, nil}, 1.5},
 		{vectordata.TypeFloat64Array, []arrayFloat{0.25, -1.5, 0.25}, []float64{0.25, -1.5, 0.25}, []float64{}, []float64(nil), []float64{2.5, 3.5}, arrayFloat(0.25), []float64{math.NaN()}, "0.25"},
 		{vectordata.TypeBoolArray, arrayFlags{true, false, true}, []bool{true, false, true}, []bool{}, []bool(nil), []bool{true}, arrayFlag(false), []any{true, 1}, 1},
+		{vectordata.TypeUUIDArray, []nativeUUID{{strings.ToUpper(nativeUUIDA)}, {nativeUUIDA}}, []string{nativeUUIDA, nativeUUIDA}, []string{}, []nativeUUID(nil), []string{nativeUUIDB}, nativeUUID{strings.ToUpper(nativeUUIDA)}, []string{"invalid"}, "invalid"},
+		{vectordata.TypeTimeArray, []arrayInstant{arrayInstant(instant), arrayInstant(instant.Add(100 * time.Nanosecond))}, []time.Time{canonical, canonical}, []time.Time{}, []time.Time(nil), []time.Time{canonical.Add(time.Hour)}, instant.In(time.FixedZone("other", -18000)), []time.Time{time.Date(10000, 1, 1, 0, 0, 0, 0, time.UTC)}, "not a timestamp"},
 	} {
 		t.Run(string(tt.kind), func(t *testing.T) {
+			if !slices.Contains(caps.DataTypes, tt.kind) {
+				t.Skip("array type is not advertised")
+			}
 			ctx := context.Background()
 			store := factory(t)
 			d := vectordata.CollectionDefinition{Key: vectordata.KeyProperty{Name: "ID"}, Data: []vectordata.DataProperty{{Name: "Values", StorageName: `values";x`, Type: tt.kind, Optional: true, IsIndexed: true}, {Name: "Body", Type: vectordata.TypeString, IsFullTextIndexed: caps.FullTextIndexing}}, Vectors: []vectordata.VectorProperty{{Name: "Vector", Dimensions: 2}}}
@@ -136,6 +140,11 @@ func runNativeArrays(t *testing.T, factory Factory, caps vectordata.ProviderCapa
 		})
 	}
 	t.Run("typed and legacy mappings", func(t *testing.T) {
+		for _, kind := range []vectordata.DataType{vectordata.TypeInt64Array, vectordata.TypeFloat64Array, vectordata.TypeBoolArray} {
+			if !slices.Contains(caps.DataTypes, kind) {
+				t.Skip("numeric arrays not advertised")
+			}
+		}
 		ctx := context.Background()
 		c, err := vectordata.EnsureTypedModelCollection[string, nativeArrayModel](ctx, factory(t), "typed_arrays", nil, vectordata.ModelCollectionOptions{})
 		if err != nil {
@@ -158,4 +167,48 @@ func runNativeArrays(t *testing.T, factory Factory, caps vectordata.ProviderCapa
 			t.Fatalf("typed empty arrays: %+v, %v", got, err)
 		}
 	})
+	t.Run("structured typed and legacy mappings", func(t *testing.T) { runStructuredArrayModels(t, factory, caps, instant, canonical) })
+}
+
+type arrayInstant time.Time
+type arrayUUIDs []nativeUUID
+type arrayInstants []arrayInstant
+type structuredArrayModel struct {
+	ID          string        `vectordata:"key"`
+	UUIDs       arrayUUIDs    `vectordata:"data,type=uuid_array,optional,index"`
+	Times       arrayInstants `vectordata:"data,type=time_array,optional,index"`
+	Pointer     *arrayUUIDs   `vectordata:"data,type=uuid_array"`
+	LegacyTimes []time.Time   `vectordata:"data"`
+	LegacyUUIDs []nativeUUID  `vectordata:"data"`
+}
+
+func runStructuredArrayModels(t *testing.T, factory Factory, caps vectordata.ProviderCapabilities, instant, canonical time.Time) {
+	if !slices.Contains(caps.DataTypes, vectordata.TypeUUIDArray) || !slices.Contains(caps.DataTypes, vectordata.TypeTimeArray) {
+		t.Skip("structured arrays not advertised")
+	}
+	ctx := context.Background()
+	c, err := vectordata.EnsureTypedModelCollection[string, structuredArrayModel](ctx, factory(t), "structured_arrays", nil, vectordata.ModelCollectionOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	empty := arrayUUIDs{}
+	input := structuredArrayModel{ID: "a", UUIDs: arrayUUIDs{{strings.ToUpper(nativeUUIDA)}}, Times: arrayInstants{arrayInstant(instant)}, Pointer: &empty, LegacyTimes: []time.Time{instant.UTC()}, LegacyUUIDs: []nativeUUID{{nativeUUIDA}}}
+	if _, err := c.Insert(ctx, []structuredArrayModel{input, {ID: "null"}, {ID: "empty", UUIDs: arrayUUIDs{}, Times: arrayInstants{}}}); err != nil {
+		t.Fatal(err)
+	}
+	got, err := c.Get(ctx, "a", vectordata.RetrievalOptions{})
+	want := input
+	want.UUIDs = arrayUUIDs{{nativeUUIDA}}
+	want.Times = arrayInstants{arrayInstant(canonical)}
+	if err != nil || !reflect.DeepEqual(got, want) {
+		t.Fatalf("structured native/legacy round trip: %+v, %v", got, err)
+	}
+	got, err = c.Get(ctx, "null", vectordata.RetrievalOptions{})
+	if err != nil || got.UUIDs != nil || got.Times != nil || got.Pointer != nil {
+		t.Fatalf("structured NULL arrays: %+v, %v", got, err)
+	}
+	got, err = c.Get(ctx, "empty", vectordata.RetrievalOptions{})
+	if err != nil || got.UUIDs == nil || got.Times == nil || len(got.UUIDs)+len(got.Times) != 0 {
+		t.Fatalf("structured empty arrays: %+v, %v", got, err)
+	}
 }

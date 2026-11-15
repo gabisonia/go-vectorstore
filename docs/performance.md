@@ -3,21 +3,25 @@
 ## Native array verification
 
 ```sh
-go test -race -tags=integration -run 'NativeArray|ModelContract/capabilities/native_arrays' \
+go test -race -tags=integration -run 'NativeArray|TimestampArrays|ModelContract/capabilities/native_arrays' \
   -v -timeout=3m ./stores/postgres
-go test -race -run 'NativeArray' ./vectordata
+go test -race -run 'NativeArray|StructuredArray' ./vectordata
 ```
 
-Shared tests cover integer, floating-point and boolean array round trips, aliases,
+Shared tests cover integer, floating-point, boolean, UUID and timestamp array round trips, aliases,
 NULL vs empty arrays, whole-array equality/membership, scalar membership and
 negation, filtered vector/hybrid search, mutable-buffer ownership and atomic
 failure on invalid elements. Typed tests preserve legacy JSON slice mappings and
 check overflow while decoding narrower Go fields.
+UUID values are canonicalized; timestamp tests cover equivalent timezones and
+microsecond truncation without changing legacy JSON precision.
 
 PostgreSQL tests check additive native-array migrations, required backfill/manual
 conversion classification, text/binary vector transport with native arrays, and
 array type drift. Read checks reject direct-SQL NULL elements, non-finite floats,
-multidimensional arrays and custom lower bounds.
+multidimensional arrays and custom lower bounds, including UUID read projections.
+Timestamp tests also cover session timezones, pre-epoch values, supported year
+boundaries and rejection of infinities and out-of-range years.
 
 The GIN fixture stores 2,000 records with each membership target present in 1% of
 rows. It explains the actual generated retrieval SQL with sequential scans disabled

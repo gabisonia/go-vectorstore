@@ -5,16 +5,25 @@ package postgres
 import (
 	"context"
 	"errors"
+	"fmt"
 	"reflect"
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/gabisonia/go-vectorstore/vectordata"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func arrayProperties() []vectordata.DataProperty {
-	return []vectordata.DataProperty{{Name: "Ints", Type: vectordata.TypeInt64Array, Optional: true, IsIndexed: true}, {Name: "Floats", Type: vectordata.TypeFloat64Array, Optional: true, IsIndexed: true}, {Name: "Flags", Type: vectordata.TypeBoolArray, Optional: true, IsIndexed: true}}
+	return []vectordata.DataProperty{
+		{Name: "Ints", Type: vectordata.TypeInt64Array, Optional: true, IsIndexed: true},
+		{Name: "Floats", Type: vectordata.TypeFloat64Array, Optional: true, IsIndexed: true},
+		{Name: "Flags", Type: vectordata.TypeBoolArray, Optional: true, IsIndexed: true},
+		{Name: "UUIDs", Type: vectordata.TypeUUIDArray, Optional: true, IsIndexed: true},
+		{Name: "Times", Type: vectordata.TypeTimeArray, Optional: true, IsIndexed: true},
+	}
 }
 
 func TestIntegrationNativeArrayMigrationAndTransport(t *testing.T) {
@@ -37,16 +46,27 @@ func TestIntegrationNativeArrayMigrationAndTransport(t *testing.T) {
 	if err != nil || record.Data["Title"] != "first" || record.Data["Ints"] != nil || record.Data["Floats"] != nil || record.Data["Flags"] != nil {
 		t.Fatalf("migrated record: %v, %v", record, err)
 	}
+	for _, p := range arrayProperties() {
+		if record.Data[p.Name] != nil {
+			t.Fatalf("migrated array %s is not NULL: %v", p.Name, record.Data[p.Name])
+		}
+	}
+	instant := time.Date(2026, 7, 1, 9, 2, 3, 123456789, time.FixedZone("offset", 7200))
 	for _, binary := range []bool{false, true} {
 		record.Data["Ints"] = []int32{1, -2}
 		record.Data["Floats"] = []float32{0.25, -1.5}
 		record.Data["Flags"] = []bool{true, false}
+		record.Data["UUIDs"] = []string{"8F516DB6-38CA-4E8F-AD79-D71B015F5419"}
+		record.Data["Times"] = []time.Time{instant}
 		if _, err := c.writeEncoded(ctx, []vectordata.ModelRecord{record}, true, binary); err != nil {
 			t.Fatalf("binary=%v array write: %v", binary, err)
 		}
 		row, err := c.Get(ctx, "a", vectordata.RetrievalOptions{})
 		if err != nil || !reflect.DeepEqual(row.Data["Ints"], []int64{1, -2}) || !reflect.DeepEqual(row.Data["Floats"], []float64{0.25, -1.5}) || !reflect.DeepEqual(row.Data["Flags"], []bool{true, false}) {
 			t.Fatalf("binary=%v array read: %v, %v", binary, row, err)
+		}
+		if !reflect.DeepEqual(row.Data["UUIDs"], []string{"8f516db6-38ca-4e8f-ad79-d71b015f5419"}) || !reflect.DeepEqual(row.Data["Times"], []time.Time{instant.UTC().Truncate(time.Microsecond)}) {
+			t.Fatalf("binary=%v structured array read: %v", binary, row)
 		}
 	}
 	// A different native array type is storage drift even though both use array_ops.
@@ -115,14 +135,20 @@ func TestIntegrationNativeArrayGINPlans(t *testing.T) {
 	}
 	c := handle.(*ModelCollection)
 	records := make([]vectordata.ModelRecord, 2000)
+	const uuidNeedle = "8f516db6-38ca-4e8f-ad79-d71b015f5419"
+	timeNeedle := time.Date(2030, 1, 1, 0, 0, 0, 123456000, time.UTC)
 	for i := range records {
 		ints, floats, flags := []int64{int64(i)}, []float64{float64(i)}, []bool{true}
+		uuids := []string{fmt.Sprintf("00000000-0000-0000-0000-%012x", i)}
+		times := []time.Time{time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC).Add(time.Duration(i) * time.Hour)}
 		if i%100 == 0 {
 			ints = append(ints, -7)
 			floats = append(floats, 0.25)
 			flags = append(flags, false)
+			uuids = append(uuids, uuidNeedle)
+			times = append(times, timeNeedle)
 		}
-		records[i] = vectordata.ModelRecord{Key: strconv.Itoa(i), Data: map[string]any{"Ints": ints, "Floats": floats, "Flags": flags}}
+		records[i] = vectordata.ModelRecord{Key: strconv.Itoa(i), Data: map[string]any{"Ints": ints, "Floats": floats, "Flags": flags, "UUIDs": uuids, "Times": times}}
 	}
 	if _, err := c.Insert(ctx, records); err != nil {
 		t.Fatal(err)
@@ -137,7 +163,7 @@ func TestIntegrationNativeArrayGINPlans(t *testing.T) {
 	for _, tt := range []struct {
 		field  string
 		needle any
-	}{{"Ints", int16(-7)}, {"Floats", float32(0.25)}, {"Flags", false}} {
+	}{{"Ints", int16(-7)}, {"Floats", float32(0.25)}, {"Flags", false}, {"UUIDs", strings.ToUpper(uuidNeedle)}, {"Times", timeNeedle.In(time.FixedZone("other", -18000)).Add(789 * time.Nanosecond)}} {
 		t.Run(tt.field, func(t *testing.T) {
 			filter := vectordata.Contains(vectordata.Column(tt.field), tt.needle)
 			sql, args, err := c.queryPlan(filter, 100, vectordata.QueryOptions{})
@@ -200,6 +226,15 @@ func TestIntegrationNativeArrayRejectsOutOfBandShapes(t *testing.T) {
 		{"Ints", "ARRAY[1,NULL]::bigint[]"}, {"Ints", "ARRAY[[1,2],[3,4]]::bigint[]"}, {"Ints", "'[0:1]={1,2}'::bigint[]"},
 		{"Floats", "ARRAY[1,'NaN']::double precision[]"}, {"Floats", "ARRAY['Infinity']::double precision[]"},
 		{"Flags", "ARRAY[true,NULL]::boolean[]"},
+		{"UUIDs", "ARRAY['00000000-0000-0000-0000-000000000001',NULL]::uuid[]"},
+		{"UUIDs", "ARRAY[['00000000-0000-0000-0000-000000000001']]::uuid[]"},
+		{"UUIDs", "'[0:0]={00000000-0000-0000-0000-000000000001}'::uuid[]"},
+		{"Times", "ARRAY['2026-01-01',NULL]::timestamptz[]"},
+		{"Times", "ARRAY[['2026-01-01']]::timestamptz[]"},
+		{"Times", "'[0:0]={2026-01-01}'::timestamptz[]"},
+		{"Times", "ARRAY['infinity']::timestamptz[]"},
+		{"Times", "ARRAY['-infinity']::timestamptz[]"},
+		{"Times", "ARRAY['10000-01-01']::timestamptz[]"},
 	} {
 		t.Run(tt.field+tt.expression, func(t *testing.T) {
 			if _, err := store.pool.Exec(ctx, "INSERT INTO "+c.table()+" (\"ID\","+quoteIdent(tt.field)+") VALUES ('bad',"+tt.expression+") ON CONFLICT (\"ID\") DO UPDATE SET "+quoteIdent(tt.field)+"=EXCLUDED."+quoteIdent(tt.field)); err != nil {
@@ -210,6 +245,51 @@ func TestIntegrationNativeArrayRejectsOutOfBandShapes(t *testing.T) {
 			}
 			if _, err := store.pool.Exec(ctx, "DELETE FROM "+c.table()+" WHERE \"ID\"='bad'"); err != nil {
 				t.Fatal(err)
+			}
+		})
+	}
+}
+
+func TestIntegrationTimestampArraysAcrossSessionTimezones(t *testing.T) {
+	for _, zone := range []string{"UTC", "America/New_York"} {
+		t.Run(zone, func(t *testing.T) {
+			ctx := context.Background()
+			cfg, err := pgxpool.ParseConfig(integrationDSN)
+			if err != nil {
+				t.Fatal(err)
+			}
+			cfg.MaxConns = 1
+			cfg.ConnConfig.RuntimeParams["timezone"] = zone
+			pool, err := pgxpool.NewWithConfig(ctx, cfg)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(pool.Close)
+			store := newTestStore(t, pool)
+			c, err := store.EnsureModelCollection(ctx, "timestamp_bounds", vectordata.CollectionDefinition{Key: vectordata.KeyProperty{Name: "ID"}, Data: []vectordata.DataProperty{{Name: "Times", Type: vectordata.TypeTimeArray}}}, vectordata.ModelCollectionOptions{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			input := []time.Time{
+				time.Date(1, 1, 1, 0, 0, 0, 0, time.UTC),
+				time.Date(9999, 12, 31, 23, 59, 59, 999999999, time.UTC),
+				time.Date(1969, 12, 31, 23, 59, 59, 999999999, time.UTC),
+				time.Date(2026, 7, 1, 9, 2, 3, 123456789, time.FixedZone("offset", 7200)),
+			}
+			if _, err := c.Insert(ctx, []vectordata.ModelRecord{{Key: "a", Data: map[string]any{"Times": input}}}); err != nil {
+				t.Fatal(err)
+			}
+			want := make([]time.Time, len(input))
+			for i, instant := range input {
+				want[i] = instant.UTC().Truncate(time.Microsecond)
+			}
+			row, err := c.Get(ctx, "a", vectordata.RetrievalOptions{})
+			if err != nil || !reflect.DeepEqual(row.Data["Times"], want) {
+				t.Fatalf("timestamp boundary round trip: %v, %v", row, err)
+			}
+			rows, err := c.Query(ctx, vectordata.Eq(vectordata.Column("Times"), input), 1, vectordata.QueryOptions{})
+			if err != nil || len(rows) != 1 {
+				t.Fatalf("timestamp boundary equality: %v, %v", rows, err)
 			}
 		})
 	}
