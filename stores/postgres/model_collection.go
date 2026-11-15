@@ -12,6 +12,7 @@ import (
 	"github.com/gabisonia/go-vectorstore/vectordata"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // ModelCollection maps a CollectionDefinition to native PostgreSQL columns.
@@ -125,6 +126,9 @@ func (c *ModelCollection) writeStatement(r vectordata.ModelRecord, upsert, useBi
 		if p.Type == vectordata.TypeBytes {
 			cast = "::bytea"
 		}
+		if _, array := p.Type.ArrayElementType(); array && p.Type != vectordata.TypeStringArray {
+			cast = "::" + dataSQLType(p.Type)
+		}
 		if p.Type == vectordata.TypeJSON && !(p.Optional && value == nil) {
 			payload, err := json.Marshal(value)
 			if err != nil {
@@ -196,7 +200,13 @@ func (c *ModelCollection) scan(row modelScanner, vectors, withDistance bool) (ve
 	targets := []any{&r.Key}
 	data := make([]any, len(c.definition.Data))
 	for i := range data {
-		targets = append(targets, &data[i])
+		p := c.definition.Data[i]
+		if _, array := p.Type.ArrayElementType(); array && p.Type != vectordata.TypeStringArray {
+			data[i] = &pgtype.Array[any]{}
+			targets = append(targets, data[i])
+		} else {
+			targets = append(targets, &data[i])
+		}
 	}
 	vectorTexts := make([]string, len(c.definition.Vectors))
 	if vectors {
@@ -213,6 +223,19 @@ func (c *ModelCollection) scan(row modelScanner, vectors, withDistance bool) (ve
 	}
 	for i, p := range c.definition.Data {
 		value := data[i]
+		if array, ok := value.(*pgtype.Array[any]); ok {
+			value = nil
+			if array.Valid {
+				if len(array.Dims) > 1 || len(array.Dims) == 0 && len(array.Elements) != 0 || len(array.Dims) == 1 && (array.Dims[0].LowerBound != 1 || int(array.Dims[0].Length) != len(array.Elements)) {
+					return r, 0, fmt.Errorf("%w: property %q requires a one-dimensional array with lower bound 1", vectordata.ErrInvalidRecord, p.Name)
+				}
+				var err error
+				value, err = vectordata.NormalizeModelData(array.Elements, p)
+				if err != nil {
+					return r, 0, err
+				}
+			}
+		}
 		if value != nil && p.Type == vectordata.TypeBytes {
 			value = append([]byte{}, value.([]byte)...)
 		}
@@ -291,7 +314,7 @@ func (c *ModelCollection) GetMany(ctx context.Context, keys []any, opts vectorda
 	return out, ctx.Err()
 }
 func (c *ModelCollection) filterConfig() filtersql.FilterSQLConfig {
-	cfg := filtersql.FilterSQLConfig{ColumnExpr: map[string]string{c.definition.Key.Name: "t." + quoteIdent(c.definition.Key.StorageName)}, JSONColumnExpr: map[string]string{}, ArrayColumns: map[string]bool{}, UseMetadataContainment: true}
+	cfg := filtersql.FilterSQLConfig{ColumnExpr: map[string]string{c.definition.Key.Name: "t." + quoteIdent(c.definition.Key.StorageName)}, JSONColumnExpr: map[string]string{}, ArrayColumns: map[string]bool{}, ArrayElementTypes: map[string]string{}, UseMetadataContainment: true}
 	native := map[string]vectordata.DataProperty{}
 	for _, p := range c.definition.Data {
 		expr := "t." + quoteIdent(p.StorageName)
@@ -299,8 +322,12 @@ func (c *ModelCollection) filterConfig() filtersql.FilterSQLConfig {
 		if p.Type == vectordata.TypeJSON {
 			cfg.JSONColumnExpr[p.Name] = expr
 		}
-		if p.Type == vectordata.TypeStringArray {
+		if element, array := p.Type.ArrayElementType(); array {
 			cfg.ArrayColumns[p.Name] = true
+			if p.Type != vectordata.TypeStringArray {
+				cfg.ArrayElementTypes[p.Name] = dataSQLType(element)
+				native[p.Name] = p
+			}
 		}
 		if p.Type == vectordata.TypeUUID || p.Type == vectordata.TypeBytes {
 			native[p.Name] = p
@@ -316,6 +343,12 @@ func (c *ModelCollection) filterConfig() filtersql.FilterSQLConfig {
 		}
 		if name == c.definition.Key.Name && c.definition.Key.Type == vectordata.KeyUUID && value != nil {
 			return c.definition.NormalizeKey(value)
+		}
+		return value, nil
+	}
+	cfg.NormalizeArrayElement = func(name string, value any) (any, error) {
+		if p, ok := native[name]; ok {
+			return vectordata.NormalizeModelArrayElement(value, p.Type)
 		}
 		return value, nil
 	}

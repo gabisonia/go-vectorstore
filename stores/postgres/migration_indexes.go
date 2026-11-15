@@ -28,7 +28,7 @@ func modelIndexSpecs(collection string, d vectordata.CollectionDefinition) ([]mo
 				return nil, err
 			}
 			method := "btree"
-			if p.Type == vectordata.TypeStringArray {
+			if _, array := p.Type.ArrayElementType(); array {
 				method = "gin"
 			}
 			indexes = append(indexes, modelIndexSpec{property: p.Name, name: name, method: method, column: p.StorageName, opClass: dataOpClass(p.Type)})

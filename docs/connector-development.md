@@ -198,6 +198,17 @@ does this through `filtersql.FilterSQLConfig.NormalizeColumnValue` without casti
 indexed columns to text. `conformance.Run` exercises advertised UUID/byte support,
 including aliases, typed mapping, nulls, sorting, filters and buffer ownership.
 
+`TypeInt64Array`, `TypeFloat64Array` and `TypeBoolArray` are explicit native array
+choices; preserve existing JSON inference. `DataType.ArrayElementType` identifies
+native arrays, while `NormalizeModelData` validates/copies whole values and
+`NormalizeModelArrayElement` canonicalizes membership operands. Preserve NULL vs
+non-nil empty arrays, reject NULL elements and non-finite floats, and copy mutable
+read values. PostgreSQL preserves dimensions while scanning so unsupported shapes
+are rejected rather than flattened. Use trusted `ArrayElementTypes` casts and
+`NormalizeArrayElement` in `filtersql.FilterSQLConfig` to type membership operands
+without casting indexed columns. The shared suite checks all three types, null
+semantics, aliases, filters, search, atomic failures and legacy JSON round trips.
+
 Advertise supported `VectorPrecisions` explicitly. The Go vector API stays float32;
 `NormalizeModelVector` validates and rounds float16 values. It returns a new slice
 for float16 and the original slice for float32, so copy float32 inputs before

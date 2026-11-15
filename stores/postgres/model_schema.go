@@ -169,6 +169,12 @@ func dataSQLType(t vectordata.DataType) string {
 		return "timestamp with time zone"
 	case vectordata.TypeStringArray:
 		return "text[]"
+	case vectordata.TypeInt64Array:
+		return "bigint[]"
+	case vectordata.TypeFloat64Array:
+		return "double precision[]"
+	case vectordata.TypeBoolArray:
+		return "boolean[]"
 	case vectordata.TypeUUID:
 		return "uuid"
 	case vectordata.TypeBytes:
@@ -337,6 +343,9 @@ func (c *ModelCollection) validateSchema(ctx context.Context, tx pgx.Tx) error {
 	return nil
 }
 func dataOpClass(t vectordata.DataType) string {
+	if _, array := t.ArrayElementType(); array {
+		return "array_ops"
+	}
 	switch t {
 	case vectordata.TypeString:
 		return "text_ops"
@@ -348,8 +357,6 @@ func dataOpClass(t vectordata.DataType) string {
 		return "bool_ops"
 	case vectordata.TypeTime:
 		return "timestamptz_ops"
-	case vectordata.TypeStringArray:
-		return "array_ops"
 	case vectordata.TypeUUID:
 		return "uuid_ops"
 	case vectordata.TypeBytes:

@@ -1,5 +1,30 @@
 # Performance and verification
 
+## Native array verification
+
+```sh
+go test -race -tags=integration -run 'NativeArray|ModelContract/capabilities/native_arrays' \
+  -v -timeout=3m ./stores/postgres
+go test -race -run 'NativeArray' ./vectordata
+```
+
+Shared tests cover integer, floating-point and boolean array round trips, aliases,
+NULL vs empty arrays, whole-array equality/membership, scalar membership and
+negation, filtered vector/hybrid search, mutable-buffer ownership and atomic
+failure on invalid elements. Typed tests preserve legacy JSON slice mappings and
+check overflow while decoding narrower Go fields.
+
+PostgreSQL tests check additive native-array migrations, required backfill/manual
+conversion classification, text/binary vector transport with native arrays, and
+array type drift. Read checks reject direct-SQL NULL elements, non-finite floats,
+multidimensional arrays and custom lower bounds.
+
+The GIN fixture stores 2,000 records with each membership target present in 1% of
+rows. It explains the actual generated retrieval SQL with sequential scans disabled
+inside a transaction, verifies each typed predicate can use its GIN index, and
+checks results under ordinary execution. This proves index eligibility rather
+than predicting production planner choices, latency or selectivity.
+
 ## L1 distance and index verification
 
 ```sh
