@@ -276,7 +276,10 @@ nullability, identity and primary-key shape must match. Existing indexes are
 checked for conflicts. Definitions are registered in PostgreSQL's reserved
 `__vectorstore_models` table. SQLite registers definitions in
 `__vectorstore_collections` alongside internal record storage; memory keeps them
-in process. Runtime embedder objects are not persisted. Changing a registered
+in process. Runtime embedder objects are not persisted. Memory record operations
+reject handles whose normalized definition differs from the current collection,
+including after deletion/recreation. Writes recheck the definition after embedding
+and before committing records; stale handles fail with `ErrSchemaMismatch`. Changing a registered
 model requires an explicit migration or a new collection. The original Record API's
 strict/auto-migrate modes are unchanged. PostgreSQL also exposes a
 [migration API](migrations.md) for read-only review and explicit, atomic application

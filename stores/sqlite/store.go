@@ -21,7 +21,7 @@ import (
 )
 
 // StoreOptions configures runtime embedding defaults. SQLite uses WAL mode,
-// FULL synchronization, foreign keys, and a five-second busy timeout.
+// FULL synchronization, foreign keys, and context-aware lock waits up to five seconds.
 type StoreOptions struct {
 	Embedder           vectordata.Embedder
 	EmbeddingBatchSize int
@@ -57,7 +57,8 @@ func Open(ctx context.Context, path string, opts StoreOptions) (*Store, error) {
 		dsn = (&url.URL{Scheme: "file", Path: absolute}).String()
 	}
 	q := url.Values{}
-	q.Add("_pragma", "busy_timeout(5000)")
+	// Disable native sleeping: retryBusy supplies bounded, cancelable waits.
+	q.Add("_pragma", "busy_timeout(0)")
 	q.Add("_pragma", "foreign_keys(1)")
 	q.Add("_pragma", "journal_mode(WAL)")
 	q.Add("_pragma", "synchronous(FULL)")
@@ -76,7 +77,7 @@ func Open(ctx context.Context, path string, opts StoreOptions) (*Store, error) {
 	return s, nil
 }
 func (s *Store) initialize(ctx context.Context) error {
-	tx, err := s.db.BeginTx(ctx, nil)
+	tx, err := s.beginTx(ctx)
 	if err != nil {
 		return err
 	}
@@ -98,6 +99,9 @@ func (*Store) Capabilities() vectordata.ProviderCapabilities {
 	return caps
 }
 func (s *Store) ListCollectionNames(ctx context.Context) ([]string, error) {
+	return retryBusy(ctx, func() ([]string, error) { return s.listCollectionNames(ctx) })
+}
+func (s *Store) listCollectionNames(ctx context.Context) ([]string, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT name FROM __vectorstore_collections ORDER BY name`)
 	if err != nil {
 		return nil, err
@@ -114,13 +118,22 @@ func (s *Store) ListCollectionNames(ctx context.Context) ([]string, error) {
 	return names, rows.Err()
 }
 func (s *Store) CollectionExists(ctx context.Context, name string) (bool, error) {
-	var exists bool
-	err := s.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM __vectorstore_collections WHERE name=?)`, name).Scan(&exists)
-	return exists, err
+	return retryBusy(ctx, func() (bool, error) {
+		var exists bool
+		err := s.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM __vectorstore_collections WHERE name=?)`, name).Scan(&exists)
+		return exists, err
+	})
 }
 func (s *Store) DeleteCollection(ctx context.Context, name string) error {
-	_, err := s.db.ExecContext(ctx, `DELETE FROM __vectorstore_collections WHERE name=?`, name)
-	return err
+	tx, err := s.beginTx(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.ExecContext(ctx, `DELETE FROM __vectorstore_collections WHERE name=?`, name); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 func (s *Store) GetModelCollection(name string, d vectordata.CollectionDefinition, opts vectordata.ModelCollectionOptions) (vectordata.ModelCollection, error) {
 	opts, err := opts.WithDefaults(s.options)
@@ -214,7 +227,7 @@ func (c *Collection) metadata(ctx context.Context, tx *sql.Tx) (int64, error) {
 }
 func (c *Collection) EnsureExists(ctx context.Context) (err error) {
 	defer func() { err = c.operation("ensure", err) }()
-	tx, err := c.store.db.BeginTx(ctx, nil)
+	tx, err := c.store.beginTx(ctx)
 	if err != nil {
 		return err
 	}
@@ -243,7 +256,7 @@ func (c *Collection) write(ctx context.Context, records []vectordata.ModelRecord
 	if len(prepared) == 0 {
 		return []any{}, ctx.Err()
 	}
-	tx, err := c.store.db.BeginTx(ctx, nil)
+	tx, err := c.store.beginTx(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -299,7 +312,7 @@ func (c *Collection) Delete(ctx context.Context, keys []any) (count int64, err e
 	if len(keys) == 0 {
 		return 0, ctx.Err()
 	}
-	tx, err := c.store.db.BeginTx(ctx, nil)
+	tx, err := c.store.beginTx(ctx)
 	if err != nil {
 		return 0, err
 	}
