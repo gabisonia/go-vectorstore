@@ -8,6 +8,7 @@ var _ vectordata.CapabilityProvider = (*Store)(nil)
 // Index hints are accepted, but memory does not build physical indexes.
 func (*Store) Capabilities() vectordata.ProviderCapabilities {
 	return vectordata.ProviderCapabilities{
+		Metadata:          true,
 		ReadIterators:     true,
 		InputEmbedding:    true,
 		OptionalVectors:   true,

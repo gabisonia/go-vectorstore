@@ -22,6 +22,9 @@ func TestBuiltInCapabilitiesAreLocalSnapshots(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			before := tt.provider.Capabilities()
+			if !before.Metadata {
+				t.Fatal("metadata discovery missing")
+			}
 			if !slices.Contains(before.DistanceMetrics, vectordata.DistanceL1) {
 				t.Fatal("L1 support missing")
 			}

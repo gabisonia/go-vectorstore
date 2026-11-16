@@ -9,6 +9,23 @@ import (
 	"github.com/gabisonia/go-vectorstore/vectordata"
 )
 
+func Example_getMetadata() {
+	type Document struct {
+		ID string `vectordata:"key"`
+	}
+	store := memory.New()
+	// Get creates a handle; this example does not create storage.
+	collection, err := vectordata.GetTypedModelCollection[string, Document](store, "docs", nil, vectordata.ModelCollectionOptions{})
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(vectordata.GetStoreMetadata(store).SystemName)
+	fmt.Println(collection.CollectionMetadata().CollectionName)
+	// Output:
+	// memory
+	// docs
+}
+
 func Example_typedSearch() {
 	type Document struct {
 		ID       string    `vectordata:"key"`

@@ -20,6 +20,7 @@ It is a workflow comparison, not a claim of API or feature equivalence with ever
 | Read iteration and cancellation | Listing, batch reads, text/custom-input and every supported hybrid variant use iter.Seq2/context.Context | Implemented; PostgreSQL cursor enumeration, memory/SQLite snapshots/pages; compatibility fallbacks buffer slices |
 | Hybrid keyword/vector search | Optional HybridSearcher and binary/sparse variants, RRF | PostgreSQL |
 | Provider discovery | CapabilityProvider reports keys, types, vector kinds, physical index tuples and optional workflows | Implemented |
+| Store/collection metadata | Optional metadata interfaces and helpers report system, database, namespace and collection identity; typed wrappers forward discovery | All three providers; local configuration snapshots |
 | Schema evolution | Read-only plans, drift detection, explicit reviewed additive application | PostgreSQL |
 | Durable provider portability | PostgreSQL and embedded SQLite | Implemented; memory is transient |
 
@@ -53,7 +54,9 @@ adapters; output is dense []float32. Provider-side generation and automatic
 binary/sparse embedding outputs remain outside the current contract.
 Runtime service discovery comparable to
 [VectorStore.GetService](https://learn.microsoft.com/en-us/dotnet/api/microsoft.extensions.vectordata.vectorstore)
-is represented by concrete providers and optional interface assertions.
+is represented by concrete providers and optional interface assertions. Store and
+collection metadata use dedicated optional interfaces, with name-only fallback
+for older collection providers; no general-purpose service locator is provided.
 
 Additional remote connectors, other distance metrics, custom rerankers, SQLite
 ANN/full-text acceleration, and non-additive migration execution are possible

@@ -25,6 +25,8 @@ type VectorIndexCapability struct {
 // particular collection or deployment enables them. Unless stated otherwise,
 // empty slices mean no support. Built-in providers return caller-owned slices.
 type ProviderCapabilities struct {
+	// Metadata supports optional store and collection identity discovery without I/O.
+	Metadata bool
 	// ReadIterators adds native collection listing, batch reads and text search
 	// iterators. InputEmbedding/HybridSearch also add their input/hybrid iterators.
 	// This reports API support, not whether a provider buffers snapshots/results.

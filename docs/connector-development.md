@@ -272,6 +272,15 @@ ordinary and hybrid plans, including relaxed IVFFlat ordering. A metric change
 still requires manual review even when operator classes match. SQLite persists
 the new metric in format 1; no vector representation changes are needed.
 
+Implement `StoreMetadataProvider` and `CollectionMetadataProvider` to expose
+configured identity through `StoreMetadata`/`CollectionMetadata`. Advertise
+`Capabilities().Metadata` only when both are available. Keep discovery local,
+stable and independent of schema validation or connection state; return value
+snapshots without driver clients, DSNs or credentials. Empty identity fields mean
+unavailable. Typed wrappers forward the optional interface, with a collection-name
+fallback for existing providers. Shared conformance checks discovery before
+creation and after deletion without creating storage as a side effect.
+
 `vectordata.MigrationPlanner` is a separate optional capability for model schema
 planning. Advertise `MigrationPlanning` only when it is implemented. Planning must
 be read-only and return provider SQL/arguments for review; classify manual work,
