@@ -248,6 +248,8 @@ type hybridSearchConfig struct {
 	vector               vectordata.VectorProperty
 	textProperty         string
 	candidates, constant int
+	keywordQuery         string
+	keywordValue         any
 }
 
 // validateHybridOptions must run before calling an embedder or accessing storage.
@@ -269,8 +271,12 @@ func (c *ModelCollection) validateHybridOptions(keywords string, top int, opts v
 			config.textProperty = d.StorageName
 		}
 	}
-	if config.textProperty == "" || strings.TrimSpace(keywords) == "" {
-		return config, fmt.Errorf("%w: indexed text property and keywords required", vectordata.ErrInvalidSearchOptions)
+	if config.textProperty == "" {
+		return config, fmt.Errorf("%w: indexed text property required", vectordata.ErrInvalidSearchOptions)
+	}
+	config.keywordQuery, config.keywordValue, err = hybridKeywords(keywords, opts.KeywordTerms)
+	if err != nil {
+		return config, err
 	}
 	config.candidates = opts.CandidateLimit
 	if config.candidates == 0 {
@@ -325,7 +331,7 @@ func (c *ModelCollection) hybridValuePlan(literal any, keywords string, top int,
 	if err != nil {
 		return "", nil, p, err
 	}
-	args := append([]any{literal, keywords}, filterArgs...)
+	args := append([]any{literal, config.keywordValue}, filterArgs...)
 	bind := func(value any) string { ph := fmt.Sprintf("$%d", next); next++; args = append(args, value); return ph }
 	op, _ := modelMetricOperator(p)
 	rankingDistance := "(t." + quoteIdent(p.StorageName) + " " + op + " $1::" + vectorQuerySQLType(p) + ")"
@@ -336,7 +342,7 @@ func (c *ModelCollection) hybridValuePlan(literal any, keywords string, top int,
 		predicate += " AND (" + where + ")"
 	}
 	text := ftsExpr("t." + quoteIdent(config.textProperty))
-	query := "plainto_tsquery('simple'::regconfig,$2)"
+	query := config.keywordQuery
 	limit := bind(config.candidates)
 	rrf := bind(config.constant)
 	sql := `WITH __vs_vector AS MATERIALIZED (SELECT ` + key + ` AS __vs_key, ` + rankingDistance + ` AS __vs_distance FROM ` + c.table() + ` t WHERE ` + predicate + ` ORDER BY __vs_distance ASC LIMIT ` + limit + `),

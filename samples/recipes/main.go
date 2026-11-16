@@ -195,6 +195,9 @@ func execute(ctx context.Context, store vectordata.ModelStore, recipe, prefix st
 			break
 		}
 	case "hybrid":
+		if !store.(vectordata.CapabilityProvider).Capabilities().HybridKeywordTerms {
+			return fmt.Errorf("keyword-list hybrid search: %w", vectordata.ErrUnsupported)
+		}
 		c, err := vectordata.EnsureTypedModelCollection[string, demo.Article](ctx, store, name, nil, vectordata.ModelCollectionOptions{})
 		if err != nil {
 			return err
@@ -207,6 +210,13 @@ func execute(ctx context.Context, store vectordata.ModelStore, recipe, prefix st
 				return err
 			}
 			fmt.Fprintf(out, "%s: %s score %.6f\n", hit.Item.ID, hit.ScoreKind, hit.Score)
+		}
+		// Entries match with OR; words within "cloud costs" match with AND.
+		for hit, err := range c.HybridSearchTextIter(ctx, "reduce cloud costs", "", 2, vectordata.HybridSearchOptions{TextProperty: "Body", CandidateLimit: 10, KeywordTerms: []string{"cloud costs", "caching"}}) {
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(out, "Keyword list: %s: %s score %.6f\n", hit.Item.ID, hit.ScoreKind, hit.Score)
 		}
 	case "migration":
 		planner, ok := store.(vectordata.MigrationPlanner)

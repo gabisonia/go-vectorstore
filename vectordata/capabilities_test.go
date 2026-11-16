@@ -25,6 +25,9 @@ func TestBuiltInCapabilitiesAreLocalSnapshots(t *testing.T) {
 			if !before.Metadata {
 				t.Fatal("metadata discovery missing")
 			}
+			if before.HybridKeywordTerms != tt.indexed {
+				t.Fatal("hybrid keyword-term discovery mismatch")
+			}
 			if !slices.Contains(before.DistanceMetrics, vectordata.DistanceL1) {
 				t.Fatal("L1 support missing")
 			}

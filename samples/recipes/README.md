@@ -43,6 +43,11 @@ before the follow-up count.
 
 Hybrid search uses the full-text `Body` property and RRF. Its score is a fusion
 score, not the similarity score from ordinary vector search.
+The recipe runs both the original string query and a `KeywordTerms` list. The
+list section prints `Keyword list: costs:` and uses OR between entries, with AND
+between words inside `"cloud costs"`. It requires `HybridKeywordTerms` capability
+and master after v0.4.1. Terms are plain text; the positional keyword string is
+blank in list mode. See [keyword-list semantics](../../docs/model-api.md#keyword-lists).
 
 Migration creates/reuses its own baseline fixture collection, then calls only
 `PlanMigration` to inspect an optional data addition. Planning is read-only; the

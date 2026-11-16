@@ -347,6 +347,7 @@ PostgreSQL float16 storage requires pgvector 0.7+ and a visible `halfvec` type.
 | `IndexedDataTypes` | None | None | String, int64, float64, bool, time, UUID, bytes, calendar values, decimals and native arrays |
 | `FullTextIndexing` | False | False | True, for string properties |
 | `HybridSearch` | False | False | True |
+| `HybridKeywordTerms` | False | False | True, plain-text keyword groups |
 | `MigrationPlanning` | False | False | True, plan-only |
 | `MigrationApplication` | False | False | True, additive changes only |
 
@@ -951,6 +952,49 @@ should not be compared with ordinary vector similarity scores.
 The memory and SQLite providers perform exact vector search and do not implement hybrid
 search. Typed calls return `ErrUnsupported` for this optional capability. Index
 hints are accepted for portability but do not create physical indexes in either provider. See [SQLite storage and limits](sqlite.md).
+
+### Keyword lists
+
+On master after v0.4.1, PostgreSQL also accepts `HybridSearchOptions.KeywordTerms`,
+covering the keyword-list workflow of Microsoft's
+[hybrid search contract](https://source.dot.net/Microsoft.Extensions.VectorData.Abstractions/IKeywordHybridSearchable.cs.html).
+Check `Capabilities().HybridKeywordTerms` before using this option with a provider.
+
+```go
+// collection is a typed model collection on a keyword-list-capable provider.
+options := vectordata.HybridSearchOptions{
+    TextProperty: "Body",
+    KeywordTerms: []string{"cloud costs", "caching"},
+}
+for hit, err := range collection.HybridSearchTextIter(ctx, "reduce spending", "", 3, options) {
+    if err != nil {
+        return err
+    }
+    fmt.Println(hit.Item, hit.ScoreKind, hit.Score)
+}
+```
+
+Leave the positional keyword string blank when supplying a list. A nil list keeps
+the existing string behavior; a non-nil empty list, a blank entry, or simultaneous
+nonblank positional keywords returns `ErrInvalidSearchOptions` before embedding
+or database access. List entries must be valid UTF-8 without NUL.
+
+PostgreSQL matches any entry (OR), with plain-text AND matching between the words
+within each entry. Thus the example matches documents containing both `cloud` and
+`costs`, or containing `caching`. Each entry is independently normalized using
+`plainto_tsquery('simple', ...)`; punctuation is ignored and query operators are
+not interpreted. See [PostgreSQL's plain-text query rules](https://www.postgresql.org/docs/current/textsearch-controls.html#TEXTSEARCH-PARSING-QUERIES).
+Entries producing no lexemes, such as `"---"`, add no keyword candidates. Vector
+candidates can still be returned even when the keyword side matches nothing.
+
+Terms use a bound text-array parameter, and the query retains GIN full-text index
+eligibility. Typed and dynamic dense/text/custom-input/binary/sparse hybrid APIs,
+including iterators, use the same option. Each enumeration snapshots the list
+before invoking embedding code; repeated enumerations read the current supplied
+list again. Callers must avoid concurrent mutation during enumeration. Filters,
+projection, paging, candidate limits, distance thresholds and RRF score thresholds
+keep their existing meanings. Existing string keywords continue to require all
+words through `plainto_tsquery`. Run the PostgreSQL `hybrid` recipe to see both forms.
 
 ## Verification and scope
 

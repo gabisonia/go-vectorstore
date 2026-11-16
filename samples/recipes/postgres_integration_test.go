@@ -76,7 +76,7 @@ func TestIntegrationPostgresRecipes(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			if recipe == "hybrid" && (!strings.Contains(out.String(), "costs:") || !strings.Contains(out.String(), "reciprocal_rank_fusion")) {
+			if recipe == "hybrid" && (!strings.Contains(out.String(), "costs:") || !strings.Contains(out.String(), "reciprocal_rank_fusion") || !strings.Contains(out.String(), "Keyword list: costs:")) {
 				t.Fatalf("missing fused results: %s", &out)
 			}
 			if recipe == "migration" {

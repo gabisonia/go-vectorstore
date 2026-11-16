@@ -55,6 +55,8 @@ type ProviderCapabilities struct {
 	// FullTextIndexing applies to string properties.
 	FullTextIndexing bool
 	HybridSearch     bool
+	// HybridKeywordTerms supports HybridSearchOptions.KeywordTerms on all hybrid variants.
+	HybridKeywordTerms bool
 	// MigrationPlanning describes plan generation, not migration execution.
 	MigrationPlanning bool
 	// MigrationApplication supports optional-property and index additions only.
