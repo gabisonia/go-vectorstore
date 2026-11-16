@@ -8,6 +8,7 @@ var _ vectordata.CapabilityProvider = (*PostgresVectorStore)(nil)
 // availability still depends on pgvector installation, version and permissions.
 func (*PostgresVectorStore) Capabilities() vectordata.ProviderCapabilities {
 	caps := vectordata.ProviderCapabilities{
+		ReadIterators:        true,
 		InputEmbedding:       true,
 		OptionalVectors:      true,
 		Backend:              "postgres",

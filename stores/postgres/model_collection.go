@@ -8,6 +8,7 @@ import (
 	"iter"
 	"strings"
 
+	"github.com/gabisonia/go-vectorstore/internal/iteration"
 	"github.com/gabisonia/go-vectorstore/stores/postgres/filtersql"
 	"github.com/gabisonia/go-vectorstore/vectordata"
 	"github.com/jackc/pgx/v5"
@@ -409,29 +410,9 @@ func (c *ModelCollection) Get(ctx context.Context, key any, opts vectordata.Retr
 	return r, err
 }
 func (c *ModelCollection) GetMany(ctx context.Context, keys []any, opts vectordata.RetrievalOptions) ([]vectordata.ModelRecord, error) {
-	values := []any{}
-	seen := map[any]bool{}
-	for _, key := range keys {
-		v, err := c.definition.NormalizeKey(key)
-		if err != nil {
-			return nil, c.operation("get_many", err)
-		}
-		if !seen[v] {
-			seen[v] = true
-			values = append(values, v)
-		}
-	}
-	out := []vectordata.ModelRecord{}
-	for start := 0; start < len(values); start += maxRowsPerStatement {
-		chunk := values[start:min(start+maxRowsPerStatement, len(values))]
-		records, err := c.Query(ctx, vectordata.In(vectordata.Column(c.definition.Key.Name), chunk...), len(chunk), vectordata.QueryOptions{IncludeVectors: opts.IncludeVectors})
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, records...)
-	}
-	return out, ctx.Err()
+	return iteration.Collect(c.GetManyIter(ctx, keys, opts))
 }
+
 func (c *ModelCollection) filterConfig() filtersql.FilterSQLConfig {
 	cfg := filtersql.FilterSQLConfig{ColumnExpr: map[string]string{c.definition.Key.Name: "t." + quoteIdent(c.definition.Key.StorageName)}, JSONColumnExpr: map[string]string{}, ArrayColumns: map[string]bool{}, ArrayElementTypes: map[string]string{}, UseMetadataContainment: true}
 	native := map[string]vectordata.DataProperty{}

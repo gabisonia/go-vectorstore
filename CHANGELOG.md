@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Complete optional model read iterators for listing, batch retrieval, text/custom
+  inputs and dense/text/input/binary/sparse hybrid search, including typed wrappers
+  and buffered compatibility fallbacks for existing third-party providers.
+- Stream PostgreSQL iterator results from cursors, stop before later batch chunks,
+  preserve tuning rollback, and check cancellation through exhaustion. Memory and
+  SQLite retain snapshots/pages and release resources before caller codecs.
+- Add shared iterator conformance, fallback/laziness and single-connection cleanup
+  coverage, including early exit before a later malformed database row.
 - Add full-range `KeyUint64` with exact provider storage, typed mapping and filters,
   plus application-generated UUID keys across memory, SQLite and PostgreSQL.
 - Preserve memory integer sequence state on failed batches and reject exhaustion

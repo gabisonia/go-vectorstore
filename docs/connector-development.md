@@ -306,6 +306,24 @@ must still reject collisions under Upsert. Only generated int64 keys use integer
 sequences/identity columns. The capability suite exercises key bounds, typed
 aliases, CRUD/filter/search behavior, generated UUIDs and migration compatibility.
 
+## Read iterator extensions
+
+Keep ModelStore/ModelCollection and existing optional search interfaces compatible.
+Implement `CollectionNameIterator`, `ModelBatchIterator`, `TextSearchIterator` and
+advertise `ReadIterators`. `InputEmbedding` additionally requires
+`InputSearchIterator`; `HybridSearch` adds `HybridSearchIterator` and supported
+input/binary/sparse hybrid iterator interfaces. Package helpers supply buffered
+fallbacks for existing slice-only providers.
+
+Defer reads, embedding and decoding until enumeration. Stop after the first error
+or a false yield; check context cancellation before work, between records and at
+exhaustion. Close cursors/transactions on every exit. Do not retry after yielding
+results. Typed codecs must decode only consumed records. Snapshot providers must
+release locks/connections before caller code, especially SQLite's single connection.
+Document buffering and cross-batch consistency separately from iterator API support.
+The shared capability suite covers these contracts; PostgreSQL also tests early
+exit before a late malformed row and single-connection cleanup/settings rollback.
+
 ## Optional vectors and array set filters
 
 Advertise `OptionalVectors` only when every supported vector kind can be absent.

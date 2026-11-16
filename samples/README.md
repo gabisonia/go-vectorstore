@@ -26,7 +26,8 @@ Deterministic embedders are instructional fixtures, not semantic models. Remote
 modes require explicit opt-in and can incur provider charges. The original Record
 API examples remain supported; new model applications should start with the typed
 samples. The new samples are on master and included in source versions from v0.4.1;
-their library calls use APIs available in v0.4.0, except for input-embeddings and native-keys,
+their library calls use APIs available in v0.4.0, except for input-embeddings,
+native-keys and the updated iterator/hybrid recipes,
 which require master after v0.4.1. Consult GitHub releases for
 published tags.
 
