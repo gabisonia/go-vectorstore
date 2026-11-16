@@ -10,6 +10,13 @@ func (s *PostgresVectorStore) StoreMetadata() vectordata.StoreMetadata {
 	return vectordata.StoreMetadata{SystemName: "postgresql", DatabaseName: s.databaseName, Namespace: s.opts.Schema}
 }
 
+func (s *PostgresVectorStore) operation(collection, op string, err error) error {
+	if err == nil {
+		return nil
+	}
+	return &vectordata.OperationError{StoreMetadata: vectordata.GetStoreMetadata(s), Backend: "postgres", Collection: collection, Operation: op, Err: err}
+}
+
 func (c *ModelCollection) CollectionMetadata() vectordata.CollectionMetadata {
 	return vectordata.CollectionMetadata{StoreMetadata: c.store.StoreMetadata(), CollectionName: c.name}
 }

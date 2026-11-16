@@ -297,6 +297,15 @@ unavailable. Typed wrappers forward the optional interface, with a collection-na
 fallback for existing providers. Shared conformance checks discovery before
 creation and after deletion without creating storage as a side effect.
 
+When wrapping failures in `OperationError`, populate its embedded `StoreMetadata`
+from the configured store. Preserve the original cause with `Unwrap`, including
+native driver errors and context cancellation. Leave error category decisions and
+message formatting intact. Do not query the database to assemble error identity;
+diagnostics must also work with closed or failed connections. Error wrapping is
+optional and is not implied by the `Metadata` discovery capability. Shared
+metadata conformance checks supplied error metadata against collection identity;
+existing providers may leave the new error metadata empty.
+
 `vectordata.MigrationPlanner` is a separate optional capability for model schema
 planning. Advertise `MigrationPlanning` only when it is implemented. Planning must
 be read-only and return provider SQL/arguments for review; classify manual work,

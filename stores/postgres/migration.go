@@ -18,11 +18,7 @@ var _ vectordata.MigrationPlanner = (*PostgresVectorStore)(nil)
 // PlanMigration inspects a repeatable-read, read-only snapshot. It does not call
 // EnsureExists, take migration locks, scan user records, or execute generated SQL.
 func (s *PostgresVectorStore) PlanMigration(ctx context.Context, name string, desired vectordata.CollectionDefinition) (plan vectordata.MigrationPlan, err error) {
-	defer func() {
-		if err != nil {
-			err = &vectordata.OperationError{Backend: "postgres", Collection: name, Operation: "plan_migration", Err: err}
-		}
-	}()
+	defer func() { err = s.operation(name, "plan_migration", err) }()
 	handle, err := s.GetModelCollection(name, desired, vectordata.ModelCollectionOptions{})
 	if err != nil {
 		return plan, err

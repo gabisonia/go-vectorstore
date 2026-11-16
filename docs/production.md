@@ -73,7 +73,10 @@ An operation error does not always establish the commit outcome: a connection ca
 be lost after the database commits but before the caller receives confirmation.
 Inspect errors with errors.Is/errors.As; OperationError preserves provider context
 and the native cause. Reconcile uncertain outcomes by stable record keys or an
-application idempotency protocol before retrying writes. Blindly repeating Insert
+application idempotency protocol before retrying writes. Inspect an `OperationError`
+with `errors.As` to obtain its configured system/database/namespace metadata in
+addition to collection and operation names. This metadata is a local snapshot;
+it does not establish the outcome of a failed operation. Blindly repeating Insert
 with generated keys can create duplicates. Upsert can overwrite concurrent changes,
 so stable keys alone do not supply application-level concurrency control.
 

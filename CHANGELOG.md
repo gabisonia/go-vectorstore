@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Add configured store identity to PostgreSQL/SQLite model operation errors and
+  PostgreSQL migration errors. Preserve existing error text, native/sentinel
+  causes and cancellation; include closed-connection and diagnostic examples.
 - Add optional hybrid `KeywordTerms` lists with PostgreSQL plain-text OR groups,
   validation before embedding, caller-owned snapshots and capability discovery.
   Support all hybrid slice/iterator variants while preserving string queries.

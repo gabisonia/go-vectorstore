@@ -480,6 +480,34 @@ and SQLite operation errors add backend, collection, and operation context throu
 `OperationError`, preserving
 `errors.Is`/`errors.As`.
 
+On master after v0.4.1, these wrappers also embed `StoreMetadata`: configured
+system, database and namespace names. PostgreSQL migration planning/application
+errors carry the same identity. This covers the contextual diagnostics represented
+by Microsoft's [VectorStoreException](https://source.dot.net/Microsoft.Extensions.VectorData.Abstractions/VectorStoreException.cs.html).
+
+```go
+// err is an error returned by a model operation or PostgreSQL migration.
+var operation *vectordata.OperationError
+if errors.As(err, &operation) {
+    fmt.Printf("%s / %s / %s: %s %s\n", operation.SystemName,
+        operation.DatabaseName, operation.Namespace,
+        operation.Collection, operation.Operation)
+}
+if errors.Is(err, vectordata.ErrNotFound) {
+    // Handle a missing record, independently of provider wrapping.
+}
+```
+
+Metadata is a value snapshot of the configured handle, obtained without database
+I/O even after close. It follows the [store metadata rules](#store-and-collection-metadata)
+and includes no connection string or credentials. `Error()` keeps its existing
+message format; read the new fields through `errors.As` for structured logging.
+`Unwrap` preserves native driver errors, sentinels and cancellation causes.
+Wrapping remains optional: memory errors and some validation/cancellation paths
+can return errors directly. Existing manually constructed `OperationError` values
+may have empty store metadata. See `ExampleOperationError` in
+[the executable examples](../vectordata/example_test.go).
+
 ### Complete read iteration
 
 Built-in stores/collections support iterator forms for all model reads:
