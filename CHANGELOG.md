@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add explicit squared Euclidean distance (`DistanceL2Squared` / `l2_squared`)
+  across all providers for dense float32/float16 and sparse vectors, with squared
+  distance thresholds and reciprocal similarity scores. Preserve existing L2 units.
+- Reuse PostgreSQL L2 HNSW/IVFFlat indexes while retaining native operator ordering;
+  verify dense/sparse plans, reviewed index additions, SQLite reopen and recipes.
 - Complete optional model read iterators for listing, batch retrieval, text/custom
   inputs and dense/text/input/binary/sparse hybrid search, including typed wrappers
   and buffered compatibility fallbacks for existing third-party providers.

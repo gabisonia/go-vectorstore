@@ -252,7 +252,7 @@ Sparse properties use `VectorSparse`, `SparseVector` and
 coordinate ordering/uniqueness, finite values, cosine norms and index nonzero
 limits. Remove explicit zeros, copy both coordinate buffers, and keep all
 operations proportional to coordinate counts. Go indices are zero-based;
-PostgreSQL text indices are one-based. Sparse float32 supports the four dense
+PostgreSQL text indices are one-based. Sparse float32 supports the five dense
 metrics, with HNSW only. Capability entries report both `MaxDimensions` and
 `MaxNonZero`. Reject invalid maps and sparse inputs before embedding/writes;
 text queries must not call a float embedder for a sparse property. Preserve
@@ -261,6 +261,16 @@ visible sparse types/operators/opclasses and checks existing nonzero counts
 before planning an index addition; manual backfill and stale reviews remain
 explicit. Shared tests cover mixed models, all metrics and billion-dimensional
 values without dense allocation.
+
+`DistanceL2Squared` returns the sum of squared component differences, with score
+`1 / (1 + distance)` and thresholds in squared units. Preserve existing L2 units.
+Advertise the metric and each supported index tuple; shared conformance covers
+dense float32/float16, sparse, thresholds, text queries, projection and iterators.
+PostgreSQL uses native L2 operators/classes for index ordering and squares only
+reported distances and threshold expressions. Preserve that distinction in
+ordinary and hybrid plans, including relaxed IVFFlat ordering. A metric change
+still requires manual review even when operator classes match. SQLite persists
+the new metric in format 1; no vector representation changes are needed.
 
 `vectordata.MigrationPlanner` is a separate optional capability for model schema
 planning. Advertise `MigrationPlanning` only when it is implemented. Planning must

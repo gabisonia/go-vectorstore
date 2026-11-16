@@ -12,7 +12,7 @@ import (
 )
 
 func TestPortableRecipes(t *testing.T) {
-	expected := map[string]string{"named-vectors": "guide: BodyVector distance 0.000; loaded dimensions 3", "iterators": "Cancellation observed; count after iterator: 2", "embedded-iterators": "Search: costs\nInput: costs", "capabilities": "Hybrid search: false"}
+	expected := map[string]string{"named-vectors": "guide: BodyVector distance 0.000; loaded dimensions 3", "squared-l2": "near: distance 25 score 0.038462\nSquared-distance threshold 5: 1 match", "iterators": "Cancellation observed; count after iterator: 2", "embedded-iterators": "Search: costs\nInput: costs", "capabilities": "Hybrid search: false"}
 	for _, backend := range []string{"memory", "sqlite"} {
 		t.Run(backend, func(t *testing.T) {
 			base := []string{}

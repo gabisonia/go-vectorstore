@@ -62,7 +62,7 @@ names, names over 63 bytes, and the reserved `__vs_` prefix are rejected.
 | --- | --- |
 | `key` | `name=<storage name>`, `type=string\|int64\|uint64\|uuid`, `generated` |
 | `data` | `name=<storage name>`, `type=<data type>`, `optional`, `index`, `fulltext` |
-| `vector` | `name=<storage name>`, `dimensions=<n>`, `kind=dense\|binary\|sparse`, `precision=float32\|float16`, `metric=cosine\|l2\|inner_product\|l1\|hamming`, `index`, `method=hnsw\|ivfflat`, `source=<data field>`, `optional`, `input` |
+| `vector` | `name=<storage name>`, `dimensions=<n>`, `kind=dense\|binary\|sparse`, `precision=float32\|float16`, `metric=cosine\|l2\|l2_squared\|inner_product\|l1\|hamming`, `index`, `method=hnsw\|ivfflat`, `source=<data field>`, `optional`, `input` |
 | `-` | Ignore the field |
 
 Untagged fields are ignored when inferring a definition. Exported fields and
@@ -319,7 +319,7 @@ if provider, ok := store.(vectordata.CapabilityProvider); ok {
 ```
 
 All three providers report string/int64/uint64/UUID keys, generated int64/UUID keys, all twenty
-portable data types, and cosine/L2/inner-product/L1/Hamming metrics.
+portable data types, and cosine/L2/squared-L2/inner-product/L1/Hamming metrics.
 `VectorKinds` reports dense, binary and sparse support. Hamming applies only to
 binary vectors; the other metrics apply to dense and sparse vectors.
 `VectorPrecisions` reports `VectorFloat32` and `VectorFloat16` on all three providers;
@@ -354,12 +354,12 @@ for _, index := range caps.VectorIndexCapabilities {
 }
 ```
 
-PostgreSQL reports HNSW for all four dense metrics and IVFFlat for cosine/L2/inner
+PostgreSQL reports HNSW for all five dense metrics and IVFFlat for cosine/L2/squared-L2/inner
 product, each with float32 (2,000 indexed dimensions) and float16 (4,000).
 Binary entries have `Kind=VectorBinary`, empty precision, and Hamming distance;
 HNSW and IVFFlat both support up to 64,000 bits. Empty kind in older entries means
 dense, and missing `VectorKinds` means the provider has not reported kinds.
-Sparse entries have `Kind=VectorSparse`, float32 precision, HNSW for all four
+Sparse entries have `Kind=VectorSparse`, float32 precision, HNSW for all five
 non-Hamming metrics, `MaxDimensions=1000000000` and `MaxNonZero=1000`. Nonzero
 limits count stored components, separately from declared dimensions. A zero
 `MaxNonZero` means the provider has not reported that limit.
@@ -568,6 +568,40 @@ also apply to the float32 Record API. See
 Adding an HNSW index to an existing L1 model is supported by additive migrations.
 Changing an existing property's metric requires manual semantic review and index
 rebuilds; `ApplyMigration` rejects that change.
+
+### Squared Euclidean distance
+
+Use `DistanceL2Squared` or `metric=l2_squared` to return the sum of squared
+component differences. This metric is available on master after v0.4.1:
+
+```go
+Embedding []float32 `vectordata:"vector,dimensions=2,metric=l2_squared,index"`
+```
+
+Compared with `[0,0]`, `[3,4]` has squared distance 25 and similarity score
+`1 / (1 + 25)`, or approximately 0.038462. `DistanceThreshold` uses squared
+units: a threshold of 5 excludes this vector; a threshold of 25 includes it.
+`ScoreThreshold` uses the same reciprocal score. Existing `DistanceL2` retains
+distance 5 and score `1 / 6` for this example. The two metrics have the same
+mathematical ordering, with different distance and score units.
+
+All three providers support dense float32/float16 and sparse squared L2. Float16
+rounding happens before distance calculation. Sparse computation visits only
+nonzero coordinates; zero vectors are valid. Binary vectors require Hamming.
+Text/custom-input queries and iterators use the selected property's metric;
+PostgreSQL hybrid search reports squared distances while keeping RRF scores.
+
+PostgreSQL reuses L2 HNSW/IVFFlat operator classes for dense vectors and L2 HNSW
+for sparse vectors. Queries keep the native `<->` distance operator in candidate
+ordering, then square its result for reported distances and thresholds. This
+preserves [pgvector index eligibility](https://github.com/pgvector/pgvector#why-isnt-a-query-using-an-index);
+an eligible index is not a guarantee that the planner will choose it. Floating-point
+results can differ slightly between providers. Adding a compatible index is
+additive. Changing a registered metric between L2 and squared L2 requires manual
+semantic review; `ApplyMigration` rejects it even though the physical operator
+class is shared. Memory/SQLite also require the registered definition to match.
+
+Run `go run ./samples/recipes -recipe squared-l2` for a complete example.
 
 ## Vector storage precision
 
@@ -784,7 +818,7 @@ operator/index availability and exact bit lengths.
 
 ## Sparse vectors
 
-Sparse vectors store only nonzero coordinates and support cosine, L2, inner
+Sparse vectors store only nonzero coordinates and support cosine, L2, squared L2, inner
 product and L1 distance in all three providers:
 
 ```go
@@ -805,7 +839,7 @@ values must be finite float32 numbers and indices must be within dimensions.
 `NewSparseVector` validates/copies input and removes explicit zeros. The maximum
 dimension count is 1 billion and input coordinate lists support up to 16,000
 entries. HNSW properties permit at most 1,000 nonzero values after removing zeros.
-Cosine rejects zero vectors; L2, L1 and inner product accept them.
+Cosine rejects zero vectors; L2, squared L2, L1 and inner product accept them.
 `NormalizeSparseVector` applies property/index validation; `SparseDistance`
 computes distances in O(nonzeros) time without allocating dense arrays.
 
@@ -899,7 +933,7 @@ type PartialDocument struct {
 
 In dynamic records, absent/nil dense slices and missing binary/sparse map entries
 represent NULL. Non-nil empty dense slices and present zero-valued binary/sparse
-structs are validated and rejected. A valid zero sparse vector for L2/L1/inner
+structs are validated and rejected. A valid zero sparse vector for L2/squared-L2/L1/inner
 product is still a present vector. IncludeVectors reads omit missing entries;
 typed reads preserve nil pointers and slices. Writes replace the complete record,
 so an upsert with a missing optional vector clears the previous value.

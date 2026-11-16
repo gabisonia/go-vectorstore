@@ -109,7 +109,7 @@ func SparseDistance(a, b SparseVector, metric DistanceMetric) (float64, error) {
 	if metric == "" {
 		metric = DistanceCosine
 	}
-	if metric != DistanceCosine && metric != DistanceL2 && metric != DistanceL1 && metric != DistanceInnerProduct {
+	if metric != DistanceCosine && metric != DistanceL2 && metric != DistanceL2Squared && metric != DistanceL1 && metric != DistanceInnerProduct {
 		return 0, fmt.Errorf("%w: unsupported sparse metric", ErrSchemaMismatch)
 	}
 	var aa, bb, dot, sum, l1 float64
@@ -141,6 +141,8 @@ func SparseDistance(a, b SparseVector, metric DistanceMetric) (float64, error) {
 	switch metric {
 	case DistanceL2:
 		return math.Sqrt(sum), nil
+	case DistanceL2Squared:
+		return sum, nil
 	case DistanceL1:
 		return l1, nil
 	case DistanceInnerProduct:

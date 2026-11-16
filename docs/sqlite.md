@@ -20,6 +20,9 @@ defaults, filters, and model operations as memory/PostgreSQL. All 20 native data
 types, string/int64/uint64/UUID keys, generated int64/UUID keys, multiple named vectors, nullable vectors,
 float16 rounding, and dense/binary/sparse exact search are supported. Binary and
 sparse search use their optional interfaces. Vector projections default to off.
+Dense and sparse `DistanceL2Squared` search reports squared Euclidean distance,
+uses `1 / (1 + distance)` scores, and persists its metric in storage format 1.
+See [distance and threshold units](model-api.md#squared-euclidean-distance).
 
 Paths are literal filenames, including punctuation; driver DSNs and custom PRAGMAs
 are not accepted. Native text values, keys, and model names must be valid UTF-8;

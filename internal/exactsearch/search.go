@@ -126,6 +126,8 @@ func DenseDistance(a, b []float32, metric vectordata.DistanceMetric) float64 {
 	switch metric {
 	case vectordata.DistanceL2:
 		return math.Sqrt(sum)
+	case vectordata.DistanceL2Squared:
+		return sum
 	case vectordata.DistanceInnerProduct:
 		return -dot
 	default:

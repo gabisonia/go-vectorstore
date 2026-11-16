@@ -59,7 +59,7 @@ func runVectorPrecisions(t *testing.T, factory Factory, caps vectordata.Provider
 				if err != nil || len(matches) != 1 || matches[0].Record.Key != "a" || !reflect.DeepEqual(matches[0].Record.Vectors["Selected"], want) {
 					t.Fatalf("precision search: %v, %v", matches, err)
 				}
-				if metric == vectordata.DistanceL2 && matches[0].Distance != 0 {
+				if (metric == vectordata.DistanceL2 || metric == vectordata.DistanceL2Squared) && matches[0].Distance != 0 {
 					t.Fatalf("query was not rounded like storage: %g", matches[0].Distance)
 				}
 				if _, err := c.Upsert(ctx, []vectordata.ModelRecord{{Key: "embedded", Data: map[string]any{"Body": "alpha"}, Vectors: map[string][]float32{"Full": input}}}); err != nil {

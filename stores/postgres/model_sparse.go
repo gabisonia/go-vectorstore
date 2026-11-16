@@ -76,7 +76,11 @@ func sparseMigrationPrerequisites(ctx context.Context, tx pgx.Tx, d vectordata.C
 	needed := map[vectordata.DistanceMetric]bool{}
 	for _, p := range d.Vectors {
 		if p.Kind == vectordata.VectorSparse {
-			needed[p.Metric] = needed[p.Metric] || p.Index != nil
+			metric := p.Metric
+			if metric == vectordata.DistanceL2Squared {
+				metric = vectordata.DistanceL2
+			}
+			needed[metric] = needed[metric] || p.Index != nil
 		}
 	}
 	if len(needed) == 0 {
