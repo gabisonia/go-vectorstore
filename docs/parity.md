@@ -14,7 +14,7 @@ It is a workflow comparison, not a claim of API or feature equivalence with ever
 | Collection lifecycle and CRUD | ModelStore, CollectionManager, ModelCollection; batch operations and generated int64 keys | Implemented |
 | Vector selection and retrieval | Multiple named properties, optional projection, nullable vectors | Implemented |
 | Dense, half, binary, sparse search | Search/SearchBinary/SearchSparse; explicit metric, thresholds and paging | Implemented; index support varies |
-| Automatic embeddings | Embedder with store/collection/property overrides, bounded batches, SearchText | Implemented for dense vectors |
+| Automatic embeddings | Text/custom-input embedders, direct input fields, store/collection/property overrides, bounded batches, SearchText/SearchInput | Implemented for dense outputs |
 | Filtered retrieval/search | Portable AST, JSON paths, native arrays, Contains/ContainsAny/ContainsAll | Implemented |
 | Streaming and cancellation | Go iter.Seq2 and context.Context | Implemented; memory/SQLite materialize query snapshots or search result pages |
 | Hybrid keyword/vector search | Optional HybridSearcher and binary/sparse variants, RRF | PostgreSQL |
@@ -47,9 +47,10 @@ limits. See [model API](model-api.md), [SQLite costs](sqlite.md), and
 Go uses interfaces, generics, tags, explicit filter nodes, iterators and contexts
 in place of .NET abstract classes, attributes, expression trees, async enumerables
 and cancellation tokens. Native key/data support is a defined portable subset.
-Embedding input is text and output is dense []float32; multimodal embedding
-inputs, provider-side embedding generation, and arbitrary embedding types are
-outside the current contract. Runtime service discovery comparable to
+Embedding input supports text, media bytes and custom values through application
+adapters; output is dense []float32. Provider-side generation and automatic
+binary/sparse embedding outputs remain outside the current contract.
+Runtime service discovery comparable to
 [VectorStore.GetService](https://learn.microsoft.com/en-us/dotnet/api/microsoft.extensions.vectordata.vectorstore)
 is represented by concrete providers and optional interface assertions.
 

@@ -25,6 +25,8 @@ type VectorIndexCapability struct {
 // particular collection or deployment enables them. Unless stated otherwise,
 // empty slices mean no support. Built-in providers return caller-owned slices.
 type ProviderCapabilities struct {
+	// InputEmbedding supports transient/custom inputs and InputSearcher for dense vectors.
+	InputEmbedding bool
 	// OptionalVectors permits SQL NULL / missing values for every supported vector kind.
 	OptionalVectors bool
 	Backend         string

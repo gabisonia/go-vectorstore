@@ -83,6 +83,7 @@ func (c *Collection) readDefinition() vectordata.CollectionDefinition {
 	for i := range d.Vectors {
 		d.Vectors[i].SourceProperty = ""
 		d.Vectors[i].Embedder = nil
+		d.Vectors[i].InputEmbedder = nil
 	}
 	return d
 }
@@ -185,11 +186,14 @@ func (c *Collection) SearchIter(ctx context.Context, v []float32, top int, o vec
 	return sequence(ctx, func() ([]vectordata.ModelSearchResult, error) { return c.Search(ctx, v, top, o) })
 }
 func (c *Collection) SearchText(ctx context.Context, text string, top int, o vectordata.ModelSearchOptions) ([]vectordata.ModelSearchResult, error) {
+	return c.SearchInput(ctx, text, top, o)
+}
+func (c *Collection) SearchInput(ctx context.Context, input any, top int, o vectordata.ModelSearchOptions) ([]vectordata.ModelSearchResult, error) {
 	p, err := c.validateSearch(top, o)
 	if err != nil {
 		return nil, c.operation("search_text", err)
 	}
-	v, err := vectordata.EmbedQuery(ctx, text, p, c.options)
+	v, err := vectordata.EmbedInputQuery(ctx, input, p, c.options)
 	if err != nil {
 		return nil, c.operation("embed_query", err)
 	}

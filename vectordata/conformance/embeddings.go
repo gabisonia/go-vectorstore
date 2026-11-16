@@ -28,6 +28,10 @@ func embeddingRecord(key, body string, vector []float32) vectordata.ModelRecord 
 // store-level embedding configuration.
 func RunEmbeddingConfiguration(t *testing.T, factory func(*testing.T, vectordata.ModelCollectionOptions) vectordata.ModelStore) {
 	t.Helper()
+	probe := factory(t, vectordata.ModelCollectionOptions{})
+	if caps, ok := probe.(vectordata.CapabilityProvider); ok && caps.Capabilities().InputEmbedding {
+		t.Run("input_embeddings", func(t *testing.T) { runInputEmbeddings(t, factory) })
+	}
 	for _, tt := range []struct {
 		name                                 string
 		collectionEmbedder, propertyEmbedder bool

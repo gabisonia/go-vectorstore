@@ -18,12 +18,13 @@ type ModelCodec[T any] interface {
 	Decode(ModelRecord) (T, error)
 }
 type structField struct {
-	index    []int
-	name     string
-	role     string
-	dataType DataType
-	binary   bool
-	sparse   bool
+	index          []int
+	name           string
+	role           string
+	dataType       DataType
+	binary         bool
+	sparse         bool
+	embeddingInput bool
 }
 
 // StructCodec resolves field mappings once at construction, not once per record.
@@ -76,7 +77,8 @@ func uuidFieldType(typ reflect.Type) bool {
 
 // DefinitionFor reads vectordata tags. Roles are key, data, or vector. Options:
 // name=<storage name>, type=<type>, generated, optional, index, fulltext,
-// dimensions=<n>, kind=dense|binary|sparse, precision=float32|float16, metric=<metric>, source=<data field>, method=hnsw|ivfflat.
+// dimensions=<n>, kind=dense|binary|sparse, precision=float32|float16, metric=<metric>,
+// source=<data field>, method=hnsw|ivfflat, input (transient embedding input).
 func DefinitionFor[T any]() (CollectionDefinition, error) {
 	t, _, err := modelType[T]()
 	if err != nil {
@@ -109,7 +111,7 @@ func DefinitionFor[T any]() (CollectionDefinition, error) {
 				values[key] = value
 			} else {
 				switch key {
-				case "generated", "optional", "index", "fulltext":
+				case "generated", "optional", "index", "fulltext", "input":
 				default:
 					return d, fmt.Errorf("%w: unknown tag flag %q", ErrSchemaMismatch, key)
 				}
@@ -129,6 +131,7 @@ func DefinitionFor[T any]() (CollectionDefinition, error) {
 		case "vector":
 			allowedFlags["optional"] = true
 			allowedFlags["index"] = true
+			allowedFlags["input"] = true
 			for _, key := range []string{"dimensions", "precision", "metric", "source", "method", "kind"} {
 				allowedValues[key] = true
 			}
@@ -279,6 +282,17 @@ func NewStructCodec[T any](definition *CollectionDefinition) (*StructCodec[T], e
 		if typ.Kind() == reflect.Pointer && p.Optional {
 			typ = typ.Elem()
 		}
+		input := typ.Kind() == reflect.String
+		for _, option := range strings.Split(field.Tag.Get("vectordata"), ",")[1:] {
+			input = input || option == "input"
+		}
+		if input {
+			if p.Kind == VectorBinary || p.Kind == VectorSparse || p.SourceProperty != "" {
+				return nil, fmt.Errorf("%w: input field %q requires a dense vector without source", ErrSchemaMismatch, p.Name)
+			}
+			codec.fields[len(codec.fields)-1].embeddingInput = true
+			continue
+		}
 		if typ != want {
 			return nil, fmt.Errorf("%w: vector field %q must be %s", ErrSchemaMismatch, p.Name, want)
 		}
@@ -332,6 +346,18 @@ func (c *StructCodec[T]) Encode(value T) (ModelRecord, error) {
 				out.Key = v.Interface()
 			}
 		case "vector":
+			if field.embeddingInput {
+				if out.EmbeddingInputs == nil {
+					out.EmbeddingInputs = map[string]any{}
+				}
+				// Optional string fields use the same text contract as strings.
+				// Other pointer inputs retain their application type.
+				if v.Kind() == reflect.Pointer && v.Type().Elem().Kind() == reflect.String && !v.IsNil() {
+					v = v.Elem()
+				}
+				out.EmbeddingInputs[field.name] = v.Interface()
+				continue
+			}
 			if v.Kind() == reflect.Pointer {
 				if v.IsNil() {
 					continue
@@ -475,6 +501,10 @@ func (c *StructCodec[T]) Decode(record ModelRecord) (T, error) {
 	var zero T
 	root := reflect.New(c.typ).Elem()
 	for _, field := range c.fields {
+		// Source values are transient; a vector cannot be decoded back into them.
+		if field.embeddingInput {
+			continue
+		}
 		target, err := structValue(root, field.index, true)
 		if err != nil {
 			return zero, err

@@ -211,6 +211,7 @@ func definitionForPlan(d vectordata.CollectionDefinition) vectordata.CollectionD
 	d = d.Clone()
 	for i := range d.Vectors {
 		d.Vectors[i].Embedder = nil
+		d.Vectors[i].InputEmbedder = nil
 	}
 	return d
 }

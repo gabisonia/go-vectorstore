@@ -133,6 +133,9 @@ func (c *ModelCollection) Search(ctx context.Context, vector []float32, top int,
 	return results, nil
 }
 func (c *ModelCollection) SearchText(ctx context.Context, text string, top int, opts vectordata.ModelSearchOptions) ([]vectordata.ModelSearchResult, error) {
+	return c.SearchInput(ctx, text, top, opts)
+}
+func (c *ModelCollection) SearchInput(ctx context.Context, input any, top int, opts vectordata.ModelSearchOptions) ([]vectordata.ModelSearchResult, error) {
 	p, err := c.definition.Vector(opts.VectorProperty)
 	if err != nil {
 		return nil, err
@@ -146,7 +149,7 @@ func (c *ModelCollection) SearchText(ctx context.Context, text string, top int, 
 	if _, _, _, err := modelVectorTuning(opts.ProviderOptions, p); err != nil {
 		return nil, err
 	}
-	vector, err := vectordata.EmbedQuery(ctx, text, p, c.options)
+	vector, err := vectordata.EmbedInputQuery(ctx, input, p, c.options)
 	if err != nil {
 		return nil, c.operation("embed_query", err)
 	}
@@ -283,6 +286,9 @@ func (c *ModelCollection) validateHybridOptions(keywords string, top int, opts v
 	return config, nil
 }
 func (c *ModelCollection) HybridSearchText(ctx context.Context, text, keywords string, top int, opts vectordata.HybridSearchOptions) ([]vectordata.ModelSearchResult, error) {
+	return c.HybridSearchInput(ctx, text, keywords, top, opts)
+}
+func (c *ModelCollection) HybridSearchInput(ctx context.Context, input any, keywords string, top int, opts vectordata.HybridSearchOptions) ([]vectordata.ModelSearchResult, error) {
 	config, err := c.validateHybridOptions(keywords, top, opts)
 	if err != nil {
 		return nil, err
@@ -290,7 +296,7 @@ func (c *ModelCollection) HybridSearchText(ctx context.Context, text, keywords s
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	vector, err := vectordata.EmbedQuery(ctx, text, config.vector, c.options)
+	vector, err := vectordata.EmbedInputQuery(ctx, input, config.vector, c.options)
 	if err != nil {
 		return nil, c.operation("embed_query", err)
 	}
