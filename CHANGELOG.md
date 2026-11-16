@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Accelerate SQLite top-level key equality/`In` queries and filtered counts with
+  the existing primary index. Preserve native-key ordering, projection, paging,
+  metadata validation and one-snapshot batching; counts avoid payload decoding.
+- Add key-filter parity, concurrent-write/cancellation and index-plan coverage,
+  measured snapshot-reference benchmarks and a portable `key-filters` recipe.
 - Add configured store identity to PostgreSQL/SQLite model operation errors and
   PostgreSQL migration errors. Preserve existing error text, native/sentinel
   causes and cancellation; include closed-connection and diagnostic examples.

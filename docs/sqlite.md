@@ -96,6 +96,27 @@ schema/format validation in the same statement. It does not deserialize payloads
 and uses bounded Go memory; counting still scans the matching index entries and
 can grow with collection size. These fast paths do not invoke embedders.
 
+On master after v0.4.1, top-level `Eq(Column(keyName), value)` and
+`In(Column(keyName), values...)` also use the existing collection/key primary index
+for `Query`, `QueryIter` and filtered `Count`. Use the logical key name; a storage
+name is not a field alias. Keys are normalized and deduplicated before SQL, with
+at most 500 unique keys per statement. Signed/unsigned integer precision, UUID
+case normalization, native key ordering and NULL operands follow the model
+contract. NULL and invalid UTF-8 string operands cannot match stored keys.
+
+Key queries decode and validate only matching payloads, including stored vectors
+even when projections omit them. They apply scalar sorting, key tie-breaking and
+paging in Go to this matched set, then release results to application code.
+Retained memory follows requested keys and matching records; a large matching set
+still uses memory even when the returned page is small. Key-filter counts read
+index entries without decoding payloads, including damaged selected payloads.
+Both paths validate registration/format even for NULL-only or missing keys and
+hold one deferred read snapshot across metadata and every key batch. Cancellation
+or an error discards partial results and releases the connection before callbacks
+or typed codecs run. Compound, data-property and JSON filters keep their existing
+snapshot evaluation. No indexes, schema migrations or storage format changes are
+needed. See [key-filter verification](performance.md#sqlite-key-filter-verification).
+
 Exact search streams and validates every payload through one deferred read
 transaction, retaining at most `top + Skip` candidates in a heap. Only the returned
 page is copied for projection. Ranking uses distance, then native key for ties;
@@ -106,10 +127,11 @@ Large offsets therefore increase memory use. WAL permits other connections to
 write during the scan; the Store's own connection remains occupied until it ends.
 Filter operands are normalized before acquiring the connection.
 
-Query and filtered Count still load the whole collection into the memory engine,
-using O(collection size) memory and scan work. Runtime embedders are disabled when
-reading stored records. QueryIter materializes its snapshot and SearchIter its
-result page before yielding, so application code holds no SQL cursor. Benchmark
+Other queries and filtered counts still load the whole collection into the memory
+engine, using O(collection size) memory and scan work. Runtime embedders are
+disabled when reading stored records. QueryIter materializes its matched set
+(the full snapshot for other predicates) and SearchIter its result page before
+yielding, so application code holds no SQL cursor. Benchmark
 realistic sizes before selecting the provider for large collections or concurrent
 query services. See the [read benchmarks](performance.md#sqlite-batch-lookup-and-count-verification)
 and [exact-search benchmarks](performance.md#exact-search-selection-and-copying).

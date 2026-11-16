@@ -65,6 +65,10 @@ func (c *Collection) engine(ctx context.Context) (*memory.Collection, error) {
 	if err != nil {
 		return nil, err
 	}
+	return c.engineForRecords(ctx, records)
+}
+
+func (c *Collection) engineForRecords(ctx context.Context, records []vectordata.ModelRecord) (*memory.Collection, error) {
 	d := c.readDefinition()
 	base, err := memory.New().EnsureModelCollection(ctx, c.name, d, vectordata.ModelCollectionOptions{})
 	if err != nil {
@@ -111,6 +115,24 @@ func (c *Collection) Query(ctx context.Context, filter vectordata.Filter, top in
 	if err = vectordata.ValidateModelFilter(filter, c.definition); err != nil {
 		return nil, err
 	}
+	if tokens, indexed, err := c.keyFilterTokens(ctx, filter); err != nil {
+		return nil, err
+	} else if indexed {
+		// Fetch full vectors for stored-record validation, then apply projection,
+		// native ordering and paging to only the indexed matches. lookupMany also
+		// checks metadata for an empty token set and releases SQL before evaluation.
+		selected, err := retryBusy(ctx, func() ([]vectordata.ModelRecord, error) {
+			return c.lookupMany(ctx, tokens, vectordata.RetrievalOptions{IncludeVectors: true})
+		})
+		if err != nil {
+			return nil, err
+		}
+		engine, err := c.engineForRecords(ctx, selected)
+		if err != nil {
+			return nil, err
+		}
+		return engine.Query(ctx, nil, top, opts)
+	}
 	engine, err := c.engine(ctx)
 	if err != nil {
 		return nil, err
@@ -131,6 +153,11 @@ func (c *Collection) Count(ctx context.Context, filter vectordata.Filter) (count
 	}
 	if filter == nil {
 		return retryBusy(ctx, func() (int64, error) { return c.countAll(ctx) })
+	}
+	if tokens, indexed, err := c.keyFilterTokens(ctx, filter); err != nil {
+		return 0, err
+	} else if indexed {
+		return retryBusy(ctx, func() (int64, error) { return c.countKeys(ctx, tokens) })
 	}
 	engine, err := c.engine(ctx)
 	if err != nil {

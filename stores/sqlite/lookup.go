@@ -48,7 +48,11 @@ func (c *Collection) lookupToken(key any) (string, error) {
 }
 
 func lookupSQL(size int) string {
-	return `SELECT payload FROM __vectorstore_records WHERE collection=? AND key IN (` + strings.TrimSuffix(strings.Repeat("?,", size), ",") + `)`
+	return `SELECT payload` + lookupFromSQL(size)
+}
+
+func lookupFromSQL(size int) string {
+	return ` FROM __vectorstore_records WHERE collection=? AND key IN (` + strings.TrimSuffix(strings.Repeat("?,", size), ",") + `)`
 }
 
 func (c *Collection) GetMany(ctx context.Context, keys []any, opts vectordata.RetrievalOptions) (records []vectordata.ModelRecord, err error) {

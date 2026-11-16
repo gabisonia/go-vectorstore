@@ -508,6 +508,11 @@ can return errors directly. Existing manually constructed `OperationError` value
 may have empty store metadata. See `ExampleOperationError` in
 [the executable examples](../vectordata/example_test.go).
 
+SQLite accelerates top-level key `Eq`/`In` queries and counts using its existing
+primary index. Queries sort/page matching records in Go; counts avoid payload
+decoding. Other predicates use snapshot evaluation. See [SQLite query costs](sqlite.md#query-costs-and-provider-limits)
+and the portable `key-filters` recipe for an indexed-key workflow.
+
 ### Complete read iteration
 
 Built-in stores/collections support iterator forms for all model reads:

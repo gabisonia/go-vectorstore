@@ -28,9 +28,14 @@ type SquaredPoint struct {
 	Vector []float32 `vectordata:"vector,dimensions=2,metric=l2_squared"`
 }
 
+type KeyedNote struct {
+	ID   int64 `vectordata:"key"`
+	Rank int64 `vectordata:"data"`
+}
+
 func run(ctx context.Context, args []string, out io.Writer) error {
 	flags := flag.NewFlagSet("recipes", flag.ContinueOnError)
-	recipe := flags.String("recipe", "named-vectors", "named-vectors, squared-l2, iterators, embedded-iterators, metadata, capabilities, hybrid, migration")
+	recipe := flags.String("recipe", "named-vectors", "named-vectors, key-filters, squared-l2, iterators, embedded-iterators, metadata, capabilities, hybrid, migration")
 	dsn := flags.String("dsn", "", "PostgreSQL DSN (required for hybrid/migration)")
 	path := flags.String("sqlite", "", "SQLite file (default: memory)")
 	prefix := flags.String("prefix", "recipe_demo", "Dedicated collection prefix")
@@ -38,7 +43,7 @@ func run(ctx context.Context, args []string, out io.Writer) error {
 		return err
 	}
 	switch *recipe {
-	case "named-vectors", "squared-l2", "iterators", "embedded-iterators", "metadata", "capabilities", "hybrid", "migration":
+	case "named-vectors", "key-filters", "squared-l2", "iterators", "embedded-iterators", "metadata", "capabilities", "hybrid", "migration":
 	default:
 		return fmt.Errorf("unknown recipe %q", *recipe)
 	}
@@ -71,6 +76,31 @@ func execute(ctx context.Context, store vectordata.ModelStore, recipe, prefix st
 	}
 	name := prefix + "_" + recipe
 	switch recipe {
+	case "key-filters":
+		c, err := vectordata.EnsureTypedModelCollection[int64, KeyedNote](ctx, store, name, nil, vectordata.ModelCollectionOptions{})
+		if err != nil {
+			return err
+		}
+		if _, err := c.Upsert(ctx, []KeyedNote{{ID: 2, Rank: 1}, {ID: 10, Rank: 0}, {ID: 99, Rank: 2}}); err != nil {
+			return err
+		}
+		filter := vectordata.In(vectordata.Column("ID"), int64(10), int64(2), int64(2), int64(-1), nil)
+		count, err := c.Count(ctx, filter)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(out, "Matched keys: %d\n", count)
+		for note, err := range c.QueryIter(ctx, filter, 1, vectordata.QueryOptions{Skip: 1, OrderBy: []vectordata.SortField{{Property: "Rank"}}}) {
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(out, "Paged key: %d\n", note.ID)
+		}
+		count, err = c.Count(ctx, vectordata.Eq(vectordata.Column("ID"), int64(10)))
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(out, "Exact-key count: %d\n", count)
 	case "metadata":
 		c, err := vectordata.GetTypedModelCollection[string, Named](store, name, nil, vectordata.ModelCollectionOptions{})
 		if err != nil {
