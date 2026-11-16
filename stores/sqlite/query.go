@@ -133,6 +133,19 @@ func (c *Collection) Query(ctx context.Context, filter vectordata.Filter, top in
 		}
 		return engine.Query(ctx, nil, top, opts)
 	}
+	if plan, supported, err := c.scalarPlan(filter, top, opts, false); err != nil {
+		return nil, err
+	} else if supported {
+		rows, err := retryBusy(ctx, func() ([]vectordata.ModelRecord, error) { return c.scalarRead(ctx, plan) })
+		if err != nil {
+			return nil, err
+		}
+		out := make([]vectordata.ModelRecord, len(rows))
+		for i, row := range rows {
+			out[i] = vectordata.CloneModelRecord(row, c.definition, opts.IncludeVectors)
+		}
+		return out, nil
+	}
 	engine, err := c.engine(ctx)
 	if err != nil {
 		return nil, err
@@ -158,6 +171,11 @@ func (c *Collection) Count(ctx context.Context, filter vectordata.Filter) (count
 		return 0, err
 	} else if indexed {
 		return retryBusy(ctx, func() (int64, error) { return c.countKeys(ctx, tokens) })
+	}
+	if plan, supported, err := c.scalarPlan(filter, 0, vectordata.QueryOptions{}, true); err != nil {
+		return 0, err
+	} else if supported {
+		return retryBusy(ctx, func() (int64, error) { return c.scalarCount(ctx, plan) })
 	}
 	engine, err := c.engine(ctx)
 	if err != nil {

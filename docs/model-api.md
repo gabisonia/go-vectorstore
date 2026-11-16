@@ -510,8 +510,11 @@ may have empty store metadata. See `ExampleOperationError` in
 
 SQLite accelerates top-level key `Eq`/`In` queries and counts using its existing
 primary index. Queries sort/page matching records in Go; counts avoid payload
-decoding. Other predicates use snapshot evaluation. See [SQLite query costs](sqlite.md#query-costs-and-provider-limits)
-and the portable `key-filters` recipe for an indexed-key workflow.
+decoding. Other supported scalar filters, ordering and paging run in SQL, decoding
+only the returned page; unsupported combinations use snapshot evaluation. Scalar
+pushdown still scans payload JSON and creates no property indexes. See
+[SQLite query costs](sqlite.md#query-costs-and-provider-limits) and the portable
+`key-filters` and `scalar-query` recipes.
 
 ### Complete read iteration
 

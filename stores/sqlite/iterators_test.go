@@ -89,7 +89,7 @@ func TestReadIteratorsReleaseConnectionBeforeCallerCode(t *testing.T) {
 		}
 		break
 	}
-	for _, filter := range []vectordata.Filter{vectordata.Eq(vectordata.Column("ID"), "a"), vectordata.In(vectordata.Column("ID"), "b", "a")} {
+	for _, filter := range []vectordata.Filter{nil, vectordata.Eq(vectordata.Column("Body"), "one"), vectordata.Eq(vectordata.Column("ID"), "a"), vectordata.In(vectordata.Column("ID"), "b", "a")} {
 		before := checking.calls
 		for _, err := range typed.QueryIter(ctx, filter, 2, vectordata.QueryOptions{}) {
 			if err != nil {

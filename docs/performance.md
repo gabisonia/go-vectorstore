@@ -52,8 +52,8 @@ those timings are coarse. These local, cache-dependent results are regression
 measurements, not production latency guarantees. Unfiltered Count still scans
 index entries as collections grow; its Go allocations do not grow with payload
 size. GetMany work follows the requested keys and matching payloads. Filtered
-counts and queries use the key fast paths below or materialize full snapshots
-for other predicates. Vector searches stream a
+counts and queries use the key/scalar paths below or materialize full snapshots
+for unsupported predicates/sorts. Vector searches stream a
 snapshot through the bounded selector described below.
 
 Tests exercise more than two key batches, deduplication/native-key aliases,
@@ -97,7 +97,8 @@ The 10,000-record references run one iteration per measurement; those timings ar
 coarse and cache-dependent. Results describe these fixtures, not production
 latency. Key paths scale with request size and matches rather than decoding every
 stored record; sorting/paging still occurs in Go over all key-query matches.
-Counts do not inspect payloads. Other filters retain snapshot evaluation.
+Key counts do not inspect payloads. Supported scalar combinations use the SQL
+path measured below; other filters retain snapshot evaluation.
 
 Tests compare results against independent snapshot evaluation for every native
 key type, including extreme integers, aliases, UTF-8, NULLs, duplicates, sort
@@ -107,6 +108,44 @@ callback reentry. Real-driver hooks commit updates/deletes between batches to
 verify one WAL snapshot; EXPLAIN checks key lookups and covering-index counts.
 The portable `key-filters` recipe exercises the public workflow on memory,
 SQLite and PostgreSQL.
+
+## SQLite scalar query verification
+
+```sh
+go test -race -run 'TestScalar' ./stores/sqlite
+go test -run '^$' -bench BenchmarkSQLiteScalarRead -benchmem -benchtime=100ms -count=3 ./stores/sqlite
+```
+
+The fixture stores int64 keys, string Group, int64 Rank and a 128-component dense
+vector. Ten percent of records match `Group = "match" AND Rank >= 0`. Queries sort
+by Rank, skip two matches and return five records without vectors. Counts use the
+same filter. References explicitly build the previous full-snapshot memory engine
+each iteration. Setup/inserts are untimed.
+
+Local medians of three runs on Apple M3 Pro, darwin/arm64, Go 1.26.1:
+
+| Records | Operation | Snapshot reference | Native SQL | Reference B/op | Native B/op |
+| --- | --- | --- | --- | --- | --- |
+| 100 | Query | 1.71 ms | 0.783 ms | 887,963 | 48,644 |
+| 10,000 | Query | 181.70 ms | 64.60 ms | 92,432,168 | 49,300 |
+| 100 | Count | 1.72 ms | 0.555 ms | 886,685 | 6,103 |
+| 10,000 | Count | 183.18 ms | 55.07 ms | 92,459,104 | 6,988 |
+
+At 10,000 records, native measurements run two iterations and references one per
+measurement, so timings are coarse and cache-dependent. SQLite still scans JSON
+fields and may sort in temporary storage; no scalar property index is created.
+The gain is reduced Go materialization and page-only decoding, without a production
+latency guarantee. B/op measures cumulative Go allocations, not retained memory
+or peak process memory.
+
+Differential tests compare counts and pages with independent snapshot evaluation
+for all key types, signed/unsigned extremes, NULL/negation, arbitrary property
+names, binary text order and unsupported-type fallback. Seeded finite float64
+round trips cover integer-shaped JSON values beyond exact integer precision.
+Real-driver hooks commit a writer between metadata and result reads to verify one
+WAL snapshot, and cancel SQL reads to check cleanup. Tests also cover empty-page
+registration checks, off-page invalid vectors, whole-page failure and typed codec
+reentry. The portable `scalar-query` recipe runs on memory, SQLite and PostgreSQL.
 
 ## Exact-search selection and copying
 

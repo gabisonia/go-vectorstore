@@ -46,9 +46,11 @@ limits. See [model API](model-api.md), [SQLite costs](sqlite.md), and
 [migration limits](migrations.md).
 
 SQLite uses its existing primary key index for top-level key equality/`In`
-queries and counts, with one read snapshot across batches. Other query predicates
-retain full-snapshot evaluation; accepted index hints do not add property or ANN
-indexes. See [measured key-filter behavior](performance.md#sqlite-key-filter-verification).
+queries and counts, with one read snapshot across batches. Supported scalar
+filters, ordering and paging also run in SQL over payload JSON; unsupported
+combinations retain full-snapshot evaluation. Accepted index hints do not add
+property or ANN indexes. See [query costs](sqlite.md#query-costs-and-provider-limits)
+and [scalar measurements](performance.md#sqlite-scalar-query-verification).
 
 ## Deliberate differences and future extensions
 

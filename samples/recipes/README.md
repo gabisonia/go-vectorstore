@@ -9,6 +9,7 @@ need no API key.
 | --- | --- | --- |
 | Named vectors and projection | `go run ./samples/recipes -recipe named-vectors` | `guide: BodyVector distance 0.000; loaded dimensions 3` |
 | Key-filter query/count | `go run ./samples/recipes -recipe key-filters -sqlite /tmp/recipes.db` | `Matched keys: 2`, `Paged key: 2`, `Exact-key count: 1` |
+| Scalar filtering and paging | `go run ./samples/recipes -recipe scalar-query -sqlite /tmp/recipes.db` | `Scalar count: 3`, `Scalar page: 3 rank 2` |
 | Squared Euclidean distance | `go run ./samples/recipes -recipe squared-l2` | `near: distance 25 score 0.038462`, then `Squared-distance threshold 5: 1 match` |
 | Early iterator exit and cancellation | `go run ./samples/recipes -recipe iterators` | `First: one`, then cancellation and a count of 2 |
 | Text/custom-input read iterators | `go run ./samples/recipes -recipe embedded-iterators` | `Search: costs`, then `Input: costs` |
@@ -58,7 +59,7 @@ printed, and finalization is shown separately. For an existing application model
 plan against that model's registered definition and review the full report using
 the [migration guide](../../docs/migrations.md).
 
-Named-vector, key-filter, squared-distance and iterator fixtures upsert stable IDs. Records remain in persistent
+Named-vector, scalar-query, key-filter, squared-distance and iterator fixtures upsert stable IDs. Records remain in persistent
 providers; reruns reuse their collections. Capabilities and metadata create none. To clean up,
 remove a closed sample SQLite file and its sidecars, or delete only collections
 under your chosen prefix through `DeleteCollection`. Stop local PostgreSQL with
@@ -73,6 +74,13 @@ operands, then sorts the matching records by Rank and returns a page. It also
 counts one exact key. The recipe is available on master after v0.4.1. SQLite's
 key fast paths use its existing index, with Go sorting/paging over matching rows;
 the same public calls work on memory and PostgreSQL. See [SQLite query costs](../../docs/sqlite.md#query-costs-and-provider-limits).
+
+The `scalar-query` recipe combines string equality and an integer range, counts
+the matches, then orders by Rank and skips the first match before returning one
+record. It works on all three providers. On master after v0.4.1, SQLite executes
+this filter and page in SQL and decodes only the page; it still scans payload JSON
+without a property index. Unsupported filter/sort combinations keep snapshot
+evaluation. See [scalar measurements](../../docs/performance.md#sqlite-scalar-query-verification).
 
 The iterator recipe also lists collections and batch-reads a found/missing key.
 The hybrid recipe enumerates `HybridSearchTextIter`. These iterator APIs require
