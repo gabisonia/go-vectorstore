@@ -141,6 +141,13 @@ server-backed storage.
 
 ## Model normalization and optional capabilities
 
+Integer `KeyTypes` describe canonical storage: `KeyInt64` and `KeyUint64` also
+accept narrower Go keys through typed wrappers. Providers continue to return
+canonical int64/uint64 values. Typed writes preflight keys against K's range before
+calling the provider; keep batch atomicity and input ownership intact. Generated
+integer bindings require 64-bit keys. Shared conformance exercises signed/unsigned
+widths and named types across CRUD, query/search, filters and iterators.
+
 New providers can implement `vectordata.ModelStore` and `ModelCollection` without
 implementing the original Record API. Normalize definitions once, call
 `PrepareModelRecords` before writes, preserve native key types and data values,

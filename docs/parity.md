@@ -10,7 +10,7 @@ It is a workflow comparison, not a claim of API or feature equivalence with ever
 | --- | --- | --- |
 | Declare key/data/vector properties | Struct tags, explicit CollectionDefinition, StructCodec and custom codecs | Implemented |
 | Typed and dynamic records | TypedModelCollection[K,T] and ModelRecord | Implemented |
-| Native keys and data | string/int64/uint64/UUID keys; 20 data types, including exact decimal/calendar values and arrays | Implemented; inspect capabilities |
+| Native keys and data | string/int64/uint64/UUID keys, typed integer widths and aliases; 20 data types, including exact decimal/calendar values and arrays | Implemented; inspect canonical storage capabilities |
 | Collection lifecycle and CRUD | ModelStore, CollectionManager, ModelCollection; batch operations and generated int64/UUID keys | Implemented |
 | Vector selection and retrieval | Multiple named properties, optional projection, nullable vectors | Implemented |
 | Dense, half, binary, sparse search | Search/SearchBinary/SearchSparse; explicit metric, thresholds and paging | Implemented; index support varies |
