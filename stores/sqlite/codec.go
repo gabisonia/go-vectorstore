@@ -56,6 +56,8 @@ func decodeRecord(payload []byte, d vectordata.CollectionDefinition) (vectordata
 	var key any
 	if d.Key.Type == vectordata.KeyInt64 {
 		key = new(int64)
+	} else if d.Key.Type == vectordata.KeyUint64 {
+		key = new(uint64)
 	} else {
 		key = new(string)
 	}

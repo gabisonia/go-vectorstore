@@ -6,6 +6,52 @@
   Go, go-vectorstore v0.4.1, SQLite and Ollama. Compose initializes local models;
   typed search/read tools and source-ID checks demonstrate agent-driven retrieval
   without cloud credentials. Add dedicated module CI and live smoke commands.
+- Push supported SQLite scalar filtering, ordering and paging into SQL, decoding
+  only the returned page and counting without vector decoding. Preserve native
+  keys, float64 precision, NULL semantics, WAL snapshots and codec reentry; retain
+  whole-snapshot fallback for unsupported types. Add benchmarks and a portable
+  `scalar-query` recipe without changing storage format or adding property indexes.
+- Accelerate SQLite top-level key equality/`In` queries and filtered counts with
+  the existing primary index. Preserve native-key ordering, projection, paging,
+  metadata validation and one-snapshot batching; counts avoid payload decoding.
+- Add key-filter parity, concurrent-write/cancellation and index-plan coverage,
+  measured snapshot-reference benchmarks and a portable `key-filters` recipe.
+- Add configured store identity to PostgreSQL/SQLite model operation errors and
+  PostgreSQL migration errors. Preserve existing error text, native/sentinel
+  causes and cancellation; include closed-connection and diagnostic examples.
+- Add optional hybrid `KeywordTerms` lists with PostgreSQL plain-text OR groups,
+  validation before embedding, caller-owned snapshots and capability discovery.
+  Support all hybrid slice/iterator variants while preserving string queries.
+- Accept narrower signed/unsigned integer keys and named types in typed model
+  collections. Check custom-codec key overflow before provider writes, preserving
+  whole-batch rejection; generated integer keys still require 64-bit bindings.
+- Add optional store/collection identity metadata across all providers and both
+  typed wrappers, with system/database/namespace names, local snapshots and
+  compatibility fallbacks. Include lifecycle conformance and a metadata recipe.
+- Add explicit squared Euclidean distance (`DistanceL2Squared` / `l2_squared`)
+  across all providers for dense float32/float16 and sparse vectors, with squared
+  distance thresholds and reciprocal similarity scores. Preserve existing L2 units.
+- Reuse PostgreSQL L2 HNSW/IVFFlat indexes while retaining native operator ordering;
+  verify dense/sparse plans, reviewed index additions, SQLite reopen and recipes.
+- Complete optional model read iterators for listing, batch retrieval, text/custom
+  inputs and dense/text/input/binary/sparse hybrid search, including typed wrappers
+  and buffered compatibility fallbacks for existing third-party providers.
+- Stream PostgreSQL iterator results from cursors, stop before later batch chunks,
+  preserve tuning rollback, and check cancellation through exhaustion. Memory and
+  SQLite retain snapshots/pages and release resources before caller codecs.
+- Add shared iterator conformance, fallback/laziness and single-connection cleanup
+  coverage, including early exit before a later malformed database row.
+- Add full-range `KeyUint64` with exact provider storage, typed mapping and filters,
+  plus application-generated UUID keys across memory, SQLite and PostgreSQL.
+- Preserve memory integer sequence state on failed batches and reject exhaustion
+  instead of wrapping; add native-key conformance, SQLite reopen and sample coverage.
+- Add optional `InputEmbedder` and typed `InputEmbeddingFunc[T]` for text, media
+  bytes and custom application inputs, with store/collection/property overrides.
+- Support transient `ModelRecord.EmbeddingInputs`, direct string vector fields,
+  and the `vector,input` tag; keep inputs out of stored records and migration plans.
+- Add `SearchInput` across memory/SQLite/PostgreSQL and PostgreSQL hybrid input
+  search, preserving text APIs, bounded batching, cancellation and atomic writes.
+- Add shared provider conformance coverage and a runnable custom-input sample.
 
 ## v0.4.1
 

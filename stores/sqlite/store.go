@@ -1,6 +1,6 @@
 // Package sqlite provides durable embedded model collections with exact search.
-// Get/GetMany and unfiltered Count use direct SQL. Query/filtered Count materialize
-// a snapshot; exact search streams a read snapshot through bounded ranking.
+// Reads use indexed key lookups or native scalar SQL where supported, with
+// snapshot evaluation for other predicates. Exact search uses bounded ranking.
 // No native ANN, full-text
 // indexes, hybrid search, or automatic schema migrations are provided.
 package sqlite
@@ -26,22 +26,25 @@ import (
 // FULL synchronization, foreign keys, and context-aware lock waits up to five seconds.
 type StoreOptions struct {
 	Embedder           vectordata.Embedder
+	InputEmbedder      vectordata.InputEmbedder
 	EmbeddingBatchSize int
 }
 
 type Store struct {
-	db      *sql.DB
-	options vectordata.ModelCollectionOptions
+	db           *sql.DB
+	options      vectordata.ModelCollectionOptions
+	databaseName string
 }
 
 var _ vectordata.ModelStore = (*Store)(nil)
 var _ vectordata.CapabilityProvider = (*Store)(nil)
+var _ vectordata.InputSearcher = (*Collection)(nil)
 
 // Open opens a database file (or a private :memory: database), creating the
 // provider tables if needed. Paths are literal filenames, not driver DSNs.
 // Close must be called when the store is no longer needed.
 func Open(ctx context.Context, path string, opts StoreOptions) (*Store, error) {
-	defaults, err := (vectordata.ModelCollectionOptions{Embedder: opts.Embedder, EmbeddingBatchSize: opts.EmbeddingBatchSize}).WithDefaults(vectordata.ModelCollectionOptions{})
+	defaults, err := (vectordata.ModelCollectionOptions{Embedder: opts.Embedder, InputEmbedder: opts.InputEmbedder, EmbeddingBatchSize: opts.EmbeddingBatchSize}).WithDefaults(vectordata.ModelCollectionOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -49,6 +52,7 @@ func Open(ctx context.Context, path string, opts StoreOptions) (*Store, error) {
 		return nil, fmt.Errorf("%w: database path is empty", vectordata.ErrSchemaMismatch)
 	}
 	var dsn string
+	databaseName := path
 	if path == ":memory:" {
 		dsn = path
 	} else {
@@ -57,6 +61,7 @@ func Open(ctx context.Context, path string, opts StoreOptions) (*Store, error) {
 			return nil, err
 		}
 		dsn = (&url.URL{Scheme: "file", Path: absolute}).String()
+		databaseName = absolute
 	}
 	q := url.Values{}
 	// Disable native sleeping: retryBusy supplies bounded, cancelable waits.
@@ -71,7 +76,7 @@ func Open(ctx context.Context, path string, opts StoreOptions) (*Store, error) {
 	}
 	db.SetMaxOpenConns(1)
 	db.SetMaxIdleConns(1)
-	s := &Store{db: db, options: defaults}
+	s := &Store{db: db, options: defaults, databaseName: databaseName}
 	if err := s.initialize(ctx); err != nil {
 		db.Close()
 		return nil, err
@@ -206,7 +211,7 @@ func (c *Collection) operation(op string, err error) error {
 	if errors.As(err, &sqliteErr) && sqliteErr.Code()&255 == 19 {
 		err = fmt.Errorf("%w: %w", vectordata.ErrInvalidRecord, err)
 	}
-	return &vectordata.OperationError{Backend: "sqlite", Collection: c.name, Operation: op, Err: err}
+	return &vectordata.OperationError{StoreMetadata: vectordata.GetStoreMetadata(c.store), Backend: "sqlite", Collection: c.name, Operation: op, Err: err}
 }
 func (c *Collection) checkDefinition(registration string, format int) error {
 	if format != 1 || registration != c.registration {
@@ -270,7 +275,12 @@ func (c *Collection) write(ctx context.Context, records []vectordata.ModelRecord
 	keys = make([]any, len(prepared))
 	for i, r := range prepared {
 		generated := r.Key == nil
-		if generated {
+		if generated && c.definition.Key.Type == vectordata.KeyUUID {
+			r.Key, err = vectordata.NewUUIDKey()
+			if err != nil {
+				return nil, err
+			}
+		} else if generated {
 			if next == 0 {
 				return nil, fmt.Errorf("%w: generated key sequence exhausted", vectordata.ErrInvalidRecord)
 			}

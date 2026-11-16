@@ -88,11 +88,12 @@ part of CI. Replace panic with returned/handled errors in application code.
 | Persistent embedded data | [sqlite-store](../samples/sqlite-store/main.go), [SQLite example](../stores/sqlite/example_test.go) | sqlite.Open, GetTypedModelCollection, Get |
 | Automatic embeddings and filtered retrieval | [typed-search](../samples/typed-search/main.go), [model and adapters](../samples/internal/demo/demo.go) | source tag, Embedder, SearchText, Column |
 | Local agent with model-selected tools | [Docker Compose demo](../samples/local-doc-agent/README.md) | Agent Framework function tools, SQLite, Ollama |
+| Custom/multimodal embedding inputs | [input-embeddings](../samples/input-embeddings/main.go) | InputEmbeddingFunc, vector,input tag, SearchInput; master after v0.4.1 |
 | Retrieve sources for generation | [typed-rag](../samples/typed-rag/main.go) | SearchText, TypedModelSearchResult.Item |
 | Named vectors and projections | [recipes](../samples/recipes/main.go), [executable examples](../vectordata/example_test.go) | VectorProperty, IncludeVectors |
-| Early iteration/cancellation | [recipes](../samples/recipes/main.go) | QueryIter, context.WithCancel, errors.Is |
+| Read iteration/cancellation | [recipes](../samples/recipes/main.go) | ListCollectionNamesIter, GetManyIter, SearchTextIter, SearchInputIter, context.WithCancel |
 | Check backend support | [recipes](../samples/recipes/main.go), [capability contract](../vectordata/capabilities.go) | CapabilityProvider.Capabilities |
-| Keyword/vector fusion | [hybrid recipe](../samples/recipes/README.md) | HybridSearchText, HybridSearchOptions |
+| Keyword/vector fusion | [hybrid recipe](../samples/recipes/README.md) | HybridSearchTextIter, HybridSearchOptions |
 | Inspect schema changes | [migration recipe](../samples/recipes/README.md), [migration guide](migrations.md) | MigrationPlanner.PlanMigration |
 | Runtime/dynamic schemas | [model API](model-api.md) | CollectionDefinition, ModelRecord, ModelStore |
 
@@ -102,8 +103,8 @@ it is not an importable public helper package.
 
 ## Rules that prevent common integration mistakes
 
-- Match `TypedModelCollection[K,T]`'s key type to the model key: string, int64 or
-  normalized UUID string. Generated int64 keys are returned from writes; do not
+- Match `TypedModelCollection[K,T]`'s key type to the model key: string, int64, uint64 or
+  a compatible UUID type. Generated int64/UUID keys are returned from writes; do not
   assume the input struct is modified with its generated ID.
 - Use `Column("Category")` for logical model fields and
   `DataPath("Details", "rating")` for a JSON data field. `Metadata(...)` belongs
@@ -136,6 +137,8 @@ it is not an importable public helper package.
   drivers may have buffered rows before cancellation. Breaking a PostgreSQL
   iterator releases its cursor;
   memory/SQLite materialize query results or search pages before yielding.
+  New model read iterators are lazy, rerun on enumeration, and may yield a late
+  error after earlier records. Package helpers adapt older slice-only providers.
   Propagate request contexts and close the owning SQLite Store/pgx pool.
 - Capabilities describe implementation support, not deployment health. Assert
   optional interfaces as well. Memory/SQLite accept index hints but have no

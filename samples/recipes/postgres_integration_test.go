@@ -67,7 +67,7 @@ func TestIntegrationPostgresRecipes(t *testing.T) {
 			t.Error(err)
 		}
 	})
-	for _, recipe := range []string{"named-vectors", "iterators", "capabilities", "hybrid", "migration"} {
+	for _, recipe := range []string{"named-vectors", "scalar-query", "key-filters", "squared-l2", "iterators", "embedded-iterators", "metadata", "capabilities", "hybrid", "migration"} {
 		t.Run(recipe, func(t *testing.T) {
 			var out bytes.Buffer
 			// Running twice also checks that fixtures and previews can be reused.
@@ -76,8 +76,14 @@ func TestIntegrationPostgresRecipes(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			if recipe == "hybrid" && (!strings.Contains(out.String(), "costs:") || !strings.Contains(out.String(), "reciprocal_rank_fusion")) {
+			if recipe == "hybrid" && (!strings.Contains(out.String(), "costs:") || !strings.Contains(out.String(), "reciprocal_rank_fusion") || !strings.Contains(out.String(), "Keyword list: costs:")) {
 				t.Fatalf("missing fused results: %s", &out)
+			}
+			if recipe == "key-filters" && !strings.Contains(out.String(), "Matched keys: 2\nPaged key: 2\nExact-key count: 1") {
+				t.Fatalf("unexpected key-filter results: %s", &out)
+			}
+			if recipe == "scalar-query" && !strings.Contains(out.String(), "Scalar count: 3\nScalar page: 3 rank 2") {
+				t.Fatalf("unexpected scalar results: %s", &out)
 			}
 			if recipe == "migration" {
 				if !strings.Contains(out.String(), "ADD COLUMN") || !strings.Contains(out.String(), "Preview only;") {

@@ -36,7 +36,7 @@ func TestModelContract(t *testing.T) {
 }
 func TestEmbeddingConfiguration(t *testing.T) {
 	conformance.RunEmbeddingConfiguration(t, func(t *testing.T, o vectordata.ModelCollectionOptions) vectordata.ModelStore {
-		return openStore(t, ":memory:", sqlite.StoreOptions{Embedder: o.Embedder, EmbeddingBatchSize: o.EmbeddingBatchSize})
+		return openStore(t, ":memory:", sqlite.StoreOptions{Embedder: o.Embedder, InputEmbedder: o.InputEmbedder, EmbeddingBatchSize: o.EmbeddingBatchSize})
 	})
 }
 func TestPersistenceAndAtomicity(t *testing.T) {

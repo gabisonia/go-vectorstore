@@ -6,6 +6,7 @@ import (
 	"iter"
 	"strings"
 
+	"github.com/gabisonia/go-vectorstore/internal/iteration"
 	"github.com/gabisonia/go-vectorstore/stores/postgres/filtersql"
 	"github.com/gabisonia/go-vectorstore/vectordata"
 	"github.com/jackc/pgx/v5"
@@ -41,7 +42,7 @@ func scoreSQL(distance string, metric vectordata.DistanceMetric) string {
 	switch metric {
 	case vectordata.DistanceCosine:
 		return "(1 - " + distance + ")"
-	case vectordata.DistanceL2, vectordata.DistanceL1, vectordata.DistanceHamming:
+	case vectordata.DistanceL2, vectordata.DistanceL2Squared, vectordata.DistanceL1, vectordata.DistanceHamming:
 		return "(1 / (1 + " + distance + "))"
 	default:
 		return "(-" + distance + ")"
@@ -77,7 +78,8 @@ func (c *ModelCollection) searchValuePlan(literal any, top int, opts vectordata.
 	if err != nil {
 		return "", nil, p, err
 	}
-	distance := "(t." + quoteIdent(p.StorageName) + " " + op + " $1::" + vectorQuerySQLType(p) + ")"
+	rankingDistance := "(t." + quoteIdent(p.StorageName) + " " + op + " $1::" + vectorQuerySQLType(p) + ")"
+	distance := reportedDistanceSQL(rankingDistance, p.Metric)
 	if err := vectordata.ValidateModelFilter(opts.Filter, c.definition); err != nil {
 		return "", nil, p, err
 	}
@@ -105,7 +107,11 @@ func (c *ModelCollection) searchValuePlan(literal any, top int, opts vectordata.
 	if len(predicates) > 0 {
 		query += " WHERE " + strings.Join(predicates, " AND ")
 	}
-	query += " ORDER BY __vs_distance ASC" + fmt.Sprintf(" LIMIT $%d OFFSET $%d", next, next+1)
+	order := "__vs_distance"
+	if p.Metric == vectordata.DistanceL2Squared {
+		order = rankingDistance
+	}
+	query += " ORDER BY " + order + " ASC" + fmt.Sprintf(" LIMIT $%d OFFSET $%d", next, next+1)
 	args = append(args, top, opts.Skip)
 	if relaxed {
 		query = "SELECT * FROM (" + query + ") AS __vs_nearest ORDER BY __vs_distance + 0 ASC"
@@ -133,6 +139,12 @@ func (c *ModelCollection) Search(ctx context.Context, vector []float32, top int,
 	return results, nil
 }
 func (c *ModelCollection) SearchText(ctx context.Context, text string, top int, opts vectordata.ModelSearchOptions) ([]vectordata.ModelSearchResult, error) {
+	return c.SearchInput(ctx, text, top, opts)
+}
+func (c *ModelCollection) SearchInput(ctx context.Context, input any, top int, opts vectordata.ModelSearchOptions) ([]vectordata.ModelSearchResult, error) {
+	return iteration.Collect(c.SearchInputIter(ctx, input, top, opts))
+}
+func (c *ModelCollection) embedSearchInput(ctx context.Context, input any, top int, opts vectordata.ModelSearchOptions) ([]float32, error) {
 	p, err := c.definition.Vector(opts.VectorProperty)
 	if err != nil {
 		return nil, err
@@ -146,11 +158,11 @@ func (c *ModelCollection) SearchText(ctx context.Context, text string, top int, 
 	if _, _, _, err := modelVectorTuning(opts.ProviderOptions, p); err != nil {
 		return nil, err
 	}
-	vector, err := vectordata.EmbedQuery(ctx, text, p, c.options)
+	vector, err := vectordata.EmbedInputQuery(ctx, input, p, c.options)
 	if err != nil {
 		return nil, c.operation("embed_query", err)
 	}
-	return c.Search(ctx, vector, top, opts)
+	return vector, nil
 }
 
 type scoreScanner struct {
@@ -236,6 +248,8 @@ type hybridSearchConfig struct {
 	vector               vectordata.VectorProperty
 	textProperty         string
 	candidates, constant int
+	keywordQuery         string
+	keywordValue         any
 }
 
 // validateHybridOptions must run before calling an embedder or accessing storage.
@@ -257,8 +271,12 @@ func (c *ModelCollection) validateHybridOptions(keywords string, top int, opts v
 			config.textProperty = d.StorageName
 		}
 	}
-	if config.textProperty == "" || strings.TrimSpace(keywords) == "" {
-		return config, fmt.Errorf("%w: indexed text property and keywords required", vectordata.ErrInvalidSearchOptions)
+	if config.textProperty == "" {
+		return config, fmt.Errorf("%w: indexed text property required", vectordata.ErrInvalidSearchOptions)
+	}
+	config.keywordQuery, config.keywordValue, err = hybridKeywords(keywords, opts.KeywordTerms)
+	if err != nil {
+		return config, err
 	}
 	config.candidates = opts.CandidateLimit
 	if config.candidates == 0 {
@@ -283,41 +301,13 @@ func (c *ModelCollection) validateHybridOptions(keywords string, top int, opts v
 	return config, nil
 }
 func (c *ModelCollection) HybridSearchText(ctx context.Context, text, keywords string, top int, opts vectordata.HybridSearchOptions) ([]vectordata.ModelSearchResult, error) {
-	config, err := c.validateHybridOptions(keywords, top, opts)
-	if err != nil {
-		return nil, err
-	}
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	vector, err := vectordata.EmbedQuery(ctx, text, config.vector, c.options)
-	if err != nil {
-		return nil, c.operation("embed_query", err)
-	}
-	return c.HybridSearch(ctx, vector, keywords, top, opts)
+	return c.HybridSearchInput(ctx, text, keywords, top, opts)
+}
+func (c *ModelCollection) HybridSearchInput(ctx context.Context, input any, keywords string, top int, opts vectordata.HybridSearchOptions) ([]vectordata.ModelSearchResult, error) {
+	return iteration.Collect(c.HybridSearchInputIter(ctx, input, keywords, top, opts))
 }
 func (c *ModelCollection) HybridSearch(ctx context.Context, vector []float32, keywords string, top int, opts vectordata.HybridSearchOptions) ([]vectordata.ModelSearchResult, error) {
-	sql, args, p, err := c.hybridPlan(vector, keywords, top, opts)
-	if err != nil {
-		return nil, err
-	}
-	return c.runHybrid(ctx, sql, args, p, opts)
-}
-func (c *ModelCollection) runHybrid(ctx context.Context, sql string, args []any, p vectordata.VectorProperty, opts vectordata.HybridSearchOptions) ([]vectordata.ModelSearchResult, error) {
-	out := []vectordata.ModelSearchResult{}
-	var failure error
-	c.runSearch(ctx, sql, args, p, opts.ModelSearchOptions, true, func(r vectordata.ModelSearchResult, err error) bool {
-		if err != nil {
-			failure = err
-			return false
-		}
-		out = append(out, r)
-		return true
-	})
-	if failure != nil {
-		return nil, failure
-	}
-	return out, nil
+	return iteration.Collect(c.HybridSearchIter(ctx, vector, keywords, top, opts))
 }
 func (c *ModelCollection) hybridPlan(vector []float32, keywords string, top int, opts vectordata.HybridSearchOptions) (string, []any, vectordata.VectorProperty, error) {
 	config, err := c.validateHybridOptions(keywords, top, opts)
@@ -341,20 +331,21 @@ func (c *ModelCollection) hybridValuePlan(literal any, keywords string, top int,
 	if err != nil {
 		return "", nil, p, err
 	}
-	args := append([]any{literal, keywords}, filterArgs...)
+	args := append([]any{literal, config.keywordValue}, filterArgs...)
 	bind := func(value any) string { ph := fmt.Sprintf("$%d", next); next++; args = append(args, value); return ph }
 	op, _ := modelMetricOperator(p)
-	distance := "(t." + quoteIdent(p.StorageName) + " " + op + " $1::" + vectorQuerySQLType(p) + ")"
+	rankingDistance := "(t." + quoteIdent(p.StorageName) + " " + op + " $1::" + vectorQuerySQLType(p) + ")"
+	distance := reportedDistanceSQL(rankingDistance, p.Metric)
 	key := "t." + quoteIdent(c.definition.Key.StorageName)
 	predicate := "t." + quoteIdent(p.StorageName) + " IS NOT NULL"
 	if where != "" {
 		predicate += " AND (" + where + ")"
 	}
 	text := ftsExpr("t." + quoteIdent(config.textProperty))
-	query := "plainto_tsquery('simple'::regconfig,$2)"
+	query := config.keywordQuery
 	limit := bind(config.candidates)
 	rrf := bind(config.constant)
-	sql := `WITH __vs_vector AS MATERIALIZED (SELECT ` + key + ` AS __vs_key, ` + distance + ` AS __vs_distance FROM ` + c.table() + ` t WHERE ` + predicate + ` ORDER BY __vs_distance ASC LIMIT ` + limit + `),
+	sql := `WITH __vs_vector AS MATERIALIZED (SELECT ` + key + ` AS __vs_key, ` + rankingDistance + ` AS __vs_distance FROM ` + c.table() + ` t WHERE ` + predicate + ` ORDER BY __vs_distance ASC LIMIT ` + limit + `),
  __vs_text AS MATERIALIZED (SELECT ` + key + ` AS __vs_key, ts_rank_cd(` + text + `,` + query + `) AS __vs_rank FROM ` + c.table() + ` t WHERE (` + predicate + `) AND ` + text + ` @@ ` + query + ` ORDER BY __vs_rank DESC, ` + key + ` LIMIT ` + limit + `),
  __vs_ranks AS (SELECT __vs_key, row_number() OVER (ORDER BY __vs_distance, __vs_key) AS __vs_rank FROM __vs_vector UNION ALL SELECT __vs_key, row_number() OVER (ORDER BY __vs_rank DESC, __vs_key) FROM __vs_text),
  __vs_fused AS (SELECT __vs_key, sum(1.0 / (` + rrf + `::float8 + __vs_rank)) AS __vs_score FROM __vs_ranks GROUP BY __vs_key)

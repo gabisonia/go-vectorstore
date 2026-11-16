@@ -5,6 +5,7 @@ import (
 	"iter"
 
 	"github.com/gabisonia/go-vectorstore/internal/exactsearch"
+	"github.com/gabisonia/go-vectorstore/internal/iteration"
 	"github.com/gabisonia/go-vectorstore/stores/memory"
 	"github.com/gabisonia/go-vectorstore/vectordata"
 )
@@ -64,6 +65,10 @@ func (c *Collection) engine(ctx context.Context) (*memory.Collection, error) {
 	if err != nil {
 		return nil, err
 	}
+	return c.engineForRecords(ctx, records)
+}
+
+func (c *Collection) engineForRecords(ctx context.Context, records []vectordata.ModelRecord) (*memory.Collection, error) {
 	d := c.readDefinition()
 	base, err := memory.New().EnsureModelCollection(ctx, c.name, d, vectordata.ModelCollectionOptions{})
 	if err != nil {
@@ -83,6 +88,7 @@ func (c *Collection) readDefinition() vectordata.CollectionDefinition {
 	for i := range d.Vectors {
 		d.Vectors[i].SourceProperty = ""
 		d.Vectors[i].Embedder = nil
+		d.Vectors[i].InputEmbedder = nil
 	}
 	return d
 }
@@ -109,6 +115,37 @@ func (c *Collection) Query(ctx context.Context, filter vectordata.Filter, top in
 	if err = vectordata.ValidateModelFilter(filter, c.definition); err != nil {
 		return nil, err
 	}
+	if tokens, indexed, err := c.keyFilterTokens(ctx, filter); err != nil {
+		return nil, err
+	} else if indexed {
+		// Fetch full vectors for stored-record validation, then apply projection,
+		// native ordering and paging to only the indexed matches. lookupMany also
+		// checks metadata for an empty token set and releases SQL before evaluation.
+		selected, err := retryBusy(ctx, func() ([]vectordata.ModelRecord, error) {
+			return c.lookupMany(ctx, tokens, vectordata.RetrievalOptions{IncludeVectors: true})
+		})
+		if err != nil {
+			return nil, err
+		}
+		engine, err := c.engineForRecords(ctx, selected)
+		if err != nil {
+			return nil, err
+		}
+		return engine.Query(ctx, nil, top, opts)
+	}
+	if plan, supported, err := c.scalarPlan(filter, top, opts, false); err != nil {
+		return nil, err
+	} else if supported {
+		rows, err := retryBusy(ctx, func() ([]vectordata.ModelRecord, error) { return c.scalarRead(ctx, plan) })
+		if err != nil {
+			return nil, err
+		}
+		out := make([]vectordata.ModelRecord, len(rows))
+		for i, row := range rows {
+			out[i] = vectordata.CloneModelRecord(row, c.definition, opts.IncludeVectors)
+		}
+		return out, nil
+	}
 	engine, err := c.engine(ctx)
 	if err != nil {
 		return nil, err
@@ -116,24 +153,9 @@ func (c *Collection) Query(ctx context.Context, filter vectordata.Filter, top in
 	return engine.Query(ctx, filter, top, opts)
 }
 func sequence[T any](ctx context.Context, run func() ([]T, error)) iter.Seq2[T, error] {
-	return func(yield func(T, error) bool) {
-		var zero T
-		items, err := run()
-		if err != nil {
-			yield(zero, err)
-			return
-		}
-		for _, item := range items {
-			if err := ctx.Err(); err != nil {
-				yield(zero, err)
-				return
-			}
-			if !yield(item, nil) {
-				return
-			}
-		}
-	}
+	return iteration.FromSlice(ctx, run)
 }
+
 func (c *Collection) QueryIter(ctx context.Context, f vectordata.Filter, top int, o vectordata.QueryOptions) iter.Seq2[vectordata.ModelRecord, error] {
 	return sequence(ctx, func() ([]vectordata.ModelRecord, error) { return c.Query(ctx, f, top, o) })
 }
@@ -144,6 +166,16 @@ func (c *Collection) Count(ctx context.Context, filter vectordata.Filter) (count
 	}
 	if filter == nil {
 		return retryBusy(ctx, func() (int64, error) { return c.countAll(ctx) })
+	}
+	if tokens, indexed, err := c.keyFilterTokens(ctx, filter); err != nil {
+		return 0, err
+	} else if indexed {
+		return retryBusy(ctx, func() (int64, error) { return c.countKeys(ctx, tokens) })
+	}
+	if plan, supported, err := c.scalarPlan(filter, 0, vectordata.QueryOptions{}, true); err != nil {
+		return 0, err
+	} else if supported {
+		return retryBusy(ctx, func() (int64, error) { return c.scalarCount(ctx, plan) })
 	}
 	engine, err := c.engine(ctx)
 	if err != nil {
@@ -185,11 +217,14 @@ func (c *Collection) SearchIter(ctx context.Context, v []float32, top int, o vec
 	return sequence(ctx, func() ([]vectordata.ModelSearchResult, error) { return c.Search(ctx, v, top, o) })
 }
 func (c *Collection) SearchText(ctx context.Context, text string, top int, o vectordata.ModelSearchOptions) ([]vectordata.ModelSearchResult, error) {
+	return c.SearchInput(ctx, text, top, o)
+}
+func (c *Collection) SearchInput(ctx context.Context, input any, top int, o vectordata.ModelSearchOptions) ([]vectordata.ModelSearchResult, error) {
 	p, err := c.validateSearch(top, o)
 	if err != nil {
 		return nil, c.operation("search_text", err)
 	}
-	v, err := vectordata.EmbedQuery(ctx, text, p, c.options)
+	v, err := vectordata.EmbedInputQuery(ctx, input, p, c.options)
 	if err != nil {
 		return nil, c.operation("embed_query", err)
 	}

@@ -8,6 +8,8 @@ type DistanceMetric string
 const (
 	DistanceCosine DistanceMetric = "cosine"
 	DistanceL2     DistanceMetric = "l2"
+	// DistanceL2Squared sums squared component differences without taking a square root.
+	DistanceL2Squared DistanceMetric = "l2_squared"
 	// DistanceL1 is Manhattan distance: the sum of absolute component differences.
 	DistanceL1           DistanceMetric = "l1"
 	DistanceInnerProduct DistanceMetric = "inner_product"
@@ -151,7 +153,7 @@ func ScoreFromDistance(metric DistanceMetric, distance float64) float64 {
 	switch metric {
 	case DistanceCosine:
 		return 1 - distance
-	case DistanceL2, DistanceL1, DistanceHamming:
+	case DistanceL2, DistanceL2Squared, DistanceL1, DistanceHamming:
 		return 1 / (1 + distance)
 	case DistanceInnerProduct:
 		return -distance

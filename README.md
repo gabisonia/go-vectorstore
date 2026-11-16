@@ -122,19 +122,21 @@ with a deterministic instructional embedder, typed reads,
 array filtering, and generated keys. Use a real embedding model for semantic search.
 
 See [the model API guide](docs/model-api.md) for collection lifecycle, explicit
-schemas, native UUID/int64 keys, UUID/byte data, date-only/time-only properties,
+schemas, native UUID/int64/uint64 keys, generated UUIDs, UUID/byte data, date-only/time-only properties,
 exact decimals, and native numeric/bool/UUID/timestamp/calendar arrays,
 multiple vectors, iterator APIs, embeddings and
 PostgreSQL hybrid search. Models can opt into float16 (`halfvec`) storage with
 `precision=float16` while keeping `[]float32` inputs and outputs. Stores also expose optional `CapabilityProvider`
 metadata for supported keys, data types, metrics, index combinations and hybrid search.
+Optional [store and collection metadata](docs/model-api.md#store-and-collection-metadata)
+reports system, database, namespace and collection identity without database I/O.
 All three providers support Manhattan (`DistanceL1`) search; PostgreSQL supports L1 HNSW
 indexes and rejects unsupported L1/IVFFlat combinations before database work.
 Models can also use packed `BinaryVector` fields with `kind=binary`, Hamming
 distance and `SearchBinary`. PostgreSQL provides native `bit(n)` storage,
 HNSW/IVFFlat indexes and binary hybrid search.
 Sparse models use `SparseVector` with zero-based coordinates, `kind=sparse`, and
-`SearchSparse`. All three providers support cosine/L2/inner-product/L1 sparse search;
+`SearchSparse`. All three providers support cosine/L2/squared-L2/inner-product/L1 sparse search;
 PostgreSQL adds `sparsevec(n)` storage, HNSW indexes and sparse hybrid search.
 PostgreSQL offers [model migration planning and explicit additive application](docs/migrations.md)
 with schema drift detection, reviewable SQL and backfill/re-embedding classifications.

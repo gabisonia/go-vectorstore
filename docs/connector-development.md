@@ -141,6 +141,13 @@ server-backed storage.
 
 ## Model normalization and optional capabilities
 
+Integer `KeyTypes` describe canonical storage: `KeyInt64` and `KeyUint64` also
+accept narrower Go keys through typed wrappers. Providers continue to return
+canonical int64/uint64 values. Typed writes preflight keys against K's range before
+calling the provider; keep batch atomicity and input ownership intact. Generated
+integer bindings require 64-bit keys. Shared conformance exercises signed/unsigned
+widths and named types across CRUD, query/search, filters and iterators.
+
 New providers can implement `vectordata.ModelStore` and `ModelCollection` without
 implementing the original Record API. Normalize definitions once, call
 `PrepareModelRecords` before writes, preserve native key types and data values,
@@ -252,7 +259,7 @@ Sparse properties use `VectorSparse`, `SparseVector` and
 coordinate ordering/uniqueness, finite values, cosine norms and index nonzero
 limits. Remove explicit zeros, copy both coordinate buffers, and keep all
 operations proportional to coordinate counts. Go indices are zero-based;
-PostgreSQL text indices are one-based. Sparse float32 supports the four dense
+PostgreSQL text indices are one-based. Sparse float32 supports the five dense
 metrics, with HNSW only. Capability entries report both `MaxDimensions` and
 `MaxNonZero`. Reject invalid maps and sparse inputs before embedding/writes;
 text queries must not call a float embedder for a sparse property. Preserve
@@ -261,6 +268,43 @@ visible sparse types/operators/opclasses and checks existing nonzero counts
 before planning an index addition; manual backfill and stale reviews remain
 explicit. Shared tests cover mixed models, all metrics and billion-dimensional
 values without dense allocation.
+
+`DistanceL2Squared` returns the sum of squared component differences, with score
+`1 / (1 + distance)` and thresholds in squared units. Preserve existing L2 units.
+Advertise the metric and each supported index tuple; shared conformance covers
+dense float32/float16, sparse, thresholds, text queries, projection and iterators.
+PostgreSQL uses native L2 operators/classes for index ordering and squares only
+reported distances and threshold expressions. Preserve that distinction in
+ordinary and hybrid plans, including relaxed IVFFlat ordering. A metric change
+still requires manual review even when operator classes match. SQLite persists
+the new metric in format 1; no vector representation changes are needed.
+
+Advertise `HybridKeywordTerms` only when `HybridSearchOptions.KeywordTerms` works
+through every advertised hybrid slice/iterator variant. PostgreSQL combines plain
+queries with OR between entries and AND within entries, binding the list as data.
+Reject empty lists, invalid/blank entries and conflicting positional keywords
+before embedding or storage access. Preserve nil-list string compatibility,
+caller ownership, enumeration snapshots and existing candidate/RRF semantics.
+Shared conformance exercises every supported vector/input form and list snapshots
+across embedding callbacks; PostgreSQL plan checks cover full-text index use.
+
+Implement `StoreMetadataProvider` and `CollectionMetadataProvider` to expose
+configured identity through `StoreMetadata`/`CollectionMetadata`. Advertise
+`Capabilities().Metadata` only when both are available. Keep discovery local,
+stable and independent of schema validation or connection state; return value
+snapshots without driver clients, DSNs or credentials. Empty identity fields mean
+unavailable. Typed wrappers forward the optional interface, with a collection-name
+fallback for existing providers. Shared conformance checks discovery before
+creation and after deletion without creating storage as a side effect.
+
+When wrapping failures in `OperationError`, populate its embedded `StoreMetadata`
+from the configured store. Preserve the original cause with `Unwrap`, including
+native driver errors and context cancellation. Leave error category decisions and
+message formatting intact. Do not query the database to assemble error identity;
+diagnostics must also work with closed or failed connections. Error wrapping is
+optional and is not implied by the `Metadata` discovery capability. Shared
+metadata conformance checks supplied error metadata against collection identity;
+existing providers may leave the new error metadata empty.
 
 `vectordata.MigrationPlanner` is a separate optional capability for model schema
 planning. Advertise `MigrationPlanning` only when it is implemented. Planning must
@@ -285,6 +329,44 @@ factory receives embedding defaults and must return an isolated store configured
 with them. It verifies override precedence, batching, text/hybrid queries and
 atomic insert/upsert behavior after embedding errors or cancellation.
 
+For custom inputs, resolve `InputEmbedder` alongside `Embedder` at each level;
+`WithDefaults` rejects ambiguous options and handles cross-kind overrides. Pass
+`ModelRecord.EmbeddingInputs` to `PrepareModelRecords` and store only its prepared
+output. Advertise `InputEmbedding` only when the collection implements optional
+`InputSearcher`; use `EmbedInputQuery` after validating search options and filters.
+Implement `InputHybridSearcher` when hybrid input search is available. The embedding
+configuration suite also exercises byte/native/custom inputs, direct string
+fields, transient-input ownership, migration-plan stripping and atomic failures
+when this capability is advertised. Its factory must propagate `InputEmbedder`.
+
+
+## Native keys
+
+For `KeyUint64`, canonical keys are uint64 and filter operands must retain integer
+precision. PostgreSQL uses numeric(20,0) with native uint64 binding/scanning; SQLite
+uses exact JSON numbers rather than float64. Do not truncate to int64. Generated
+UUID keys are application-generated random v4 values; generated insert requests
+must still reject collisions under Upsert. Only generated int64 keys use integer
+sequences/identity columns. The capability suite exercises key bounds, typed
+aliases, CRUD/filter/search behavior, generated UUIDs and migration compatibility.
+
+## Read iterator extensions
+
+Keep ModelStore/ModelCollection and existing optional search interfaces compatible.
+Implement `CollectionNameIterator`, `ModelBatchIterator`, `TextSearchIterator` and
+advertise `ReadIterators`. `InputEmbedding` additionally requires
+`InputSearchIterator`; `HybridSearch` adds `HybridSearchIterator` and supported
+input/binary/sparse hybrid iterator interfaces. Package helpers supply buffered
+fallbacks for existing slice-only providers.
+
+Defer reads, embedding and decoding until enumeration. Stop after the first error
+or a false yield; check context cancellation before work, between records and at
+exhaustion. Close cursors/transactions on every exit. Do not retry after yielding
+results. Typed codecs must decode only consumed records. Snapshot providers must
+release locks/connections before caller code, especially SQLite's single connection.
+Document buffering and cross-batch consistency separately from iterator API support.
+The shared capability suite covers these contracts; PostgreSQL also tests early
+exit before a late malformed row and single-connection cleanup/settings rollback.
 
 ## Optional vectors and array set filters
 

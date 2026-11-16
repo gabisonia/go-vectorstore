@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"iter"
+	"math"
 	"sort"
 	"strings"
 	"sync"
@@ -30,7 +31,8 @@ func New() *Store { return &Store{collections: map[string]*state{}} }
 
 // StoreOptions configures runtime defaults for model collections.
 type StoreOptions struct {
-	Embedder vectordata.Embedder
+	Embedder      vectordata.Embedder
+	InputEmbedder vectordata.InputEmbedder
 	// EmbeddingBatchSize bounds embedding requests; zero leaves them unbounded.
 	EmbeddingBatchSize int
 }
@@ -38,7 +40,7 @@ type StoreOptions struct {
 // NewWithOptions creates a store with default embedding settings. New retains its
 // original behavior. Collection and property embedders can override this default.
 func NewWithOptions(opts StoreOptions) (*Store, error) {
-	defaults, err := (vectordata.ModelCollectionOptions{Embedder: opts.Embedder, EmbeddingBatchSize: opts.EmbeddingBatchSize}).WithDefaults(vectordata.ModelCollectionOptions{})
+	defaults, err := (vectordata.ModelCollectionOptions{Embedder: opts.Embedder, InputEmbedder: opts.InputEmbedder, EmbeddingBatchSize: opts.EmbeddingBatchSize}).WithDefaults(vectordata.ModelCollectionOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -46,6 +48,7 @@ func NewWithOptions(opts StoreOptions) (*Store, error) {
 }
 
 var _ vectordata.ModelStore = (*Store)(nil)
+var _ vectordata.InputSearcher = (*Collection)(nil)
 
 func (s *Store) ListCollectionNames(ctx context.Context) ([]string, error) {
 	if err := ctx.Err(); err != nil {
@@ -123,6 +126,7 @@ func definitionJSON(d vectordata.CollectionDefinition) string {
 	d = d.Clone()
 	for i := range d.Vectors {
 		d.Vectors[i].Embedder = nil
+		d.Vectors[i].InputEmbedder = nil
 	}
 	raw, _ := json.Marshal(d)
 	return string(raw)
@@ -175,14 +179,29 @@ func (c *Collection) write(ctx context.Context, records []vectordata.ModelRecord
 		staged[key] = r
 	}
 	keys := make([]any, len(prepared))
+	next := s.next
 	for i, r := range prepared {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
 		generated := r.Key == nil
 		if generated {
-			r.Key = s.next
-			s.next++
+			if c.definition.Key.Type == vectordata.KeyUUID {
+				r.Key, err = vectordata.NewUUIDKey()
+				if err != nil {
+					return nil, err
+				}
+			} else {
+				if next <= 0 {
+					return nil, fmt.Errorf("%w: generated key sequence exhausted", vectordata.ErrInvalidRecord)
+				}
+				r.Key = next
+				if next == math.MaxInt64 {
+					next = 0
+				} else {
+					next++
+				}
+			}
 		}
 		if _, exists := staged[r.Key]; exists && (!upsert || generated) {
 			return nil, fmt.Errorf("%w: duplicate key", vectordata.ErrInvalidRecord)
@@ -190,7 +209,11 @@ func (c *Collection) write(ctx context.Context, records []vectordata.ModelRecord
 		staged[r.Key] = r
 		keys[i] = r.Key
 	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	s.records = staged
+	s.next = next
 	return keys, nil
 }
 func (c *Collection) snapshot(ctx context.Context, vectors bool) ([]vectordata.ModelRecord, error) {
@@ -426,6 +449,9 @@ func (c *Collection) SearchIter(ctx context.Context, vector []float32, top int, 
 	}
 }
 func (c *Collection) SearchText(ctx context.Context, text string, top int, opts vectordata.ModelSearchOptions) ([]vectordata.ModelSearchResult, error) {
+	return c.SearchInput(ctx, text, top, opts)
+}
+func (c *Collection) SearchInput(ctx context.Context, input any, top int, opts vectordata.ModelSearchOptions) ([]vectordata.ModelSearchResult, error) {
 	p, err := c.definition.Vector(opts.VectorProperty)
 	if err != nil {
 		return nil, err
@@ -442,7 +468,7 @@ func (c *Collection) SearchText(ctx context.Context, text string, top int, opts 
 	if err := c.checkSchema(ctx); err != nil {
 		return nil, err
 	}
-	vector, err := vectordata.EmbedQuery(ctx, text, p, c.options)
+	vector, err := vectordata.EmbedInputQuery(ctx, input, p, c.options)
 	if err != nil {
 		return nil, err
 	}

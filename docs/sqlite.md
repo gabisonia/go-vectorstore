@@ -17,9 +17,12 @@ collection, err := store.EnsureModelCollection(ctx, "documents", definition,
 
 Use the same CollectionDefinition, struct codecs, typed wrappers, embedding
 defaults, filters, and model operations as memory/PostgreSQL. All 20 native data
-types, native keys, generated int64 keys, multiple named vectors, nullable vectors,
+types, string/int64/uint64/UUID keys, generated int64/UUID keys, multiple named vectors, nullable vectors,
 float16 rounding, and dense/binary/sparse exact search are supported. Binary and
 sparse search use their optional interfaces. Vector projections default to off.
+Dense and sparse `DistanceL2Squared` search reports squared Euclidean distance,
+uses `1 / (1 + distance)` scores, and persists its metric in storage format 1.
+See [distance and threshold units](model-api.md#squared-euclidean-distance).
 
 Paths are literal filenames, including punctuation; driver DSNs and custom PRAGMAs
 are not accepted. Native text values, keys, and model names must be valid UTF-8;
@@ -27,6 +30,9 @@ invalid byte sequences are rejected rather than replaced during JSON encoding.
 The parent directory must exist. `:memory:` opens a private
 transient database for that Store. Collection names are bound parameters. Runtime
 embedders are never serialized; configure them again when reopening a store.
+`StoreMetadata` reports system `sqlite` and the absolute literal filename (or
+`:memory:`). Collection metadata adds the handle name. Discovery works after
+close and does not inspect registrations; see [metadata discovery](model-api.md#store-and-collection-metadata).
 
 ## Durability and concurrency
 
@@ -53,6 +59,11 @@ overwriting an existing record. SQL NULL and JSON null are stored distinctly;
 JSON numbers and exact decimals retain precision. Native timestamps and arrays
 are reconstructed according to the registered schema.
 
+Unsigned keys use exact JSON integer encoding and uint64 decoding, including
+MaxUint64; SQLite's signed INTEGER range does not limit them. UUIDs are generated
+in the application and inserted in the same transaction as the rest of the batch.
+Neither unsigned keys nor UUIDs consume `next_key` integer sequence values.
+
 A collection registration must exactly match the normalized definition; a stale
 handle returns ErrSchemaMismatch on reads/writes. Storage format 1 is internal to
 this provider. Open creates missing provider tables, while EnsureExists creates or
@@ -72,10 +83,59 @@ snapshot while other connections can write. Only matching payloads are decoded
 and validated; missing keys are omitted, duplicates collapse, and ordering is
 unspecified. The connection is released before results reach the caller.
 
+`ListCollectionNamesIter`, `GetManyIter`, `SearchTextIter`, and `SearchInputIter`
+are lazy at construction. They load their snapshot/result page before yielding
+and release the connection before invoking application callbacks or typed codecs.
+They do not promise bounded lookup-result memory or incremental SQL decoding.
+GetManyIter shares the same one-snapshot semantics as GetMany. Cancellation is
+checked before loading, between results and at exhaustion; a break terminates
+without yielding another error. Enumeration never retries after exposing results.
+
 Count with a nil filter uses SQL COUNT over the collection's record index, with
 schema/format validation in the same statement. It does not deserialize payloads
 and uses bounded Go memory; counting still scans the matching index entries and
 can grow with collection size. These fast paths do not invoke embedders.
+
+On master after v0.4.1, top-level `Eq(Column(keyName), value)` and
+`In(Column(keyName), values...)` also use the existing collection/key primary index
+for `Query`, `QueryIter` and filtered `Count`. Use the logical key name; a storage
+name is not a field alias. Keys are normalized and deduplicated before SQL, with
+at most 500 unique keys per statement. Signed/unsigned integer precision, UUID
+case normalization, native key ordering and NULL operands follow the model
+contract. NULL and invalid UTF-8 string operands cannot match stored keys.
+
+Key queries decode and validate only matching payloads, including stored vectors
+even when projections omit them. They apply scalar sorting, key tie-breaking and
+paging in Go to this matched set, then release results to application code.
+Retained memory follows requested keys and matching records; a large matching set
+still uses memory even when the returned page is small. Key-filter counts read
+index entries without decoding payloads, including damaged selected payloads.
+Both paths validate registration/format even for NULL-only or missing keys and
+hold one deferred read snapshot across metadata and every key batch. Cancellation
+or an error discards partial results and releases the connection before callbacks
+or typed codecs run. See [key-filter verification](performance.md#sqlite-key-filter-verification).
+
+Other `Query`/`QueryIter` calls use native SQL filtering, ordering and `LIMIT`/`OFFSET`
+when the complete filter and ordering are supported. This covers key comparisons
+and string, int64, float64 and bool data columns with `Eq`, `In`, `Gt`, `Gte`, `Lt`,
+`Lte`, `Exists`, `And`, `Or` and `Not`. A nil filter also supports native paging.
+Use logical property names. Names and values are bound parameters; text uses binary
+ordering, NULLs sort last in either direction, and native keys break ties.
+Unsigned keys retain their full range. Float64 fields and `In` operands explicitly
+use REAL conversion to match typed Go decoding even when their JSON spelling is
+an integer. See SQLite's [JSON scalar decoding](https://www.sqlite.org/json1.html#jex).
+
+Native scalar queries decode and validate only the returned page, including its
+stored vectors before projection. An off-page invalid vector does not fail that
+page. Scalar counts evaluate the relevant JSON fields without decoding vectors
+or validating every model field; malformed JSON can still fail SQL evaluation.
+Metadata and results share one deferred WAL read snapshot, including empty pages.
+Errors discard the whole page, and the connection is released before application
+codecs run. These paths add no physical property indexes: SQLite still scans the
+collection's payload JSON and may use temporary sorting space. Go result memory
+follows the page, but SQL work and sorting costs can grow with collection size.
+No schema migration or storage format change is needed. See
+[scalar query verification](performance.md#sqlite-scalar-query-verification).
 
 Exact search streams and validates every payload through one deferred read
 transaction, retaining at most `top + Skip` candidates in a heap. Only the returned
@@ -87,10 +147,13 @@ Large offsets therefore increase memory use. WAL permits other connections to
 write during the scan; the Store's own connection remains occupied until it ends.
 Filter operands are normalized before acquiring the connection.
 
-Query and filtered Count still load the whole collection into the memory engine,
-using O(collection size) memory and scan work. Runtime embedders are disabled when
-reading stored records. QueryIter materializes its snapshot and SearchIter its
-result page before yielding, so application code holds no SQL cursor. Benchmark
+Queries/counts with unsupported filter or sort operations load the whole collection
+into the memory engine, using O(collection size) memory and scan work. This includes
+JSON paths, arrays, decimals, bytes and calendar/timestamp data. Deep/large filter
+trees also fall back as a whole to avoid SQLite expression limits. Runtime embedders
+are disabled when reading stored records. QueryIter materializes its key matches,
+native page or fallback snapshot and SearchIter its result page before
+yielding, so application code holds no SQL cursor. Benchmark
 realistic sizes before selecting the provider for large collections or concurrent
 query services. See the [read benchmarks](performance.md#sqlite-batch-lookup-and-count-verification)
 and [exact-search benchmarks](performance.md#exact-search-selection-and-copying).

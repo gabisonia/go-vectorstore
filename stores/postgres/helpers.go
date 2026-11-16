@@ -47,7 +47,7 @@ func metricOperator(metric vectordata.DistanceMetric) (string, error) {
 	switch metric {
 	case vectordata.DistanceCosine:
 		return "<=>", nil
-	case vectordata.DistanceL2:
+	case vectordata.DistanceL2, vectordata.DistanceL2Squared:
 		return "<->", nil
 	case vectordata.DistanceL1:
 		return "<+>", nil
@@ -62,7 +62,7 @@ func metricOpClass(metric vectordata.DistanceMetric) (string, error) {
 	switch metric {
 	case vectordata.DistanceCosine:
 		return "vector_cosine_ops", nil
-	case vectordata.DistanceL2:
+	case vectordata.DistanceL2, vectordata.DistanceL2Squared:
 		return "vector_l2_ops", nil
 	case vectordata.DistanceL1:
 		return "vector_l1_ops", nil
@@ -71,6 +71,16 @@ func metricOpClass(metric vectordata.DistanceMetric) (string, error) {
 	default:
 		return "", fmt.Errorf("%w: unsupported distance metric %q", vectordata.ErrSchemaMismatch, metric)
 	}
+}
+
+// reportedDistanceSQL separates the public distance from the native operator
+// used for ANN ordering. Squaring the ORDER BY expression would prevent pgvector
+// from using its L2 operator class, even though nearest-neighbor ordering agrees.
+func reportedDistanceSQL(raw string, metric vectordata.DistanceMetric) string {
+	if metric == vectordata.DistanceL2Squared {
+		return "power(" + raw + ", 2)"
+	}
+	return raw
 }
 
 func vectorLiteral(v []float32) string {

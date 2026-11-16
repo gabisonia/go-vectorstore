@@ -68,6 +68,7 @@ func TestMetricOperatorAndOpClass(t *testing.T) {
 	}{
 		{metric: vectordata.DistanceCosine, operator: "<=>", opClass: "vector_cosine_ops"},
 		{metric: vectordata.DistanceL2, operator: "<->", opClass: "vector_l2_ops"},
+		{metric: vectordata.DistanceL2Squared, operator: "<->", opClass: "vector_l2_ops"},
 		{metric: vectordata.DistanceL1, operator: "<+>", opClass: "vector_l1_ops"},
 		{metric: vectordata.DistanceInnerProduct, operator: "<#>", opClass: "vector_ip_ops"},
 	}

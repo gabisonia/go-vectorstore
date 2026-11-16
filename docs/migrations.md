@@ -131,6 +131,8 @@ a freshly reviewed no-op plan can be applied successfully.
 | Change embedding source | Manual embedding regeneration or compatibility verification |
 | Change distance metric | Manual validation of existing vectors/search semantics, plus index changes |
 | Change identity generation | Manual sequence ownership/privilege/alignment review |
+| Change to/from uint64 keys | Manual conversion between native key types; uint64 uses numeric(20,0) |
+| Change UUID key generation | Manual registration/application-behavior review; UUID generation is application-side, without an identity column |
 
 Backfill requirements are conservative even for empty tables: the planner never
 scans user records to decide whether a backfill can be skipped. Runtime embedding

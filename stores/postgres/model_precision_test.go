@@ -39,7 +39,7 @@ func TestVectorPrecisionDimensionLimits(t *testing.T) {
 }
 
 func TestHalfVectorIndexOperatorClasses(t *testing.T) {
-	for _, metric := range []vectordata.DistanceMetric{vectordata.DistanceCosine, vectordata.DistanceL2, vectordata.DistanceInnerProduct} {
+	for _, metric := range []vectordata.DistanceMetric{vectordata.DistanceCosine, vectordata.DistanceL2, vectordata.DistanceL2Squared, vectordata.DistanceInnerProduct} {
 		for _, method := range []vectordata.IndexMethod{vectordata.IndexMethodHNSW, vectordata.IndexMethodIVFFlat} {
 			d, err := (vectordata.CollectionDefinition{Key: vectordata.KeyProperty{Name: "ID"}, Vectors: []vectordata.VectorProperty{{Name: "Vector", Dimensions: 3, Precision: vectordata.VectorFloat16, Metric: metric, Index: &vectordata.VectorIndexOptions{Method: method}}}}).Normalize()
 			if err != nil {

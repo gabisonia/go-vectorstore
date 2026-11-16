@@ -50,12 +50,65 @@ func BenchmarkSQLiteRead(b *testing.B) {
 				b.ReportAllocs()
 				keys := []any{"key-000000", "key-000003", "missing", "key-000000"}
 				for b.Loop() {
-					rows, err := c.Query(ctx, vectordata.In(vectordata.Column("ID"), keys...), len(keys), vectordata.QueryOptions{})
+					engine, err := c.(*Collection).engine(ctx)
+					if err != nil {
+						b.Fatal(err)
+					}
+					rows, err := engine.Query(ctx, vectordata.In(vectordata.Column("ID"), keys...), len(keys), vectordata.QueryOptions{})
 					if err != nil || len(rows) != 2 {
 						b.Fatalf("reference lookup: %d %v", len(rows), err)
 					}
 				}
 			})
+			for _, tt := range []struct {
+				name   string
+				filter vectordata.Filter
+				want   int
+			}{
+				{"key_eq", vectordata.Eq(vectordata.Column("ID"), "key-000003"), 1},
+				{"key_in", vectordata.In(vectordata.Column("ID"), "key-000000", "key-000003", "missing", "key-000000"), 2},
+			} {
+				for _, reference := range []bool{false, true} {
+					suffix := tt.name
+					if reference {
+						suffix += "_reference"
+					}
+					b.Run("query_"+suffix, func(b *testing.B) {
+						b.ReportAllocs()
+						for b.Loop() {
+							var query vectordata.ModelCollection = c
+							if reference {
+								engine, err := c.(*Collection).engine(ctx)
+								if err != nil {
+									b.Fatal(err)
+								}
+								query = engine
+							}
+							rows, err := query.Query(ctx, tt.filter, 4, vectordata.QueryOptions{})
+							if err != nil || len(rows) != tt.want {
+								b.Fatalf("key query: %d %v", len(rows), err)
+							}
+						}
+					})
+					b.Run("count_"+suffix, func(b *testing.B) {
+						b.ReportAllocs()
+						for b.Loop() {
+							var query vectordata.ModelCollection = c
+							if reference {
+								engine, err := c.(*Collection).engine(ctx)
+								if err != nil {
+									b.Fatal(err)
+								}
+								query = engine
+							}
+							count, err := query.Count(ctx, tt.filter)
+							if err != nil || count != int64(tt.want) {
+								b.Fatalf("key count: %d %v", count, err)
+							}
+						}
+					})
+				}
+			}
 			b.Run("count_all", func(b *testing.B) {
 				b.ReportAllocs()
 				for b.Loop() {

@@ -52,6 +52,8 @@ func oracleDistance(a, b []float32, metric vectordata.DistanceMetric) float64 {
 		bb += y * y
 	}
 	switch metric {
+	case vectordata.DistanceL2Squared:
+		return squared
 	case vectordata.DistanceL2:
 		return math.Sqrt(squared)
 	case vectordata.DistanceL1:
@@ -125,7 +127,7 @@ func TestProvidersMatchFullSort(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			index := 0
 			for _, kind := range []vectordata.VectorKind{vectordata.VectorDense, vectordata.VectorBinary, vectordata.VectorSparse} {
-				metrics := []vectordata.DistanceMetric{vectordata.DistanceCosine, vectordata.DistanceL2, vectordata.DistanceInnerProduct, vectordata.DistanceL1}
+				metrics := []vectordata.DistanceMetric{vectordata.DistanceCosine, vectordata.DistanceL2, vectordata.DistanceL2Squared, vectordata.DistanceInnerProduct, vectordata.DistanceL1}
 				if kind == vectordata.VectorBinary {
 					metrics = []vectordata.DistanceMetric{vectordata.DistanceHamming}
 				}

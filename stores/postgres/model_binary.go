@@ -4,6 +4,7 @@ import (
 	"context"
 	"iter"
 
+	"github.com/gabisonia/go-vectorstore/internal/iteration"
 	"github.com/gabisonia/go-vectorstore/vectordata"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -94,17 +95,5 @@ func (c *ModelCollection) SearchBinary(ctx context.Context, v vectordata.BinaryV
 	return out, nil
 }
 func (c *ModelCollection) HybridSearchBinary(ctx context.Context, v vectordata.BinaryVector, keywords string, top int, opts vectordata.HybridSearchOptions) ([]vectordata.ModelSearchResult, error) {
-	config, err := c.validateHybridOptions(keywords, top, opts)
-	if err != nil {
-		return nil, err
-	}
-	v, err = vectordata.NormalizeBinaryVector(v, config.vector)
-	if err != nil {
-		return nil, err
-	}
-	sql, args, p, err := c.hybridValuePlan(binaryWriteValue(v), keywords, top, opts)
-	if err != nil {
-		return nil, err
-	}
-	return c.runHybrid(ctx, sql, args, p, opts)
+	return iteration.Collect(c.HybridSearchBinaryIter(ctx, v, keywords, top, opts))
 }

@@ -22,20 +22,26 @@ func TestBuiltInCapabilitiesAreLocalSnapshots(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			before := tt.provider.Capabilities()
+			if !before.Metadata {
+				t.Fatal("metadata discovery missing")
+			}
+			if before.HybridKeywordTerms != tt.indexed {
+				t.Fatal("hybrid keyword-term discovery mismatch")
+			}
 			if !slices.Contains(before.DistanceMetrics, vectordata.DistanceL1) {
 				t.Fatal("L1 support missing")
 			}
 			if before.Backend != tt.name || before.FullTextIndexing != tt.indexed || before.HybridSearch != tt.indexed || before.MigrationPlanning != tt.indexed || before.MigrationApplication != tt.indexed {
 				t.Fatalf("unexpected features: %+v", before)
 			}
-			if !slices.Equal(before.GeneratedKeyTypes, []vectordata.KeyType{vectordata.KeyInt64}) {
+			if !slices.Equal(before.GeneratedKeyTypes, []vectordata.KeyType{vectordata.KeyInt64, vectordata.KeyUUID}) {
 				t.Fatalf("generated keys: %v", before.GeneratedKeyTypes)
 			}
 			if !slices.Equal(before.VectorPrecisions, []vectordata.VectorPrecision{vectordata.VectorFloat32, vectordata.VectorFloat16}) {
 				t.Fatalf("vector precisions: %v", before.VectorPrecisions)
 			}
 			if tt.indexed {
-				if len(before.VectorIndexCapabilities) != 20 {
+				if len(before.VectorIndexCapabilities) != 25 {
 					t.Fatalf("index combinations: %+v", before.VectorIndexCapabilities)
 				}
 				for _, index := range before.VectorIndexCapabilities {

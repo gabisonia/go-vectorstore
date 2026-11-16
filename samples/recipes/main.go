@@ -23,10 +23,25 @@ type Named struct {
 	TitleVector []float32 `vectordata:"vector,dimensions=3"`
 	BodyVector  []float32 `vectordata:"vector,dimensions=3"`
 }
+type SquaredPoint struct {
+	ID     string    `vectordata:"key"`
+	Vector []float32 `vectordata:"vector,dimensions=2,metric=l2_squared"`
+}
+
+type KeyedNote struct {
+	ID   int64 `vectordata:"key"`
+	Rank int64 `vectordata:"data"`
+}
+
+type RankedNote struct {
+	ID       int64  `vectordata:"key"`
+	Category string `vectordata:"data"`
+	Rank     int64  `vectordata:"data"`
+}
 
 func run(ctx context.Context, args []string, out io.Writer) error {
 	flags := flag.NewFlagSet("recipes", flag.ContinueOnError)
-	recipe := flags.String("recipe", "named-vectors", "named-vectors, iterators, capabilities, hybrid, migration")
+	recipe := flags.String("recipe", "named-vectors", "named-vectors, scalar-query, key-filters, squared-l2, iterators, embedded-iterators, metadata, capabilities, hybrid, migration")
 	dsn := flags.String("dsn", "", "PostgreSQL DSN (required for hybrid/migration)")
 	path := flags.String("sqlite", "", "SQLite file (default: memory)")
 	prefix := flags.String("prefix", "recipe_demo", "Dedicated collection prefix")
@@ -34,7 +49,7 @@ func run(ctx context.Context, args []string, out io.Writer) error {
 		return err
 	}
 	switch *recipe {
-	case "named-vectors", "iterators", "capabilities", "hybrid", "migration":
+	case "named-vectors", "scalar-query", "key-filters", "squared-l2", "iterators", "embedded-iterators", "metadata", "capabilities", "hybrid", "migration":
 	default:
 		return fmt.Errorf("unknown recipe %q", *recipe)
 	}
@@ -67,6 +82,78 @@ func execute(ctx context.Context, store vectordata.ModelStore, recipe, prefix st
 	}
 	name := prefix + "_" + recipe
 	switch recipe {
+	case "scalar-query":
+		c, err := vectordata.EnsureTypedModelCollection[int64, RankedNote](ctx, store, name, nil, vectordata.ModelCollectionOptions{})
+		if err != nil {
+			return err
+		}
+		if _, err := c.Upsert(ctx, []RankedNote{{ID: 1, Category: "guides", Rank: 3}, {ID: 2, Category: "guides", Rank: 1}, {ID: 3, Category: "guides", Rank: 2}, {ID: 4, Category: "other", Rank: 0}}); err != nil {
+			return err
+		}
+		filter := vectordata.And(vectordata.Eq(vectordata.Column("Category"), "guides"), vectordata.Gte(vectordata.Column("Rank"), int64(1)))
+		count, err := c.Count(ctx, filter)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(out, "Scalar count: %d\n", count)
+		for note, err := range c.QueryIter(ctx, filter, 1, vectordata.QueryOptions{OrderBy: []vectordata.SortField{{Property: "Rank"}}, Skip: 1}) {
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(out, "Scalar page: %d rank %d\n", note.ID, note.Rank)
+		}
+	case "key-filters":
+		c, err := vectordata.EnsureTypedModelCollection[int64, KeyedNote](ctx, store, name, nil, vectordata.ModelCollectionOptions{})
+		if err != nil {
+			return err
+		}
+		if _, err := c.Upsert(ctx, []KeyedNote{{ID: 2, Rank: 1}, {ID: 10, Rank: 0}, {ID: 99, Rank: 2}}); err != nil {
+			return err
+		}
+		filter := vectordata.In(vectordata.Column("ID"), int64(10), int64(2), int64(2), int64(-1), nil)
+		count, err := c.Count(ctx, filter)
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(out, "Matched keys: %d\n", count)
+		for note, err := range c.QueryIter(ctx, filter, 1, vectordata.QueryOptions{Skip: 1, OrderBy: []vectordata.SortField{{Property: "Rank"}}}) {
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(out, "Paged key: %d\n", note.ID)
+		}
+		count, err = c.Count(ctx, vectordata.Eq(vectordata.Column("ID"), int64(10)))
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(out, "Exact-key count: %d\n", count)
+	case "metadata":
+		c, err := vectordata.GetTypedModelCollection[string, Named](store, name, nil, vectordata.ModelCollectionOptions{})
+		if err != nil {
+			return err
+		}
+		m := c.CollectionMetadata()
+		fmt.Fprintf(out, "System: %s\nDatabase: %s\nNamespace: %s\nCollection: %s\n", m.SystemName, m.DatabaseName, m.Namespace, m.CollectionName)
+	case "squared-l2":
+		c, err := vectordata.EnsureTypedModelCollection[string, SquaredPoint](ctx, store, name, nil, vectordata.ModelCollectionOptions{})
+		if err != nil {
+			return err
+		}
+		if _, err := c.Upsert(ctx, []SquaredPoint{{ID: "origin", Vector: []float32{0, 0}}, {ID: "near", Vector: []float32{3, 4}}}); err != nil {
+			return err
+		}
+		for hit, err := range c.SearchIter(ctx, []float32{0, 0}, 2, vectordata.ModelSearchOptions{}) {
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(out, "%s: distance %.0f score %.6f\n", hit.Item.ID, hit.Distance, hit.Score)
+		}
+		limit := 5.0
+		hits, err := c.Search(ctx, []float32{0, 0}, 2, vectordata.ModelSearchOptions{DistanceThreshold: &limit})
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(out, "Squared-distance threshold 5: %d match\n", len(hits))
 	case "named-vectors":
 		c, err := vectordata.EnsureTypedModelCollection[string, Named](ctx, store, name, nil, vectordata.ModelCollectionOptions{})
 		if err != nil {
@@ -89,6 +176,22 @@ func execute(ctx context.Context, store vectordata.ModelStore, recipe, prefix st
 		}
 		if _, err := c.Upsert(ctx, []Note{{ID: "one", Text: "first"}, {ID: "two", Text: "second"}}); err != nil {
 			return err
+		}
+		for collectionName, err := range vectordata.ListCollectionNamesIter(ctx, store) {
+			if err != nil {
+				return err
+			}
+			if collectionName == name {
+				fmt.Fprintf(out, "Collection: %s\n", collectionName)
+				break
+			}
+		}
+		for note, err := range c.GetManyIter(ctx, []string{"one", "missing"}, vectordata.RetrievalOptions{}) {
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(out, "Batch: %s\n", note.ID)
+			break
 		}
 		// Leaving the range closes a PostgreSQL cursor. Memory/SQLite materialize
 		// before yielding. Check the iterator's error value on every iteration.
@@ -125,7 +228,7 @@ func execute(ctx context.Context, store vectordata.ModelStore, recipe, prefix st
 			return err
 		}
 		fmt.Fprintf(out, "Cancellation observed; count after iterator: %d\n", count)
-	case "hybrid":
+	case "embedded-iterators":
 		c, err := vectordata.EnsureTypedModelCollection[string, demo.Article](ctx, store, name, nil, vectordata.ModelCollectionOptions{})
 		if err != nil {
 			return err
@@ -133,12 +236,43 @@ func execute(ctx context.Context, store vectordata.ModelStore, recipe, prefix st
 		if _, err := c.Upsert(ctx, demo.Articles()); err != nil {
 			return err
 		}
-		hits, err := c.HybridSearchText(ctx, "reduce cloud costs", "caching", 2, vectordata.HybridSearchOptions{TextProperty: "Body", CandidateLimit: 10})
+		for hit, err := range c.SearchTextIter(ctx, "reduce cloud costs", 2, vectordata.ModelSearchOptions{}) {
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(out, "Search: %s\n", hit.Item.ID)
+			break
+		}
+		for hit, err := range c.SearchInputIter(ctx, "reduce cloud costs", 2, vectordata.ModelSearchOptions{}) {
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(out, "Input: %s\n", hit.Item.ID)
+			break
+		}
+	case "hybrid":
+		if !store.(vectordata.CapabilityProvider).Capabilities().HybridKeywordTerms {
+			return fmt.Errorf("keyword-list hybrid search: %w", vectordata.ErrUnsupported)
+		}
+		c, err := vectordata.EnsureTypedModelCollection[string, demo.Article](ctx, store, name, nil, vectordata.ModelCollectionOptions{})
 		if err != nil {
 			return err
 		}
-		for _, hit := range hits {
+		if _, err := c.Upsert(ctx, demo.Articles()); err != nil {
+			return err
+		}
+		for hit, err := range c.HybridSearchTextIter(ctx, "reduce cloud costs", "caching", 2, vectordata.HybridSearchOptions{TextProperty: "Body", CandidateLimit: 10}) {
+			if err != nil {
+				return err
+			}
 			fmt.Fprintf(out, "%s: %s score %.6f\n", hit.Item.ID, hit.ScoreKind, hit.Score)
+		}
+		// Entries match with OR; words within "cloud costs" match with AND.
+		for hit, err := range c.HybridSearchTextIter(ctx, "reduce cloud costs", "", 2, vectordata.HybridSearchOptions{TextProperty: "Body", CandidateLimit: 10, KeywordTerms: []string{"cloud costs", "caching"}}) {
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(out, "Keyword list: %s: %s score %.6f\n", hit.Item.ID, hit.ScoreKind, hit.Score)
 		}
 	case "migration":
 		planner, ok := store.(vectordata.MigrationPlanner)

@@ -10,15 +10,18 @@ It is a workflow comparison, not a claim of API or feature equivalence with ever
 | --- | --- | --- |
 | Declare key/data/vector properties | Struct tags, explicit CollectionDefinition, StructCodec and custom codecs | Implemented |
 | Typed and dynamic records | TypedModelCollection[K,T] and ModelRecord | Implemented |
-| Native keys and data | string/int64/UUID keys; 20 data types, including exact decimal/calendar values and arrays | Implemented; inspect capabilities |
-| Collection lifecycle and CRUD | ModelStore, CollectionManager, ModelCollection; batch operations and generated int64 keys | Implemented |
+| Native keys and data | string/int64/uint64/UUID keys, typed integer widths and aliases; 20 data types, including exact decimal/calendar values and arrays | Implemented; inspect canonical storage capabilities |
+| Collection lifecycle and CRUD | ModelStore, CollectionManager, ModelCollection; batch operations and generated int64/UUID keys | Implemented |
 | Vector selection and retrieval | Multiple named properties, optional projection, nullable vectors | Implemented |
 | Dense, half, binary, sparse search | Search/SearchBinary/SearchSparse; explicit metric, thresholds and paging | Implemented; index support varies |
-| Automatic embeddings | Embedder with store/collection/property overrides, bounded batches, SearchText | Implemented for dense vectors |
+| Squared Euclidean distance | DistanceL2Squared (`l2_squared`), squared-distance thresholds and reciprocal similarity scores | All three providers; dense float32/float16 and sparse |
+| Automatic embeddings | Text/custom-input embedders, direct input fields, store/collection/property overrides, bounded batches, SearchText/SearchInput | Implemented for dense outputs |
 | Filtered retrieval/search | Portable AST, JSON paths, native arrays, Contains/ContainsAny/ContainsAll | Implemented |
-| Streaming and cancellation | Go iter.Seq2 and context.Context | Implemented; memory/SQLite materialize query snapshots or search result pages |
-| Hybrid keyword/vector search | Optional HybridSearcher and binary/sparse variants, RRF | PostgreSQL |
+| Read iteration and cancellation | Listing, batch reads, text/custom-input and every supported hybrid variant use iter.Seq2/context.Context | Implemented; PostgreSQL cursor enumeration, memory/SQLite snapshots/pages; compatibility fallbacks buffer slices |
+| Hybrid keyword/vector search | Optional HybridSearcher and binary/sparse variants, RRF; string queries or plain-text KeywordTerms lists | PostgreSQL; inspect HybridKeywordTerms capability |
 | Provider discovery | CapabilityProvider reports keys, types, vector kinds, physical index tuples and optional workflows | Implemented |
+| Store/collection metadata | Optional metadata interfaces and helpers report system, database, namespace and collection identity; typed wrappers forward discovery | All three providers; local configuration snapshots |
+| Error diagnostics | OperationError preserves error chains and embeds configured store identity for structured diagnostics | PostgreSQL/SQLite model wrappers and PostgreSQL migrations; wrapping is optional |
 | Schema evolution | Read-only plans, drift detection, explicit reviewed additive application | PostgreSQL |
 | Durable provider portability | PostgreSQL and embedded SQLite | Implemented; memory is transient |
 
@@ -42,16 +45,26 @@ also depends on deployed pgvector version, permissions, index dimensions and NNZ
 limits. See [model API](model-api.md), [SQLite costs](sqlite.md), and
 [migration limits](migrations.md).
 
+SQLite uses its existing primary key index for top-level key equality/`In`
+queries and counts, with one read snapshot across batches. Supported scalar
+filters, ordering and paging also run in SQL over payload JSON; unsupported
+combinations retain full-snapshot evaluation. Accepted index hints do not add
+property or ANN indexes. See [query costs](sqlite.md#query-costs-and-provider-limits)
+and [scalar measurements](performance.md#sqlite-scalar-query-verification).
+
 ## Deliberate differences and future extensions
 
 Go uses interfaces, generics, tags, explicit filter nodes, iterators and contexts
 in place of .NET abstract classes, attributes, expression trees, async enumerables
 and cancellation tokens. Native key/data support is a defined portable subset.
-Embedding input is text and output is dense []float32; multimodal embedding
-inputs, provider-side embedding generation, and arbitrary embedding types are
-outside the current contract. Runtime service discovery comparable to
+Embedding input supports text, media bytes and custom values through application
+adapters; output is dense []float32. Provider-side generation and automatic
+binary/sparse embedding outputs remain outside the current contract.
+Runtime service discovery comparable to
 [VectorStore.GetService](https://learn.microsoft.com/en-us/dotnet/api/microsoft.extensions.vectordata.vectorstore)
-is represented by concrete providers and optional interface assertions.
+is represented by concrete providers and optional interface assertions. Store and
+collection metadata use dedicated optional interfaces, with name-only fallback
+for older collection providers; no general-purpose service locator is provided.
 
 Additional remote connectors, other distance metrics, custom rerankers, SQLite
 ANN/full-text acceleration, and non-additive migration execution are possible

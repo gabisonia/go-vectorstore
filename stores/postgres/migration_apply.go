@@ -17,11 +17,7 @@ var _ vectordata.MigrationApplier = (*PostgresVectorStore)(nil)
 // SQL produced from the locked live state is executed.
 func (s *PostgresVectorStore) ApplyMigration(ctx context.Context, reviewed vectordata.MigrationPlan) (err error) {
 	name := reviewed.Collection
-	defer func() {
-		if err != nil {
-			err = &vectordata.OperationError{Backend: "postgres", Collection: name, Operation: "apply_migration", Err: err}
-		}
-	}()
+	defer func() { err = s.operation(name, "apply_migration", err) }()
 	if reviewed.Backend != "postgres" || reviewed.Namespace != s.opts.Schema || reviewed.Revision == "" || reviewed.Registered == nil {
 		return fmt.Errorf("%w: review does not identify this store and a registered snapshot", vectordata.ErrMigrationConflict)
 	}
@@ -191,7 +187,9 @@ func validateAdditiveMigration(plan vectordata.MigrationPlan) error {
 		old.Index = nil
 		next.Index = nil
 		old.Embedder = nil
+		old.InputEmbedder = nil
 		next.Embedder = nil
+		next.InputEmbedder = nil
 		if old != next {
 			return deny(old.Name)
 		}

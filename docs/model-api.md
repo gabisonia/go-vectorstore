@@ -60,9 +60,9 @@ names, names over 63 bytes, and the reserved `__vs_` prefix are rejected.
 
 | Tag role | Options |
 | --- | --- |
-| `key` | `name=<storage name>`, `type=string|int64|uuid`, `generated` |
+| `key` | `name=<storage name>`, `type=string\|int64\|uint64\|uuid`, `generated` |
 | `data` | `name=<storage name>`, `type=<data type>`, `optional`, `index`, `fulltext` |
-| `vector` | `name=<storage name>`, `dimensions=<n>`, `kind=dense\|binary\|sparse`, `precision=float32\|float16`, `metric=cosine\|l2\|inner_product\|l1\|hamming`, `index`, `method=hnsw\|ivfflat`, `source=<data field>`, `optional` |
+| `vector` | `name=<storage name>`, `dimensions=<n>`, `kind=dense\|binary\|sparse`, `precision=float32\|float16`, `metric=cosine\|l2\|l2_squared\|inner_product\|l1\|hamming`, `index`, `method=hnsw\|ivfflat`, `source=<data field>`, `optional`, `input` |
 | `-` | Ignore the field |
 
 Untagged fields are ignored when inferring a definition. Exported fields and
@@ -70,13 +70,41 @@ exported embedded fields are supported. Invalid tags and type conflicts fail
 before storage creation. An explicit definition uses exported Go field names and
 does not require tags.
 
-Supported native key types are string, int64 and UUID. UUID keys can be strings
-or compatible types with text mapping. PostgreSQL stores these as `text`,
-`bigint`, and `uuid`, rather than stringifying all keys into a text column.
-`key,generated` requires an int64-compatible field and uses a PostgreSQL identity
-column. A zero generated key in a tagged model requests a new key. Insert/Upsert
-return keys in input order; input models are not mutated. Assign the returned key
-before upserting the same model again. Generated keys can have gaps.
+Supported native key types are string, int64, uint64 and UUID. UUID keys can be
+strings or compatible types with text mapping. PostgreSQL stores these as `text`,
+`bigint`, `numeric(20,0)` and `uuid`, rather than stringifying all keys into a text
+column. Unsigned fields infer `KeyUint64`. Values from 0 to 18446744073709551615 retain
+their exact identity across writes, reads, filters, ordering and deletes. Native
+integer arguments are accepted when in range; floats, numeric strings and negative
+values are rejected for uint64 keys. SQLite decodes unsigned JSON keys directly
+into uint64, preserving values above 2^53 and MaxInt64 after reopening a file.
+
+On master after v0.4.1, non-generated typed integer keys support `int8`, `int16`,
+`int32`, `int`, `int64`, `uint8`, `uint16`, `uint32`, `uint`, `uint64` and named
+types. For example, an `int32` key field can use `TypedModelCollection[int32, T]`.
+Signed widths map to canonical `KeyInt64`; unsigned widths map to `KeyUint64`.
+Capabilities report those storage types rather than every Go width. Insert/Upsert
+return the selected `[]K` type. If a custom codec emits a key outside K's range,
+the entire batch fails with `ErrInvalidRecord` before provider writes or embedding
+generation. Reading a stored key that cannot fit the model field returns a decode
+error rather than narrowing it. This adds no storage format or schema migration.
+
+`key,generated` supports int64-compatible fields and UUID fields. PostgreSQL uses
+identity columns for int64 keys. All providers generate random version 4 UUIDs
+in the application, then insert them as explicit values; no database UUID default
+or additional extension is required. Unsigned and arbitrary string generation
+are unsupported. Use `type=uuid` explicitly for string UUID fields.
+Generated integer fields and the typed key parameter must both have 64 bits;
+narrower generated bindings fail with `ErrSchemaMismatch` before storage creation.
+
+A zero generated key field in a tagged model (or a nil `ModelRecord.Key`) requests
+a new key. An explicit dynamic key, including an all-zero UUID string, is preserved.
+Insert/Upsert return keys in input order; input models are not mutated. Assign the
+returned key before upserting the same model again. A generated-key collision
+fails instead of overwriting a record, including during Upsert. Failed memory and
+SQLite batches preserve integer sequence state; PostgreSQL identity values can
+have gaps after a rollback. See the runnable
+[native-key sample](../samples/native-keys/README.md).
 
 Data types are `string`, `int64`, `float64`, `bool`, `time`, `string_array`, `json`,
 `uuid`, `bytes`, `int64_array`, `float64_array`, `bool_array`, `uuid_array`,
@@ -301,8 +329,8 @@ if provider, ok := store.(vectordata.CapabilityProvider); ok {
 }
 ```
 
-All three providers report string/int64/UUID keys, generated int64 keys, all twenty
-portable data types, and cosine/L2/inner-product/L1/Hamming metrics.
+All three providers report string/int64/uint64/UUID keys, generated int64/UUID keys, all twenty
+portable data types, and cosine/L2/squared-L2/inner-product/L1/Hamming metrics.
 `VectorKinds` reports dense, binary and sparse support. Hamming applies only to
 binary vectors; the other metrics apply to dense and sparse vectors.
 `VectorPrecisions` reports `VectorFloat32` and `VectorFloat16` on all three providers;
@@ -310,12 +338,16 @@ PostgreSQL float16 storage requires pgvector 0.7+ and a visible `halfvec` type.
 
 | Feature | Memory | SQLite | PostgreSQL |
 | --- | --- | --- | --- |
+| `Metadata` | True, store/collection identity | True, store/collection identity | True, store/collection identity |
+| `InputEmbedding` | True, dense outputs | True, dense outputs | True, dense outputs |
+| `ReadIterators` | True, buffered snapshots/pages | True, buffered snapshots/pages | True, cursor enumeration |
 | `OptionalVectors` | True | True | True |
 | `VectorIndexMethods` | None | None | HNSW, IVFFlat |
 | `VectorIndexCapabilities` | None | None | Supported method/metric/precision combinations and dimension/nonzero limits |
 | `IndexedDataTypes` | None | None | String, int64, float64, bool, time, UUID, bytes, calendar values, decimals and native arrays |
 | `FullTextIndexing` | False | False | True, for string properties |
 | `HybridSearch` | False | False | True |
+| `HybridKeywordTerms` | False | False | True, plain-text keyword groups |
 | `MigrationPlanning` | False | False | True, plan-only |
 | `MigrationApplication` | False | False | True, additive changes only |
 
@@ -335,12 +367,12 @@ for _, index := range caps.VectorIndexCapabilities {
 }
 ```
 
-PostgreSQL reports HNSW for all four dense metrics and IVFFlat for cosine/L2/inner
+PostgreSQL reports HNSW for all five dense metrics and IVFFlat for cosine/L2/squared-L2/inner
 product, each with float32 (2,000 indexed dimensions) and float16 (4,000).
 Binary entries have `Kind=VectorBinary`, empty precision, and Hamming distance;
 HNSW and IVFFlat both support up to 64,000 bits. Empty kind in older entries means
 dense, and missing `VectorKinds` means the provider has not reported kinds.
-Sparse entries have `Kind=VectorSparse`, float32 precision, HNSW for all four
+Sparse entries have `Kind=VectorSparse`, float32 precision, HNSW for all five
 non-Hamming metrics, `MaxDimensions=1000000000` and `MaxNonZero=1000`. Nonzero
 limits count stored components, separately from declared dimensions. A zero
 `MaxNonZero` means the provider has not reported that limit.
@@ -356,9 +388,53 @@ their usual schema and deployment validation. Built-in stores return independent
 caller-owned slices; changing a snapshot does not configure the provider.
 
 `ModelStore` remains unchanged. A third-party provider without
-`CapabilityProvider` has unavailable metadata; this does not imply its optional
+`CapabilityProvider` has unavailable capability information; this does not imply its optional
 features are unsupported. Callers can still use the `HybridSearcher` interface
 and normal operation errors when metadata is unavailable.
+
+### Store and collection metadata
+
+On master after v0.4.1, optional `StoreMetadataProvider` and
+`CollectionMetadataProvider` interfaces identify configured handles. This serves
+the discovery workflow of Microsoft's
+[store metadata](https://learn.microsoft.com/en-us/dotnet/api/microsoft.extensions.vectordata.vectorstoremetadata)
+and [collection metadata](https://source.dot.net/Microsoft.Extensions.VectorData.Abstractions/VectorStoreCollectionMetadata.cs.html)
+without a general-purpose service locator.
+
+```go
+// store is a ModelStore; collection is a model or typed collection handle.
+storeInfo := vectordata.GetStoreMetadata(store)
+collectionInfo := vectordata.GetCollectionMetadata(collection)
+fmt.Printf("%s / %s / %s / %s\n", storeInfo.SystemName,
+    storeInfo.DatabaseName, storeInfo.Namespace, collectionInfo.CollectionName)
+```
+
+| Provider | `SystemName` | `DatabaseName` | `Namespace` |
+| --- | --- | --- | --- |
+| Memory | `memory` | Empty | Empty |
+| SQLite | `sqlite` | Absolute literal filename, or `:memory:` | Empty |
+| PostgreSQL | `postgresql` | Database from the pool's configured connection | Configured schema, default `public` |
+
+`SystemName` describes the database system; the existing capability backend
+identifier remains `postgres` for PostgreSQL. Collection metadata embeds the store
+metadata and adds `CollectionName`, preserving the logical, unquoted handle name.
+No connection string, host, username, password or runtime connection options are
+included. Filenames are normalized when SQLite opens, so relative names remain
+stable if the working directory later changes. Discovery does not resolve symlinks.
+
+The helpers perform no database I/O, invoke no codecs, and return caller-owned
+value snapshots. Results describe configuration even before creation, after
+deletion, or after a store/pool closes. They do not validate registration, health
+or existence, or query a server to resolve its actual database name. Use `Exists`
+and normal operations for those checks. `Capabilities().Metadata` advertises both
+optional interfaces on built-ins. Empty fields mean unavailable.
+
+Existing providers need no changes: `GetStoreMetadata` returns an empty value
+without the optional interface; `GetCollectionMetadata` falls back to `Name()`.
+Nil and typed-nil handles return empty values. Both typed wrappers forward
+collection metadata with this fallback. PostgreSQL's original Record collection
+also exposes it. Run `go run ./samples/recipes -recipe metadata` for a complete
+example that creates no collection.
 
 ## Lifecycle and retrieval
 
@@ -403,6 +479,105 @@ Querying a deleted/missing collection returns `ErrCollectionNotFound`. PostgreSQ
 and SQLite operation errors add backend, collection, and operation context through
 `OperationError`, preserving
 `errors.Is`/`errors.As`.
+
+On master after v0.4.1, these wrappers also embed `StoreMetadata`: configured
+system, database and namespace names. PostgreSQL migration planning/application
+errors carry the same identity. This covers the contextual diagnostics represented
+by Microsoft's [VectorStoreException](https://source.dot.net/Microsoft.Extensions.VectorData.Abstractions/VectorStoreException.cs.html).
+
+```go
+// err is an error returned by a model operation or PostgreSQL migration.
+var operation *vectordata.OperationError
+if errors.As(err, &operation) {
+    fmt.Printf("%s / %s / %s: %s %s\n", operation.SystemName,
+        operation.DatabaseName, operation.Namespace,
+        operation.Collection, operation.Operation)
+}
+if errors.Is(err, vectordata.ErrNotFound) {
+    // Handle a missing record, independently of provider wrapping.
+}
+```
+
+Metadata is a value snapshot of the configured handle, obtained without database
+I/O even after close. It follows the [store metadata rules](#store-and-collection-metadata)
+and includes no connection string or credentials. `Error()` keeps its existing
+message format; read the new fields through `errors.As` for structured logging.
+`Unwrap` preserves native driver errors, sentinels and cancellation causes.
+Wrapping remains optional: memory errors and some validation/cancellation paths
+can return errors directly. Existing manually constructed `OperationError` values
+may have empty store metadata. See `ExampleOperationError` in
+[the executable examples](../vectordata/example_test.go).
+
+SQLite accelerates top-level key `Eq`/`In` queries and counts using its existing
+primary index. Queries sort/page matching records in Go; counts avoid payload
+decoding. Other supported scalar filters, ordering and paging run in SQL, decoding
+only the returned page; unsupported combinations use snapshot evaluation. Scalar
+pushdown still scans payload JSON and creates no property indexes. See
+[SQLite query costs](sqlite.md#query-costs-and-provider-limits) and the portable
+`key-filters` and `scalar-query` recipes.
+
+### Complete read iteration
+
+Built-in stores/collections support iterator forms for all model reads:
+
+| Operation | Optional interface | Iterator |
+| --- | --- | --- |
+| Collection listing | `CollectionNameIterator` | `ListCollectionNamesIter` |
+| Batch retrieval | `ModelBatchIterator` | `GetManyIter` |
+| Text vector search | `TextSearchIterator` | `SearchTextIter` |
+| Custom embedding input | `InputSearchIterator` | `SearchInputIter` |
+| Dense/text hybrid search | `HybridSearchIterator` | `HybridSearchIter`, `HybridSearchTextIter` |
+| Custom-input hybrid search | `InputHybridSearchIterator` | `HybridSearchInputIter` |
+| Binary/sparse hybrid search | `BinaryHybridSearchIterator`, `SparseHybridSearchIterator` | `HybridSearchBinaryIter`, `HybridSearchSparseIter` |
+
+Hybrid iterators require a hybrid-capable provider (currently PostgreSQL).
+The typed model wrapper exposes the collection iterator methods directly.
+When using `ModelStore` or `ModelCollection` interfaces, call package helpers such
+as `vectordata.ListCollectionNamesIter(ctx, store)` and
+`vectordata.SearchTextIter(ctx, collection, text, top, options)`. Helpers prefer
+the optional iterator interfaces and buffer the existing slice methods when a
+third-party provider has not implemented them. Unsupported input/hybrid methods
+yield `ErrUnsupported`. The original provider interfaces remain compatible.
+`ReadIterators` advertises native implementations, not bounded memory or latency.
+
+```go
+for record, err := range documents.GetManyIter(ctx, []string{"guide", "missing"},
+    vectordata.RetrievalOptions{}) {
+    if err != nil { return err }
+    fmt.Println(record.ID)
+}
+for hit, err := range documents.SearchTextIter(ctx, "mountains", 3,
+    vectordata.ModelSearchOptions{}) {
+    if err != nil { return err }
+    fmt.Println(hit.Item.ID, hit.Score)
+    break // Releases a PostgreSQL cursor immediately.
+}
+```
+
+Constructing a sequence does no database access, embedding or model decoding.
+Each enumeration reruns the operation, including one embedding request for text
+or input queries. Keep inputs unchanged during consumption. Options/filters are
+validated before embedding. Errors are yielded once and stop enumeration; a late
+error can follow earlier valid results. Existing slice methods return no partial
+values on error. Typed codecs decode only consumed results and stop on the first
+decode error. Check every yielded error, including one at exhaustion if the final
+item canceled the context. Breaking ends the operation deliberately, without an
+additional error result.
+
+PostgreSQL enumerates listing, batch lookup and embedded/hybrid search rows from
+cursors and closes them on completion, error, cancellation or break. It validates
+and deduplicates all batch keys before querying, then reads bounded SQL chunks;
+breaking stops before the next chunk. Batch retrieval preserves the existing
+behavior of separate read statements rather than promising one snapshot across
+all chunks. Ranking/RRF work still runs in PostgreSQL before results are available.
+Consume or close the sequence before issuing a nested operation through a
+single-connection PostgreSQL pool.
+
+Memory and SQLite buffer listing/lookup snapshots and selected search pages
+before yielding. SQLite preserves its single WAL snapshot for GetMany, releases
+its one connection before caller callbacks/codecs run, and never retries after
+yielding. These iterator APIs do not add SQLite ANN or SQL filter acceleration.
+See the [iterator recipes](../samples/recipes/README.md).
 
 ## Filtering
 
@@ -486,6 +661,40 @@ also apply to the float32 Record API. See
 Adding an HNSW index to an existing L1 model is supported by additive migrations.
 Changing an existing property's metric requires manual semantic review and index
 rebuilds; `ApplyMigration` rejects that change.
+
+### Squared Euclidean distance
+
+Use `DistanceL2Squared` or `metric=l2_squared` to return the sum of squared
+component differences. This metric is available on master after v0.4.1:
+
+```go
+Embedding []float32 `vectordata:"vector,dimensions=2,metric=l2_squared,index"`
+```
+
+Compared with `[0,0]`, `[3,4]` has squared distance 25 and similarity score
+`1 / (1 + 25)`, or approximately 0.038462. `DistanceThreshold` uses squared
+units: a threshold of 5 excludes this vector; a threshold of 25 includes it.
+`ScoreThreshold` uses the same reciprocal score. Existing `DistanceL2` retains
+distance 5 and score `1 / 6` for this example. The two metrics have the same
+mathematical ordering, with different distance and score units.
+
+All three providers support dense float32/float16 and sparse squared L2. Float16
+rounding happens before distance calculation. Sparse computation visits only
+nonzero coordinates; zero vectors are valid. Binary vectors require Hamming.
+Text/custom-input queries and iterators use the selected property's metric;
+PostgreSQL hybrid search reports squared distances while keeping RRF scores.
+
+PostgreSQL reuses L2 HNSW/IVFFlat operator classes for dense vectors and L2 HNSW
+for sparse vectors. Queries keep the native `<->` distance operator in candidate
+ordering, then square its result for reported distances and thresholds. This
+preserves [pgvector index eligibility](https://github.com/pgvector/pgvector#why-isnt-a-query-using-an-index);
+an eligible index is not a guarantee that the planner will choose it. Floating-point
+results can differ slightly between providers. Adding a compatible index is
+additive. Changing a registered metric between L2 and squared L2 requires manual
+semantic review; `ApplyMigration` rejects it even though the physical operator
+class is shared. Memory/SQLite also require the registered definition to match.
+
+Run `go run ./samples/recipes -recipe squared-l2` for a complete example.
 
 ## Vector storage precision
 
@@ -572,6 +781,77 @@ input regardless of batch size.
 Callers must use compatible embedding models for ingestion and queries;
 embedders must honor cancellation and be safe for concurrent use.
 
+### Custom and multimodal inputs
+
+`InputEmbedder.EmbedInputs(ctx, inputs []any) ([][]float32, error)` accepts text,
+image/audio bytes, and application values. `InputEmbeddingFunc[T]` adapts a typed
+function and rejects nil values or type mismatches before invoking that function
+for a batch. Actual media decoding and model calls belong to your embedder.
+Outputs are still dense float32 vectors, optionally stored at float16 precision;
+automatic binary/sparse generation and database-side generation are unsupported.
+
+Configure `InputEmbedder` on `StoreOptions`, `ModelCollectionOptions` or
+`VectorProperty`. Resolution is property → collection → store, across both kinds
+of embedder. A text embedder at a higher level replaces an inherited input embedder
+and vice versa. Configure only one kind at each level; ambiguous options fail with
+`ErrInvalidEmbeddingOptions` (ambiguous property definitions fail with
+`ErrSchemaMismatch`). Nil and typed-nil values inherit the next default.
+
+For example, your application can supply image bytes:
+
+```go
+embedder := vectordata.InputEmbeddingFunc[[]byte](
+    func(ctx context.Context, images [][]byte) ([][]float32, error) {
+        return imageModel.Embed(ctx, images) // Your application's model adapter.
+    })
+options := vectordata.ModelCollectionOptions{InputEmbedder: embedder, EmbeddingBatchSize: 32}
+```
+
+A dense vector field of type `string` is an embedding input automatically. Other
+input types require the `input` tag, including custom structs and image/audio
+byte slices. Optional string pointers supply the dereferenced string; other
+custom pointer inputs retain their type. The field's type must match the typed
+adapter. Define separate vector properties or a common application input type
+when a generator needs to accept multiple media types.
+
+```go
+type Photo struct {
+    ID    string `vectordata:"key"`
+    Title string `vectordata:"data"`
+    Image []byte `vectordata:"vector,input,dimensions=1536"`
+}
+```
+
+Input fields are never stored or decoded: they have their zero value on reads,
+even with `IncludeVectors`. Add separate data properties for sources you need to
+retrieve. A normal `[]float32` field with the same logical name can read the stored
+vector using the same definition. The `input` tag changes mapping, not schema.
+It cannot be combined with `source` or a binary/sparse vector kind.
+
+Dynamic records supply transient values in `ModelRecord.EmbeddingInputs`, keyed
+by dense vector property name. This map is excluded from JSON and consumed during
+batch preparation; providers never store or return it. Explicit vectors take
+precedence over input values. Otherwise a transient input overrides `SourceProperty`;
+the latter can name any native data property. Native sources reach the embedder
+in canonical form (for example, JSON objects are maps rather than custom structs).
+The original text `Embedder` continues to require a string source. Unknown input
+properties and inputs for binary/sparse properties fail before any embedding call.
+A nil input omits an optional vector; it is an error for a required vector.
+
+Built-in collections implement optional `InputSearcher.SearchInput` and PostgreSQL
+also implements `InputHybridSearcher.HybridSearchInput`. The typed wrapper exposes
+both methods and returns `ErrUnsupported` for third-party providers without those
+interfaces. `SearchText` and `HybridSearchText` remain text convenience methods and
+use the same resolved generator. Queries always embed one input. Options and
+filters are validated before invoking a generator; existing batch limits, output
+validation, cancellation, and atomic write guarantees apply to input embeddings.
+
+Mutable inputs are borrowed read-only during the call: generators must not mutate
+or retain them, and callers must not change them concurrently. The library copies
+generated vectors before storing or returning them, so generators may reuse output
+buffers on later calls. Runtime generators never enter registrations or migration
+plans. See the runnable [custom-input sample](../samples/input-embeddings/README.md).
+
 ## Binary vectors
 
 Binary vectors are explicit model properties with packed bytes and an exact bit
@@ -631,7 +911,7 @@ operator/index availability and exact bit lengths.
 
 ## Sparse vectors
 
-Sparse vectors store only nonzero coordinates and support cosine, L2, inner
+Sparse vectors store only nonzero coordinates and support cosine, L2, squared L2, inner
 product and L1 distance in all three providers:
 
 ```go
@@ -652,7 +932,7 @@ values must be finite float32 numbers and indices must be within dimensions.
 `NewSparseVector` validates/copies input and removes explicit zeros. The maximum
 dimension count is 1 billion and input coordinate lists support up to 16,000
 entries. HNSW properties permit at most 1,000 nonzero values after removing zeros.
-Cosine rejects zero vectors; L2, L1 and inner product accept them.
+Cosine rejects zero vectors; L2, squared L2, L1 and inner product accept them.
 `NormalizeSparseVector` applies property/index validation; `SparseDistance`
 computes distances in O(nonzeros) time without allocating dense arrays.
 
@@ -709,6 +989,49 @@ The memory and SQLite providers perform exact vector search and do not implement
 search. Typed calls return `ErrUnsupported` for this optional capability. Index
 hints are accepted for portability but do not create physical indexes in either provider. See [SQLite storage and limits](sqlite.md).
 
+### Keyword lists
+
+On master after v0.4.1, PostgreSQL also accepts `HybridSearchOptions.KeywordTerms`,
+covering the keyword-list workflow of Microsoft's
+[hybrid search contract](https://source.dot.net/Microsoft.Extensions.VectorData.Abstractions/IKeywordHybridSearchable.cs.html).
+Check `Capabilities().HybridKeywordTerms` before using this option with a provider.
+
+```go
+// collection is a typed model collection on a keyword-list-capable provider.
+options := vectordata.HybridSearchOptions{
+    TextProperty: "Body",
+    KeywordTerms: []string{"cloud costs", "caching"},
+}
+for hit, err := range collection.HybridSearchTextIter(ctx, "reduce spending", "", 3, options) {
+    if err != nil {
+        return err
+    }
+    fmt.Println(hit.Item, hit.ScoreKind, hit.Score)
+}
+```
+
+Leave the positional keyword string blank when supplying a list. A nil list keeps
+the existing string behavior; a non-nil empty list, a blank entry, or simultaneous
+nonblank positional keywords returns `ErrInvalidSearchOptions` before embedding
+or database access. List entries must be valid UTF-8 without NUL.
+
+PostgreSQL matches any entry (OR), with plain-text AND matching between the words
+within each entry. Thus the example matches documents containing both `cloud` and
+`costs`, or containing `caching`. Each entry is independently normalized using
+`plainto_tsquery('simple', ...)`; punctuation is ignored and query operators are
+not interpreted. See [PostgreSQL's plain-text query rules](https://www.postgresql.org/docs/current/textsearch-controls.html#TEXTSEARCH-PARSING-QUERIES).
+Entries producing no lexemes, such as `"---"`, add no keyword candidates. Vector
+candidates can still be returned even when the keyword side matches nothing.
+
+Terms use a bound text-array parameter, and the query retains GIN full-text index
+eligibility. Typed and dynamic dense/text/custom-input/binary/sparse hybrid APIs,
+including iterators, use the same option. Each enumeration snapshots the list
+before invoking embedding code; repeated enumerations read the current supplied
+list again. Callers must avoid concurrent mutation during enumeration. Filters,
+projection, paging, candidate limits, distance thresholds and RRF score thresholds
+keep their existing meanings. Existing string keywords continue to require all
+words through `plainto_tsquery`. Run the PostgreSQL `hybrid` recipe to see both forms.
+
 ## Verification and scope
 
 `vectordata/conformance.Run` exercises shared provider behavior. Memory and SQLite tests
@@ -746,7 +1069,7 @@ type PartialDocument struct {
 
 In dynamic records, absent/nil dense slices and missing binary/sparse map entries
 represent NULL. Non-nil empty dense slices and present zero-valued binary/sparse
-structs are validated and rejected. A valid zero sparse vector for L2/L1/inner
+structs are validated and rejected. A valid zero sparse vector for L2/squared-L2/L1/inner
 product is still a present vector. IncludeVectors reads omit missing entries;
 typed reads preserve nil pointers and slices. Writes replace the complete record,
 so an upsert with a missing optional vector clears the previous value.

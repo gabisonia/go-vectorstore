@@ -25,10 +25,20 @@ type VectorIndexCapability struct {
 // particular collection or deployment enables them. Unless stated otherwise,
 // empty slices mean no support. Built-in providers return caller-owned slices.
 type ProviderCapabilities struct {
+	// Metadata supports optional store and collection identity discovery without I/O.
+	Metadata bool
+	// ReadIterators adds native collection listing, batch reads and text search
+	// iterators. InputEmbedding/HybridSearch also add their input/hybrid iterators.
+	// This reports API support, not whether a provider buffers snapshots/results.
+	ReadIterators bool
+	// InputEmbedding supports transient/custom inputs and InputSearcher for dense vectors.
+	InputEmbedding bool
 	// OptionalVectors permits SQL NULL / missing values for every supported vector kind.
 	OptionalVectors bool
 	Backend         string
-	KeyTypes        []KeyType
+	// KeyTypes lists canonical storage types. Typed integer keys may use narrower
+	// Go widths; generated int64 keys still require a full-width typed key.
+	KeyTypes []KeyType
 	// GeneratedKeyTypes is the subset of KeyTypes that supports automatic keys.
 	GeneratedKeyTypes []KeyType
 	DataTypes         []DataType
@@ -45,6 +55,8 @@ type ProviderCapabilities struct {
 	// FullTextIndexing applies to string properties.
 	FullTextIndexing bool
 	HybridSearch     bool
+	// HybridKeywordTerms supports HybridSearchOptions.KeywordTerms on all hybrid variants.
+	HybridKeywordTerms bool
 	// MigrationPlanning describes plan generation, not migration execution.
 	MigrationPlanning bool
 	// MigrationApplication supports optional-property and index additions only.

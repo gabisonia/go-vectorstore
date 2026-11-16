@@ -6,10 +6,12 @@ model sample; then select SQLite or PostgreSQL when persistence is needed.
 | Goal | Sample | Requirements |
 | --- | --- | --- |
 | Typed CRUD, generated keys, automatic embeddings | [model-store](model-store/README.md) | None; optional SQLite/PostgreSQL |
+| Exact uint64 keys and generated UUIDs | [native-keys](native-keys/README.md) | None |
+| Custom inputs, image/audio bytes and direct string vector fields | [input-embeddings](input-embeddings/README.md) | None; deterministic fixture |
 | Durable records, optional vectors, array filters | [sqlite-store](sqlite-store/README.md) | Writable SQLite file |
 | Typed filtered text retrieval | [typed-search](typed-search/README.md) | None in fixture mode; optional OpenAI |
 | Typed retrieval and cited context for generation | [typed-rag](typed-rag/README.md) | None in fixture mode; optional OpenAI |
-| Named vectors, iterators, capabilities, hybrid, migration preview | [recipes](recipes/README.md) | None for portable recipes; PostgreSQL for hybrid/migration |
+| Named vectors, scalar/key filters, squared distance, iterators, metadata, capabilities, hybrid, migration preview | [recipes](recipes/README.md) | None for portable recipes; PostgreSQL for hybrid/migration |
 | Local model with agent-selected search/read tools | [local-doc-agent](local-doc-agent/README.md) | Docker Compose; downloads local models; separate Go 1.26+ module |
 | Original Record API semantic search | [semantic-search](semantic-search/README.md) | PostgreSQL and OpenAI key |
 | Original Record API RAG story demo | [ragrimosa](ragrimosa/README.md) | PostgreSQL and OpenAI key |
@@ -25,8 +27,11 @@ Deterministic embedders are instructional fixtures, not semantic models. Remote
 modes require explicit opt-in and can incur provider charges. The original Record
 API examples remain supported; new model applications should start with the typed
 samples. The new samples are on master and included in source versions from v0.4.1;
-their library calls use APIs available in v0.4.0. Consult GitHub releases for
-published tags.
+their library calls use APIs available in v0.4.0, except for input-embeddings,
+native-keys and the key-filter, metadata, squared-distance and updated iterator/hybrid recipes,
+which require master after v0.4.1. Consult GitHub releases for
+published tags. The scalar-query recipe also demonstrates the SQLite SQL paging
+optimization on master after v0.4.1; its public calls work on v0.4.0.
 
 ## Verification
 
