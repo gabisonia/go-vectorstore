@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+- Add optional `InputEmbedder` and typed `InputEmbeddingFunc[T]` for text, media
+  bytes and custom application inputs, with store/collection/property overrides.
+- Support transient `ModelRecord.EmbeddingInputs`, direct string vector fields,
+  and the `vector,input` tag; keep inputs out of stored records and migration plans.
+- Add `SearchInput` across memory/SQLite/PostgreSQL and PostgreSQL hybrid input
+  search, preserving text APIs, bounded batching, cancellation and atomic writes.
+- Add shared provider conformance coverage and a runnable custom-input sample.
+
 ## v0.4.1
 
 ### Production hardening

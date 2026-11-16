@@ -62,7 +62,7 @@ names, names over 63 bytes, and the reserved `__vs_` prefix are rejected.
 | --- | --- |
 | `key` | `name=<storage name>`, `type=string|int64|uuid`, `generated` |
 | `data` | `name=<storage name>`, `type=<data type>`, `optional`, `index`, `fulltext` |
-| `vector` | `name=<storage name>`, `dimensions=<n>`, `kind=dense\|binary\|sparse`, `precision=float32\|float16`, `metric=cosine\|l2\|inner_product\|l1\|hamming`, `index`, `method=hnsw\|ivfflat`, `source=<data field>`, `optional` |
+| `vector` | `name=<storage name>`, `dimensions=<n>`, `kind=dense\|binary\|sparse`, `precision=float32\|float16`, `metric=cosine\|l2\|inner_product\|l1\|hamming`, `index`, `method=hnsw\|ivfflat`, `source=<data field>`, `optional`, `input` |
 | `-` | Ignore the field |
 
 Untagged fields are ignored when inferring a definition. Exported fields and
@@ -310,6 +310,7 @@ PostgreSQL float16 storage requires pgvector 0.7+ and a visible `halfvec` type.
 
 | Feature | Memory | SQLite | PostgreSQL |
 | --- | --- | --- | --- |
+| `InputEmbedding` | True, dense outputs | True, dense outputs | True, dense outputs |
 | `OptionalVectors` | True | True | True |
 | `VectorIndexMethods` | None | None | HNSW, IVFFlat |
 | `VectorIndexCapabilities` | None | None | Supported method/metric/precision combinations and dimension/nonzero limits |
@@ -571,6 +572,77 @@ the library does not retry or undo those external calls. Text queries embed one
 input regardless of batch size.
 Callers must use compatible embedding models for ingestion and queries;
 embedders must honor cancellation and be safe for concurrent use.
+
+### Custom and multimodal inputs
+
+`InputEmbedder.EmbedInputs(ctx, inputs []any) ([][]float32, error)` accepts text,
+image/audio bytes, and application values. `InputEmbeddingFunc[T]` adapts a typed
+function and rejects nil values or type mismatches before invoking that function
+for a batch. Actual media decoding and model calls belong to your embedder.
+Outputs are still dense float32 vectors, optionally stored at float16 precision;
+automatic binary/sparse generation and database-side generation are unsupported.
+
+Configure `InputEmbedder` on `StoreOptions`, `ModelCollectionOptions` or
+`VectorProperty`. Resolution is property → collection → store, across both kinds
+of embedder. A text embedder at a higher level replaces an inherited input embedder
+and vice versa. Configure only one kind at each level; ambiguous options fail with
+`ErrInvalidEmbeddingOptions` (ambiguous property definitions fail with
+`ErrSchemaMismatch`). Nil and typed-nil values inherit the next default.
+
+For example, your application can supply image bytes:
+
+```go
+embedder := vectordata.InputEmbeddingFunc[[]byte](
+    func(ctx context.Context, images [][]byte) ([][]float32, error) {
+        return imageModel.Embed(ctx, images) // Your application's model adapter.
+    })
+options := vectordata.ModelCollectionOptions{InputEmbedder: embedder, EmbeddingBatchSize: 32}
+```
+
+A dense vector field of type `string` is an embedding input automatically. Other
+input types require the `input` tag, including custom structs and image/audio
+byte slices. Optional string pointers supply the dereferenced string; other
+custom pointer inputs retain their type. The field's type must match the typed
+adapter. Define separate vector properties or a common application input type
+when a generator needs to accept multiple media types.
+
+```go
+type Photo struct {
+    ID    string `vectordata:"key"`
+    Title string `vectordata:"data"`
+    Image []byte `vectordata:"vector,input,dimensions=1536"`
+}
+```
+
+Input fields are never stored or decoded: they have their zero value on reads,
+even with `IncludeVectors`. Add separate data properties for sources you need to
+retrieve. A normal `[]float32` field with the same logical name can read the stored
+vector using the same definition. The `input` tag changes mapping, not schema.
+It cannot be combined with `source` or a binary/sparse vector kind.
+
+Dynamic records supply transient values in `ModelRecord.EmbeddingInputs`, keyed
+by dense vector property name. This map is excluded from JSON and consumed during
+batch preparation; providers never store or return it. Explicit vectors take
+precedence over input values. Otherwise a transient input overrides `SourceProperty`;
+the latter can name any native data property. Native sources reach the embedder
+in canonical form (for example, JSON objects are maps rather than custom structs).
+The original text `Embedder` continues to require a string source. Unknown input
+properties and inputs for binary/sparse properties fail before any embedding call.
+A nil input omits an optional vector; it is an error for a required vector.
+
+Built-in collections implement optional `InputSearcher.SearchInput` and PostgreSQL
+also implements `InputHybridSearcher.HybridSearchInput`. The typed wrapper exposes
+both methods and returns `ErrUnsupported` for third-party providers without those
+interfaces. `SearchText` and `HybridSearchText` remain text convenience methods and
+use the same resolved generator. Queries always embed one input. Options and
+filters are validated before invoking a generator; existing batch limits, output
+validation, cancellation, and atomic write guarantees apply to input embeddings.
+
+Mutable inputs are borrowed read-only during the call: generators must not mutate
+or retain them, and callers must not change them concurrently. The library copies
+generated vectors before storing or returning them, so generators may reuse output
+buffers on later calls. Runtime generators never enter registrations or migration
+plans. See the runnable [custom-input sample](../samples/input-embeddings/README.md).
 
 ## Binary vectors
 

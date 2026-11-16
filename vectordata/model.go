@@ -69,9 +69,11 @@ type VectorProperty struct {
 	Precision VectorPrecision `json:",omitempty"`
 	Metric    DistanceMetric
 	Index     *VectorIndexOptions
-	// SourceProperty names a string data property used for automatic embedding.
+	// SourceProperty names a data property used for automatic embedding.
+	// The legacy Embedder requires a string; InputEmbedder accepts other native values.
 	SourceProperty string
-	Embedder       Embedder `json:"-"`
+	Embedder       Embedder      `json:"-"`
+	InputEmbedder  InputEmbedder `json:"-"`
 }
 
 // CollectionDefinition is shared by mapping, schema creation, validation and search.
@@ -93,6 +95,10 @@ type ModelRecord struct {
 	Vectors       map[string][]float32
 	BinaryVectors map[string]BinaryVector `json:",omitempty"`
 	SparseVectors map[string]SparseVector `json:",omitempty"`
+	// EmbeddingInputs supplies transient inputs by dense vector property name.
+	// Explicit vectors take precedence. Inputs are consumed before storage and
+	// are never persisted or returned. Mutable inputs are borrowed read-only.
+	EmbeddingInputs map[string]any `json:"-"`
 }
 
 // Embedder generates one vector for each input, preserving input order. Implementations must honor ctx.
@@ -106,7 +112,8 @@ func (f EmbeddingFunc) Embed(ctx context.Context, inputs []string) ([][]float32,
 }
 
 type ModelCollectionOptions struct {
-	Embedder Embedder
+	Embedder      Embedder
+	InputEmbedder InputEmbedder
 	// EmbeddingBatchSize bounds inputs per embedding request for each property.
 	// Zero inherits the store default, or uses one request when no default is set.
 	// Positive values override the store default; negative values are invalid.
@@ -119,8 +126,12 @@ func (o ModelCollectionOptions) WithDefaults(defaults ModelCollectionOptions) (M
 	if o.EmbeddingBatchSize < 0 || defaults.EmbeddingBatchSize < 0 {
 		return ModelCollectionOptions{}, fmt.Errorf("%w: embedding batch size must be nonnegative", ErrInvalidEmbeddingOptions)
 	}
-	if isNilValue(o.Embedder) {
+	if !isNilValue(o.Embedder) && !isNilValue(o.InputEmbedder) || !isNilValue(defaults.Embedder) && !isNilValue(defaults.InputEmbedder) {
+		return ModelCollectionOptions{}, fmt.Errorf("%w: configure either Embedder or InputEmbedder at each level", ErrInvalidEmbeddingOptions)
+	}
+	if isNilValue(o.Embedder) && isNilValue(o.InputEmbedder) {
 		o.Embedder = defaults.Embedder
+		o.InputEmbedder = defaults.InputEmbedder
 	}
 	if o.EmbeddingBatchSize == 0 {
 		o.EmbeddingBatchSize = defaults.EmbeddingBatchSize
@@ -278,6 +289,9 @@ func (d CollectionDefinition) Normalize() (CollectionDefinition, error) {
 	}
 	for i := range d.Vectors {
 		p := &d.Vectors[i]
+		if !isNilValue(p.Embedder) && !isNilValue(p.InputEmbedder) {
+			return fail("configure either Embedder or InputEmbedder per vector property")
+		}
 		if p.StorageName == "" {
 			p.StorageName = p.Name
 		}
@@ -296,14 +310,14 @@ func (d CollectionDefinition) Normalize() (CollectionDefinition, error) {
 			return fail("unsupported vector kind")
 		}
 		if p.Kind == VectorBinary {
-			if p.Metric != DistanceHamming || p.Precision != "" || p.SourceProperty != "" || !isNilValue(p.Embedder) || p.Dimensions > 64000 {
+			if p.Metric != DistanceHamming || p.Precision != "" || p.SourceProperty != "" || !isNilValue(p.Embedder) || !isNilValue(p.InputEmbedder) || p.Dimensions > 64000 {
 				return fail("binary vectors require Hamming distance, no float precision/embedder, and at most 64000 bits")
 			}
 		} else if p.Metric == DistanceHamming {
 			return fail("Hamming distance requires a binary vector")
 		}
 		if p.Kind == VectorSparse {
-			if p.Precision != "" && p.Precision != VectorFloat32 || p.SourceProperty != "" || !isNilValue(p.Embedder) || p.Dimensions > MaxSparseDimensions || p.Index != nil && p.Index.Method == IndexMethodIVFFlat {
+			if p.Precision != "" && p.Precision != VectorFloat32 || p.SourceProperty != "" || !isNilValue(p.Embedder) || !isNilValue(p.InputEmbedder) || p.Dimensions > MaxSparseDimensions || p.Index != nil && p.Index.Method == IndexMethodIVFFlat {
 				return fail("sparse vectors require float32, explicit values, at most 1 billion dimensions, and HNSW indexes")
 			}
 		}
@@ -354,12 +368,12 @@ func (d CollectionDefinition) Normalize() (CollectionDefinition, error) {
 		if p.SourceProperty != "" {
 			found := false
 			for _, field := range d.Data {
-				if field.Name == p.SourceProperty && field.Type == TypeString {
+				if field.Name == p.SourceProperty {
 					found = true
 				}
 			}
 			if !found {
-				return fail("embedding source must name a string data property")
+				return fail("embedding source must name a data property")
 			}
 		}
 	}
@@ -604,6 +618,15 @@ func PrepareModelRecords(ctx context.Context, d CollectionDefinition, opts Model
 				out[i].Vectors[name] = append([]float32{}, vector...)
 			}
 		}
+		for name := range r.EmbeddingInputs {
+			found := false
+			for _, p := range d.Vectors {
+				found = found || p.Name == name && p.Kind != VectorBinary && p.Kind != VectorSparse
+			}
+			if !found {
+				return nil, fmt.Errorf("%w: unknown/non-dense embedding input %q", ErrInvalidRecord, name)
+			}
+		}
 		for name := range r.BinaryVectors {
 			found := false
 			for _, p := range d.Vectors {
@@ -658,19 +681,22 @@ func PrepareModelRecords(ctx context.Context, d CollectionDefinition, opts Model
 			continue
 		}
 		var positions []int
-		var inputs []string
+		var inputs []any
 		for i := range out {
-			if out[i].Vectors[p.Name] == nil && p.Optional && (p.SourceProperty == "" || out[i].Data[p.SourceProperty] == nil) {
+			input, hasInput := records[i].EmbeddingInputs[p.Name]
+			if !hasInput && p.SourceProperty != "" {
+				input, hasInput = out[i].Data[p.SourceProperty]
+			}
+			if out[i].Vectors[p.Name] == nil && p.Optional && (!hasInput || isNilValue(input)) {
 				delete(out[i].Vectors, p.Name)
 				continue
 			}
-			if len(out[i].Vectors[p.Name]) == 0 && p.SourceProperty != "" && (!p.Optional || out[i].Vectors[p.Name] == nil) {
-				value, ok := out[i].Data[p.SourceProperty].(string)
-				if !ok {
-					return nil, fmt.Errorf("%w: missing embedding source %q", ErrInvalidRecord, p.SourceProperty)
+			if len(out[i].Vectors[p.Name]) == 0 && hasInput && (!p.Optional || out[i].Vectors[p.Name] == nil) {
+				if isNilValue(input) {
+					return nil, fmt.Errorf("%w: missing embedding input for %q", ErrInvalidRecord, p.Name)
 				}
 				positions = append(positions, i)
-				inputs = append(inputs, value)
+				inputs = append(inputs, input)
 			} else {
 				vector, err := NormalizeModelVector(out[i].Vectors[p.Name], p)
 				if err != nil {
@@ -680,13 +706,6 @@ func PrepareModelRecords(ctx context.Context, d CollectionDefinition, opts Model
 			}
 		}
 		if len(inputs) > 0 {
-			embedder := p.Embedder
-			if isNilValue(embedder) {
-				embedder = opts.Embedder
-			}
-			if isNilValue(embedder) {
-				return nil, fmt.Errorf("%w: no embedder for %q", ErrUnsupported, p.Name)
-			}
 			batchSize := opts.EmbeddingBatchSize
 			if batchSize == 0 {
 				batchSize = len(inputs)
@@ -696,7 +715,7 @@ func PrepareModelRecords(ctx context.Context, d CollectionDefinition, opts Model
 					return nil, err
 				}
 				end := start + min(batchSize, len(inputs)-start)
-				vectors, err := embedder.Embed(ctx, inputs[start:end:end])
+				vectors, err := embedInputs(ctx, inputs[start:end:end], p, opts)
 				if err != nil {
 					return nil, err
 				}
@@ -724,34 +743,10 @@ func PrepareModelRecords(ctx context.Context, d CollectionDefinition, opts Model
 	}
 	return out, nil
 }
+
+// EmbedQuery is the text convenience form of EmbedInputQuery.
 func EmbedQuery(ctx context.Context, text string, p VectorProperty, opts ModelCollectionOptions) ([]float32, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	if p.Kind == VectorBinary || p.Kind == VectorSparse {
-		return nil, fmt.Errorf("%w: binary/sparse queries require explicit vector values", ErrUnsupported)
-	}
-	if _, err := opts.WithDefaults(ModelCollectionOptions{}); err != nil {
-		return nil, err
-	}
-	embedder := p.Embedder
-	if isNilValue(embedder) {
-		embedder = opts.Embedder
-	}
-	if isNilValue(embedder) {
-		return nil, fmt.Errorf("%w: text search requires an embedder", ErrUnsupported)
-	}
-	vectors, err := embedder.Embed(ctx, []string{text})
-	if err != nil {
-		return nil, err
-	}
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	if len(vectors) != 1 {
-		return nil, fmt.Errorf("%w: expected one query embedding", ErrInvalidVector)
-	}
-	return NormalizeModelVector(vectors[0], p)
+	return EmbedInputQuery(ctx, text, p, opts)
 }
 func ValidateModelSearchOptions(top int, opts ModelSearchOptions) error {
 	if top <= 0 || opts.Skip < 0 || top > int(^uint(0)>>1)-opts.Skip {

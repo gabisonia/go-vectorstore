@@ -15,7 +15,7 @@ func TestModelContract(t *testing.T) {
 
 func TestEmbeddingConfiguration(t *testing.T) {
 	conformance.RunEmbeddingConfiguration(t, func(t *testing.T, defaults vectordata.ModelCollectionOptions) vectordata.ModelStore {
-		store, err := memory.NewWithOptions(memory.StoreOptions{Embedder: defaults.Embedder, EmbeddingBatchSize: defaults.EmbeddingBatchSize})
+		store, err := memory.NewWithOptions(memory.StoreOptions{Embedder: defaults.Embedder, InputEmbedder: defaults.InputEmbedder, EmbeddingBatchSize: defaults.EmbeddingBatchSize})
 		if err != nil {
 			t.Fatal(err)
 		}

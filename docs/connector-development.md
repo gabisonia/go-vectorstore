@@ -285,6 +285,16 @@ factory receives embedding defaults and must return an isolated store configured
 with them. It verifies override precedence, batching, text/hybrid queries and
 atomic insert/upsert behavior after embedding errors or cancellation.
 
+For custom inputs, resolve `InputEmbedder` alongside `Embedder` at each level;
+`WithDefaults` rejects ambiguous options and handles cross-kind overrides. Pass
+`ModelRecord.EmbeddingInputs` to `PrepareModelRecords` and store only its prepared
+output. Advertise `InputEmbedding` only when the collection implements optional
+`InputSearcher`; use `EmbedInputQuery` after validating search options and filters.
+Implement `InputHybridSearcher` when hybrid input search is available. The embedding
+configuration suite also exercises byte/native/custom inputs, direct string
+fields, transient-input ownership, migration-plan stripping and atomic failures
+when this capability is advertised. Its factory must propagate `InputEmbedder`.
+
 
 ## Optional vectors and array set filters
 

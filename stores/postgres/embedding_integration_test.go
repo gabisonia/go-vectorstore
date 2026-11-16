@@ -14,6 +14,7 @@ func TestIntegrationEmbeddingConfiguration(t *testing.T) {
 		base := newTestStore(t, integrationPool(t))
 		opts := base.opts
 		opts.Embedder = defaults.Embedder
+		opts.InputEmbedder = defaults.InputEmbedder
 		opts.EmbeddingBatchSize = defaults.EmbeddingBatchSize
 		store, err := NewVectorStore(base.pool, opts)
 		if err != nil {

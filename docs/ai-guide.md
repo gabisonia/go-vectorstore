@@ -87,6 +87,7 @@ part of CI. Replace panic with returned/handled errors in application code.
 | Typed CRUD and generated keys | [model-store](../samples/model-store/main.go) | EnsureTypedModelCollection, Upsert, GetMany, Delete |
 | Persistent embedded data | [sqlite-store](../samples/sqlite-store/main.go), [SQLite example](../stores/sqlite/example_test.go) | sqlite.Open, GetTypedModelCollection, Get |
 | Automatic embeddings and filtered retrieval | [typed-search](../samples/typed-search/main.go), [model and adapters](../samples/internal/demo/demo.go) | source tag, Embedder, SearchText, Column |
+| Custom/multimodal embedding inputs | [input-embeddings](../samples/input-embeddings/main.go) | InputEmbeddingFunc, vector,input tag, SearchInput; master after v0.4.1 |
 | Retrieve sources for generation | [typed-rag](../samples/typed-rag/main.go) | SearchText, TypedModelSearchResult.Item |
 | Named vectors and projections | [recipes](../samples/recipes/main.go), [executable examples](../vectordata/example_test.go) | VectorProperty, IncludeVectors |
 | Early iteration/cancellation | [recipes](../samples/recipes/main.go) | QueryIter, context.WithCancel, errors.Is |

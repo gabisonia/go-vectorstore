@@ -114,7 +114,7 @@ func (s *PostgresVectorStore) DeleteCollection(ctx context.Context, name string)
 	return tx.Commit(ctx)
 }
 func (s *PostgresVectorStore) GetModelCollection(name string, definition vectordata.CollectionDefinition, opts vectordata.ModelCollectionOptions) (vectordata.ModelCollection, error) {
-	opts, err := opts.WithDefaults(vectordata.ModelCollectionOptions{Embedder: s.opts.Embedder, EmbeddingBatchSize: s.opts.EmbeddingBatchSize})
+	opts, err := opts.WithDefaults(vectordata.ModelCollectionOptions{Embedder: s.opts.Embedder, InputEmbedder: s.opts.InputEmbedder, EmbeddingBatchSize: s.opts.EmbeddingBatchSize})
 	if err != nil {
 		return nil, err
 	}
@@ -305,6 +305,7 @@ func definitionJSON(d vectordata.CollectionDefinition) ([]byte, error) {
 	d = d.Clone()
 	for i := range d.Vectors {
 		d.Vectors[i].Embedder = nil
+		d.Vectors[i].InputEmbedder = nil
 	}
 	return json.Marshal(d)
 }

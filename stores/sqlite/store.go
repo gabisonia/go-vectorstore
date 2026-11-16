@@ -26,6 +26,7 @@ import (
 // FULL synchronization, foreign keys, and context-aware lock waits up to five seconds.
 type StoreOptions struct {
 	Embedder           vectordata.Embedder
+	InputEmbedder      vectordata.InputEmbedder
 	EmbeddingBatchSize int
 }
 
@@ -36,12 +37,13 @@ type Store struct {
 
 var _ vectordata.ModelStore = (*Store)(nil)
 var _ vectordata.CapabilityProvider = (*Store)(nil)
+var _ vectordata.InputSearcher = (*Collection)(nil)
 
 // Open opens a database file (or a private :memory: database), creating the
 // provider tables if needed. Paths are literal filenames, not driver DSNs.
 // Close must be called when the store is no longer needed.
 func Open(ctx context.Context, path string, opts StoreOptions) (*Store, error) {
-	defaults, err := (vectordata.ModelCollectionOptions{Embedder: opts.Embedder, EmbeddingBatchSize: opts.EmbeddingBatchSize}).WithDefaults(vectordata.ModelCollectionOptions{})
+	defaults, err := (vectordata.ModelCollectionOptions{Embedder: opts.Embedder, InputEmbedder: opts.InputEmbedder, EmbeddingBatchSize: opts.EmbeddingBatchSize}).WithDefaults(vectordata.ModelCollectionOptions{})
 	if err != nil {
 		return nil, err
 	}

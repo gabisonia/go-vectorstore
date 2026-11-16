@@ -65,6 +65,38 @@ func ExampleEmbeddingFunc() {
 	// Output: guide similarity
 }
 
+func ExampleInputEmbeddingFunc() {
+	type Photo struct {
+		ID    string `vectordata:"key"`
+		Image []byte `vectordata:"vector,input,dimensions=2,metric=l2"`
+	}
+	// A deterministic fixture; supply an image model in a real application.
+	embedder := vectordata.InputEmbeddingFunc[[]byte](func(ctx context.Context, images [][]byte) ([][]float32, error) {
+		out := make([][]float32, len(images))
+		for i, image := range images {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+			out[i] = []float32{float32(len(image)), 1}
+		}
+		return out, nil
+	})
+	ctx := context.Background()
+	photos, err := vectordata.EnsureTypedModelCollection[string, Photo](ctx, memory.New(), "photos", nil, vectordata.ModelCollectionOptions{InputEmbedder: embedder})
+	if err != nil {
+		panic(err)
+	}
+	if _, err := photos.Upsert(ctx, []Photo{{ID: "cat", Image: []byte{1, 2, 3}}}); err != nil {
+		panic(err)
+	}
+	hits, err := photos.SearchInput(ctx, []byte{4, 5, 6}, 1, vectordata.ModelSearchOptions{})
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(hits[0].Item.ID, hits[0].Distance, len(hits[0].Item.Image))
+	// Output: cat 0 0
+}
+
 func Example_namedVectors() {
 	type Document struct {
 		ID    string    `vectordata:"key"`

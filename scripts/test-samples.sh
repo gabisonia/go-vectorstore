@@ -6,6 +6,7 @@ sample_tmp="$(mktemp -d)"
 trap 'rm -rf "$sample_tmp"' EXIT
 
 go run ./samples/model-store
+go run ./samples/input-embeddings
 go run ./samples/model-store -sqlite "$sample_tmp/models.db"
 go run ./samples/sqlite-store -db "$sample_tmp/documents.db"
 go run ./samples/sqlite-store -db "$sample_tmp/documents.db"

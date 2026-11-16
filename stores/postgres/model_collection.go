@@ -25,6 +25,8 @@ type ModelCollection struct {
 
 var _ vectordata.ModelCollection = (*ModelCollection)(nil)
 var _ vectordata.HybridSearcher = (*ModelCollection)(nil)
+var _ vectordata.InputSearcher = (*ModelCollection)(nil)
+var _ vectordata.InputHybridSearcher = (*ModelCollection)(nil)
 
 func (c *ModelCollection) Name() string                                { return c.name }
 func (c *ModelCollection) Definition() vectordata.CollectionDefinition { return c.definition.Clone() }

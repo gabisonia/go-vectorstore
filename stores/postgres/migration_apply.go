@@ -191,7 +191,9 @@ func validateAdditiveMigration(plan vectordata.MigrationPlan) error {
 		old.Index = nil
 		next.Index = nil
 		old.Embedder = nil
+		old.InputEmbedder = nil
 		next.Embedder = nil
+		next.InputEmbedder = nil
 		if old != next {
 			return deny(old.Name)
 		}
