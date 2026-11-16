@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Add optional hybrid `KeywordTerms` lists with PostgreSQL plain-text OR groups,
+  validation before embedding, caller-owned snapshots and capability discovery.
+  Support all hybrid slice/iterator variants while preserving string queries.
 - Accept narrower signed/unsigned integer keys and named types in typed model
   collections. Check custom-codec key overflow before provider writes, preserving
   whole-batch rejection; generated integer keys still require 64-bit bindings.

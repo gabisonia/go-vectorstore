@@ -75,6 +75,7 @@ func (c *ModelCollection) SearchInputIter(ctx context.Context, input any, top in
 
 func (c *ModelCollection) HybridSearchIter(ctx context.Context, vector []float32, keywords string, top int, opts vectordata.HybridSearchOptions) iter.Seq2[vectordata.ModelSearchResult, error] {
 	return c.plannedSearchIter(ctx, opts.ModelSearchOptions, true, func() (string, []any, vectordata.VectorProperty, error) {
+		opts := snapshotHybridOptions(opts)
 		return c.hybridPlan(vector, keywords, top, opts)
 	})
 }
@@ -83,6 +84,7 @@ func (c *ModelCollection) HybridSearchTextIter(ctx context.Context, text, keywor
 }
 func (c *ModelCollection) HybridSearchInputIter(ctx context.Context, input any, keywords string, top int, opts vectordata.HybridSearchOptions) iter.Seq2[vectordata.ModelSearchResult, error] {
 	return c.plannedSearchIter(ctx, opts.ModelSearchOptions, true, func() (string, []any, vectordata.VectorProperty, error) {
+		opts := snapshotHybridOptions(opts)
 		config, err := c.validateHybridOptions(keywords, top, opts)
 		if err != nil {
 			return "", nil, config.vector, err
@@ -96,6 +98,7 @@ func (c *ModelCollection) HybridSearchInputIter(ctx context.Context, input any, 
 }
 func (c *ModelCollection) HybridSearchBinaryIter(ctx context.Context, vector vectordata.BinaryVector, keywords string, top int, opts vectordata.HybridSearchOptions) iter.Seq2[vectordata.ModelSearchResult, error] {
 	return c.plannedSearchIter(ctx, opts.ModelSearchOptions, true, func() (string, []any, vectordata.VectorProperty, error) {
+		opts := snapshotHybridOptions(opts)
 		config, err := c.validateHybridOptions(keywords, top, opts)
 		if err != nil {
 			return "", nil, config.vector, err
@@ -109,6 +112,7 @@ func (c *ModelCollection) HybridSearchBinaryIter(ctx context.Context, vector vec
 }
 func (c *ModelCollection) HybridSearchSparseIter(ctx context.Context, vector vectordata.SparseVector, keywords string, top int, opts vectordata.HybridSearchOptions) iter.Seq2[vectordata.ModelSearchResult, error] {
 	return c.plannedSearchIter(ctx, opts.ModelSearchOptions, true, func() (string, []any, vectordata.VectorProperty, error) {
+		opts := snapshotHybridOptions(opts)
 		config, err := c.validateHybridOptions(keywords, top, opts)
 		if err != nil {
 			return "", nil, config.vector, err

@@ -18,6 +18,7 @@ func runCapabilities(t *testing.T, factory Factory) {
 		t.Skip("provider does not expose optional capability metadata")
 	}
 	caps := provider.Capabilities()
+	t.Run("hybrid_keyword_terms", func(t *testing.T) { runHybridKeywordTerms(t, factory, caps) })
 	t.Run("metadata", func(t *testing.T) { runMetadata(t, factory, caps) })
 	t.Run("read_iterators", func(t *testing.T) { runReadIterators(t, factory, caps) })
 	t.Run("native_keys", func(t *testing.T) { runNativeKeys(t, factory, caps) })

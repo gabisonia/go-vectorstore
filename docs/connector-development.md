@@ -279,6 +279,15 @@ ordinary and hybrid plans, including relaxed IVFFlat ordering. A metric change
 still requires manual review even when operator classes match. SQLite persists
 the new metric in format 1; no vector representation changes are needed.
 
+Advertise `HybridKeywordTerms` only when `HybridSearchOptions.KeywordTerms` works
+through every advertised hybrid slice/iterator variant. PostgreSQL combines plain
+queries with OR between entries and AND within entries, binding the list as data.
+Reject empty lists, invalid/blank entries and conflicting positional keywords
+before embedding or storage access. Preserve nil-list string compatibility,
+caller ownership, enumeration snapshots and existing candidate/RRF semantics.
+Shared conformance exercises every supported vector/input form and list snapshots
+across embedding callbacks; PostgreSQL plan checks cover full-text index use.
+
 Implement `StoreMetadataProvider` and `CollectionMetadataProvider` to expose
 configured identity through `StoreMetadata`/`CollectionMetadata`. Advertise
 `Capabilities().Metadata` only when both are available. Keep discovery local,

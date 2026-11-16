@@ -44,6 +44,10 @@ func TestIntegrationModelQueryIndexes(t *testing.T) {
 			q, a, _, err := c.hybridPlan(vector, "orchid", 10, vectordata.HybridSearchOptions{})
 			return q, a, err
 		}, indexes: []string{"idx_models_Vector_hnsw", "idx_models_Body_fts"}},
+		{name: "hybrid keyword terms", plan: func() (string, []any, error) {
+			q, a, _, err := c.hybridPlan(vector, "", 10, vectordata.HybridSearchOptions{KeywordTerms: []string{"orchid", "nonexistent"}})
+			return q, a, err
+		}, indexes: []string{"idx_models_Vector_hnsw", "idx_models_Body_fts"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
