@@ -9,6 +9,23 @@ import (
 	"github.com/gabisonia/go-vectorstore/vectordata"
 )
 
+func Example_integerKeyWidths() {
+	type Sensor struct {
+		ID int16 `vectordata:"key"`
+	}
+	ctx := context.Background()
+	collection, err := vectordata.EnsureTypedModelCollection[int16, Sensor](ctx, memory.New(), "sensors", nil, vectordata.ModelCollectionOptions{})
+	if err != nil {
+		panic(err)
+	}
+	keys, err := collection.Insert(ctx, []Sensor{{ID: -32768}, {ID: 32767}})
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("%T %v\n", keys, keys)
+	// Output: []int16 [-32768 32767]
+}
+
 func Example_getMetadata() {
 	type Document struct {
 		ID string `vectordata:"key"`

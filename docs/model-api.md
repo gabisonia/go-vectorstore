@@ -73,18 +73,29 @@ does not require tags.
 Supported native key types are string, int64, uint64 and UUID. UUID keys can be
 strings or compatible types with text mapping. PostgreSQL stores these as `text`,
 `bigint`, `numeric(20,0)` and `uuid`, rather than stringifying all keys into a text
-column. Unsigned fields infer `KeyUint64`; typed wrappers use `uint64` (including
-defined types) or a 64-bit `uint`. Values from 0 to 18446744073709551615 retain
+column. Unsigned fields infer `KeyUint64`. Values from 0 to 18446744073709551615 retain
 their exact identity across writes, reads, filters, ordering and deletes. Native
 integer arguments are accepted when in range; floats, numeric strings and negative
 values are rejected for uint64 keys. SQLite decodes unsigned JSON keys directly
 into uint64, preserving values above 2^53 and MaxInt64 after reopening a file.
+
+On master after v0.4.1, non-generated typed integer keys support `int8`, `int16`,
+`int32`, `int`, `int64`, `uint8`, `uint16`, `uint32`, `uint`, `uint64` and named
+types. For example, an `int32` key field can use `TypedModelCollection[int32, T]`.
+Signed widths map to canonical `KeyInt64`; unsigned widths map to `KeyUint64`.
+Capabilities report those storage types rather than every Go width. Insert/Upsert
+return the selected `[]K` type. If a custom codec emits a key outside K's range,
+the entire batch fails with `ErrInvalidRecord` before provider writes or embedding
+generation. Reading a stored key that cannot fit the model field returns a decode
+error rather than narrowing it. This adds no storage format or schema migration.
 
 `key,generated` supports int64-compatible fields and UUID fields. PostgreSQL uses
 identity columns for int64 keys. All providers generate random version 4 UUIDs
 in the application, then insert them as explicit values; no database UUID default
 or additional extension is required. Unsigned and arbitrary string generation
 are unsupported. Use `type=uuid` explicitly for string UUID fields.
+Generated integer fields and the typed key parameter must both have 64 bits;
+narrower generated bindings fail with `ErrSchemaMismatch` before storage creation.
 
 A zero generated key field in a tagged model (or a nil `ModelRecord.Key`) requests
 a new key. An explicit dynamic key, including an all-zero UUID string, is preserved.

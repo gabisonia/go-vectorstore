@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Accept narrower signed/unsigned integer keys and named types in typed model
+  collections. Check custom-codec key overflow before provider writes, preserving
+  whole-batch rejection; generated integer keys still require 64-bit bindings.
 - Add optional store/collection identity metadata across all providers and both
   typed wrappers, with system/database/namespace names, local snapshots and
   compatibility fallbacks. Include lifecycle conformance and a metadata recipe.

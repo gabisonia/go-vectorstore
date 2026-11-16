@@ -36,7 +36,9 @@ type ProviderCapabilities struct {
 	// OptionalVectors permits SQL NULL / missing values for every supported vector kind.
 	OptionalVectors bool
 	Backend         string
-	KeyTypes        []KeyType
+	// KeyTypes lists canonical storage types. Typed integer keys may use narrower
+	// Go widths; generated int64 keys still require a full-width typed key.
+	KeyTypes []KeyType
 	// GeneratedKeyTypes is the subset of KeyTypes that supports automatic keys.
 	GeneratedKeyTypes []KeyType
 	DataTypes         []DataType

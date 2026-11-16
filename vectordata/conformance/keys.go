@@ -20,6 +20,7 @@ type unsignedModel struct {
 }
 
 func runNativeKeys(t *testing.T, factory Factory, caps vectordata.ProviderCapabilities) {
+	t.Run("integer_widths", func(t *testing.T) { runIntegerKeys(t, factory, caps) })
 	if slices.Contains(caps.KeyTypes, vectordata.KeyUint64) {
 		t.Run("uint64", func(t *testing.T) {
 			ctx := context.Background()

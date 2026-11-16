@@ -1,4 +1,4 @@
-// Demonstrates exact unsigned keys and generated UUID keys without credentials.
+// Demonstrates typed integer keys and generated UUID keys without credentials.
 package main
 
 import (
@@ -17,6 +17,10 @@ type Event struct {
 	Body string `vectordata:"data"`
 }
 
+type Sensor struct {
+	ID int32 `vectordata:"key"`
+}
+
 type Document struct {
 	ID   string `vectordata:"key,type=uuid,generated"`
 	Body string `vectordata:"data"`
@@ -26,6 +30,15 @@ func run() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	store := memory.New()
+	sensors, err := vectordata.EnsureTypedModelCollection[int32, Sensor](ctx, store, "sensors", nil, vectordata.ModelCollectionOptions{})
+	if err != nil {
+		return err
+	}
+	sensorKeys, err := sensors.Insert(ctx, []Sensor{{ID: math.MaxInt32}})
+	if err != nil {
+		return err
+	}
+	fmt.Printf("Typed int32 key: %d\n", sensorKeys[0])
 	events, err := vectordata.EnsureTypedModelCollection[uint64, Event](ctx, store, "events", nil, vectordata.ModelCollectionOptions{})
 	if err != nil {
 		return err
