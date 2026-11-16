@@ -1,0 +1,5 @@
+.git
+*.db
+*.db-*
+README.md
+docs

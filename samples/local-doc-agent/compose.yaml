@@ -1,0 +1,64 @@
+name: vector-doc-agent
+
+services:
+  ollama:
+    image: ollama/ollama:0.40.16
+    environment:
+      OLLAMA_HOST: 0.0.0.0:11434
+      OLLAMA_NO_CLOUD: '1'
+      OLLAMA_CONTEXT_LENGTH: '4096'
+      OLLAMA_NUM_PARALLEL: '1'
+      OLLAMA_MAX_LOADED_MODELS: '2'
+    volumes:
+      - models:/root/.ollama
+    healthcheck:
+      test: ['CMD', 'ollama', 'list']
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    # Inference stays on the Compose network; no host port or API key is needed.
+
+  models:
+    image: ollama/ollama:0.40.16
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+      SOURCE_CHAT_MODEL: ${CHAT_MODEL:-qwen3:4b-instruct}
+      MODEL_THREADS: ${MODEL_THREADS:-4}
+      EMBED_MODEL: ${EMBED_MODEL:-all-minilm:22m}
+    volumes:
+      - ./setup-models.sh:/setup-models.sh:ro
+    entrypoint: ['/bin/sh', '/setup-models.sh']
+
+  agent:
+    build: .
+    depends_on:
+      models:
+        condition: service_completed_successfully
+    environment:
+      OLLAMA_URL: http://ollama:11434
+      CHAT_MODEL: doc-agent-chat
+      EMBED_MODEL: ${EMBED_MODEL:-all-minilm:22m}
+      EMBED_DIMENSIONS: ${EMBED_DIMENSIONS:-384}
+      REQUEST_TIMEOUT: ${REQUEST_TIMEOUT:-5m}
+      DOCS_DIR: /docs
+      DATABASE_PATH: /data/documents.db
+      AGENT_FRAMEWORK_USER_AGENT_DISABLED: 'true'
+    volumes:
+      - ./docs:/docs:ro
+      - index:/data
+    stdin_open: true
+    tty: true
+    command: ['ask', 'Can SQLite do hybrid search? What should I use instead? Cite the documentation.']
+
+volumes:
+  models:
+  index:
+
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: ${DEMO_SUBNET:-10.254.249.0/24}
