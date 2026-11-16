@@ -11,7 +11,7 @@ model sample; then select SQLite or PostgreSQL when persistence is needed.
 | Durable records, optional vectors, array filters | [sqlite-store](sqlite-store/README.md) | Writable SQLite file |
 | Typed filtered text retrieval | [typed-search](typed-search/README.md) | None in fixture mode; optional OpenAI |
 | Typed retrieval and cited context for generation | [typed-rag](typed-rag/README.md) | None in fixture mode; optional OpenAI |
-| Named vectors, key filters, squared distance, iterators, metadata, capabilities, hybrid, migration preview | [recipes](recipes/README.md) | None for portable recipes; PostgreSQL for hybrid/migration |
+| Named vectors, scalar/key filters, squared distance, iterators, metadata, capabilities, hybrid, migration preview | [recipes](recipes/README.md) | None for portable recipes; PostgreSQL for hybrid/migration |
 | Original Record API semantic search | [semantic-search](semantic-search/README.md) | PostgreSQL and OpenAI key |
 | Original Record API RAG story demo | [ragrimosa](ragrimosa/README.md) | PostgreSQL and OpenAI key |
 
@@ -29,7 +29,8 @@ samples. The new samples are on master and included in source versions from v0.4
 their library calls use APIs available in v0.4.0, except for input-embeddings,
 native-keys and the key-filter, metadata, squared-distance and updated iterator/hybrid recipes,
 which require master after v0.4.1. Consult GitHub releases for
-published tags.
+published tags. The scalar-query recipe also demonstrates the SQLite SQL paging
+optimization on master after v0.4.1; its public calls work on v0.4.0.
 
 ## Verification
 

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Push supported SQLite scalar filtering, ordering and paging into SQL, decoding
+  only the returned page and counting without vector decoding. Preserve native
+  keys, float64 precision, NULL semantics, WAL snapshots and codec reentry; retain
+  whole-snapshot fallback for unsupported types. Add benchmarks and a portable
+  `scalar-query` recipe without changing storage format or adding property indexes.
 - Accelerate SQLite top-level key equality/`In` queries and filtered counts with
   the existing primary index. Preserve native-key ordering, projection, paging,
   metadata validation and one-snapshot batching; counts avoid payload decoding.

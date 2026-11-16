@@ -113,9 +113,29 @@ index entries without decoding payloads, including damaged selected payloads.
 Both paths validate registration/format even for NULL-only or missing keys and
 hold one deferred read snapshot across metadata and every key batch. Cancellation
 or an error discards partial results and releases the connection before callbacks
-or typed codecs run. Compound, data-property and JSON filters keep their existing
-snapshot evaluation. No indexes, schema migrations or storage format changes are
-needed. See [key-filter verification](performance.md#sqlite-key-filter-verification).
+or typed codecs run. See [key-filter verification](performance.md#sqlite-key-filter-verification).
+
+Other `Query`/`QueryIter` calls use native SQL filtering, ordering and `LIMIT`/`OFFSET`
+when the complete filter and ordering are supported. This covers key comparisons
+and string, int64, float64 and bool data columns with `Eq`, `In`, `Gt`, `Gte`, `Lt`,
+`Lte`, `Exists`, `And`, `Or` and `Not`. A nil filter also supports native paging.
+Use logical property names. Names and values are bound parameters; text uses binary
+ordering, NULLs sort last in either direction, and native keys break ties.
+Unsigned keys retain their full range. Float64 fields and `In` operands explicitly
+use REAL conversion to match typed Go decoding even when their JSON spelling is
+an integer. See SQLite's [JSON scalar decoding](https://www.sqlite.org/json1.html#jex).
+
+Native scalar queries decode and validate only the returned page, including its
+stored vectors before projection. An off-page invalid vector does not fail that
+page. Scalar counts evaluate the relevant JSON fields without decoding vectors
+or validating every model field; malformed JSON can still fail SQL evaluation.
+Metadata and results share one deferred WAL read snapshot, including empty pages.
+Errors discard the whole page, and the connection is released before application
+codecs run. These paths add no physical property indexes: SQLite still scans the
+collection's payload JSON and may use temporary sorting space. Go result memory
+follows the page, but SQL work and sorting costs can grow with collection size.
+No schema migration or storage format change is needed. See
+[scalar query verification](performance.md#sqlite-scalar-query-verification).
 
 Exact search streams and validates every payload through one deferred read
 transaction, retaining at most `top + Skip` candidates in a heap. Only the returned
@@ -127,10 +147,12 @@ Large offsets therefore increase memory use. WAL permits other connections to
 write during the scan; the Store's own connection remains occupied until it ends.
 Filter operands are normalized before acquiring the connection.
 
-Other queries and filtered counts still load the whole collection into the memory
-engine, using O(collection size) memory and scan work. Runtime embedders are
-disabled when reading stored records. QueryIter materializes its matched set
-(the full snapshot for other predicates) and SearchIter its result page before
+Queries/counts with unsupported filter or sort operations load the whole collection
+into the memory engine, using O(collection size) memory and scan work. This includes
+JSON paths, arrays, decimals, bytes and calendar/timestamp data. Deep/large filter
+trees also fall back as a whole to avoid SQLite expression limits. Runtime embedders
+are disabled when reading stored records. QueryIter materializes its key matches,
+native page or fallback snapshot and SearchIter its result page before
 yielding, so application code holds no SQL cursor. Benchmark
 realistic sizes before selecting the provider for large collections or concurrent
 query services. See the [read benchmarks](performance.md#sqlite-batch-lookup-and-count-verification)

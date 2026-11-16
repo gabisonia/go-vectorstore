@@ -35,7 +35,7 @@ func TestKeyFilterNormalizationCanReenterStore(t *testing.T) {
 		t.Fatal(err)
 	}
 	key := keyFilterUUID{text: uuid, check: func() error { _, err := c.Count(ctx, nil); return err }}
-	for _, f := range []vectordata.Filter{vectordata.Eq(vectordata.Column("ID"), key), vectordata.In(vectordata.Column("ID"), key, key)} {
+	for _, f := range []vectordata.Filter{vectordata.And(vectordata.Eq(vectordata.Column("ID"), key), vectordata.Exists(vectordata.Column("ID"))), vectordata.Eq(vectordata.Column("ID"), key), vectordata.In(vectordata.Column("ID"), key, key)} {
 		if count, err := c.Count(ctx, f); err != nil || count != 1 {
 			t.Fatalf("count normalized key while holding connection: %d %v", count, err)
 		}
@@ -202,8 +202,8 @@ func TestKeyFiltersReadOnlySelectedPayloads(t *testing.T) {
 	if rows, err := c.Query(ctx, f, 1, vectordata.QueryOptions{}); err == nil || rows != nil {
 		t.Fatalf("selected corruption escaped: %+v %v", rows, err)
 	}
-	if _, err := c.Count(ctx, vectordata.And(f, vectordata.Eq(vectordata.Column("ID"), "wanted"))); err == nil {
-		t.Fatal("compound predicate bypassed fallback")
+	if count, err := c.Count(ctx, vectordata.And(f, vectordata.Eq(vectordata.Column("ID"), "wanted"))); err != nil || count != 1 {
+		t.Fatalf("compound key count decoded unrelated payload: %d %v", count, err)
 	}
 	// A selected record's invalid vector must fail even without vector projection.
 	payload, err := encodeRecord(vectordata.ModelRecord{Key: "bad", Vectors: map[string][]float32{"Vector": {1}}})
