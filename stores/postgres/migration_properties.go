@@ -117,7 +117,11 @@ func (c *ModelCollection) propertyMigrationSteps(registered vectordata.Collectio
 			steps = append(steps, vectordata.MigrationStep{Kind: vectordata.MigrationAlterProperty, Property: p.name, StorageName: p.column, Description: description, SQL: "ALTER TABLE " + c.table() + " ALTER COLUMN " + quoteIdent(p.column) + " " + action})
 		}
 		if old.generated != p.generated {
-			steps = append(steps, vectordata.MigrationStep{Kind: vectordata.MigrationAlterProperty, Property: p.name, StorageName: p.column, Description: "change identity generation only after reviewing sequence ownership, privileges and alignment with existing keys", Manual: true})
+			description := "change identity generation only after reviewing sequence ownership, privileges and alignment with existing keys"
+			if p.role == "key" && p.typ == "uuid" {
+				description = "change application-side UUID generation only after reviewing callers and reuse of returned keys; no identity column is involved"
+			}
+			steps = append(steps, vectordata.MigrationStep{Kind: vectordata.MigrationAlterProperty, Property: p.name, StorageName: p.column, Description: description, Manual: true})
 		}
 		if old.vector != nil && p.vector != nil {
 			if old.vector.Metric != p.vector.Metric {

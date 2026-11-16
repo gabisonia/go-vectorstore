@@ -60,7 +60,7 @@ names, names over 63 bytes, and the reserved `__vs_` prefix are rejected.
 
 | Tag role | Options |
 | --- | --- |
-| `key` | `name=<storage name>`, `type=string|int64|uuid`, `generated` |
+| `key` | `name=<storage name>`, `type=string\|int64\|uint64\|uuid`, `generated` |
 | `data` | `name=<storage name>`, `type=<data type>`, `optional`, `index`, `fulltext` |
 | `vector` | `name=<storage name>`, `dimensions=<n>`, `kind=dense\|binary\|sparse`, `precision=float32\|float16`, `metric=cosine\|l2\|inner_product\|l1\|hamming`, `index`, `method=hnsw\|ivfflat`, `source=<data field>`, `optional`, `input` |
 | `-` | Ignore the field |
@@ -70,13 +70,30 @@ exported embedded fields are supported. Invalid tags and type conflicts fail
 before storage creation. An explicit definition uses exported Go field names and
 does not require tags.
 
-Supported native key types are string, int64 and UUID. UUID keys can be strings
-or compatible types with text mapping. PostgreSQL stores these as `text`,
-`bigint`, and `uuid`, rather than stringifying all keys into a text column.
-`key,generated` requires an int64-compatible field and uses a PostgreSQL identity
-column. A zero generated key in a tagged model requests a new key. Insert/Upsert
-return keys in input order; input models are not mutated. Assign the returned key
-before upserting the same model again. Generated keys can have gaps.
+Supported native key types are string, int64, uint64 and UUID. UUID keys can be
+strings or compatible types with text mapping. PostgreSQL stores these as `text`,
+`bigint`, `numeric(20,0)` and `uuid`, rather than stringifying all keys into a text
+column. Unsigned fields infer `KeyUint64`; typed wrappers use `uint64` (including
+defined types) or a 64-bit `uint`. Values from 0 to 18446744073709551615 retain
+their exact identity across writes, reads, filters, ordering and deletes. Native
+integer arguments are accepted when in range; floats, numeric strings and negative
+values are rejected for uint64 keys. SQLite decodes unsigned JSON keys directly
+into uint64, preserving values above 2^53 and MaxInt64 after reopening a file.
+
+`key,generated` supports int64-compatible fields and UUID fields. PostgreSQL uses
+identity columns for int64 keys. All providers generate random version 4 UUIDs
+in the application, then insert them as explicit values; no database UUID default
+or additional extension is required. Unsigned and arbitrary string generation
+are unsupported. Use `type=uuid` explicitly for string UUID fields.
+
+A zero generated key field in a tagged model (or a nil `ModelRecord.Key`) requests
+a new key. An explicit dynamic key, including an all-zero UUID string, is preserved.
+Insert/Upsert return keys in input order; input models are not mutated. Assign the
+returned key before upserting the same model again. A generated-key collision
+fails instead of overwriting a record, including during Upsert. Failed memory and
+SQLite batches preserve integer sequence state; PostgreSQL identity values can
+have gaps after a rollback. See the runnable
+[native-key sample](../samples/native-keys/README.md).
 
 Data types are `string`, `int64`, `float64`, `bool`, `time`, `string_array`, `json`,
 `uuid`, `bytes`, `int64_array`, `float64_array`, `bool_array`, `uuid_array`,
@@ -301,7 +318,7 @@ if provider, ok := store.(vectordata.CapabilityProvider); ok {
 }
 ```
 
-All three providers report string/int64/UUID keys, generated int64 keys, all twenty
+All three providers report string/int64/uint64/UUID keys, generated int64/UUID keys, all twenty
 portable data types, and cosine/L2/inner-product/L1/Hamming metrics.
 `VectorKinds` reports dense, binary and sparse support. Hamming applies only to
 binary vectors; the other metrics apply to dense and sparse vectors.

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"iter"
+	"math"
 	"sort"
 	"strings"
 	"sync"
@@ -178,14 +179,29 @@ func (c *Collection) write(ctx context.Context, records []vectordata.ModelRecord
 		staged[key] = r
 	}
 	keys := make([]any, len(prepared))
+	next := s.next
 	for i, r := range prepared {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
 		generated := r.Key == nil
 		if generated {
-			r.Key = s.next
-			s.next++
+			if c.definition.Key.Type == vectordata.KeyUUID {
+				r.Key, err = vectordata.NewUUIDKey()
+				if err != nil {
+					return nil, err
+				}
+			} else {
+				if next <= 0 {
+					return nil, fmt.Errorf("%w: generated key sequence exhausted", vectordata.ErrInvalidRecord)
+				}
+				r.Key = next
+				if next == math.MaxInt64 {
+					next = 0
+				} else {
+					next++
+				}
+			}
 		}
 		if _, exists := staged[r.Key]; exists && (!upsert || generated) {
 			return nil, fmt.Errorf("%w: duplicate key", vectordata.ErrInvalidRecord)
@@ -193,7 +209,11 @@ func (c *Collection) write(ctx context.Context, records []vectordata.ModelRecord
 		staged[r.Key] = r
 		keys[i] = r.Key
 	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	s.records = staged
+	s.next = next
 	return keys, nil
 }
 func (c *Collection) snapshot(ctx context.Context, vectors bool) ([]vectordata.ModelRecord, error) {

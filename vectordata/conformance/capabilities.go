@@ -18,6 +18,7 @@ func runCapabilities(t *testing.T, factory Factory) {
 		t.Skip("provider does not expose optional capability metadata")
 	}
 	caps := provider.Capabilities()
+	t.Run("native_keys", func(t *testing.T) { runNativeKeys(t, factory, caps) })
 	t.Run("optional_vectors", func(t *testing.T) { runOptionalVectors(t, factory, caps) })
 	t.Run("native_arrays", func(t *testing.T) { runNativeArrays(t, factory, caps) })
 	t.Run("calendar_data", func(t *testing.T) { runCalendarData(t, factory, caps) })
@@ -45,7 +46,7 @@ func runCapabilities(t *testing.T, factory Factory) {
 	examples[vectordata.TypeTimeOnlyArray] = []string{"09:02:03.123456"}
 	examples[vectordata.TypeDecimal] = vectordata.Decimal("12345678901234567890.123456789")
 	examples[vectordata.TypeDecimalArray] = []vectordata.Decimal{"0.1", "9007199254740993"}
-	keys := map[vectordata.KeyType]any{vectordata.KeyString: "key", vectordata.KeyInt64: int64(42), vectordata.KeyUUID: "8f516db6-38ca-4e8f-ad79-d71b015f5419"}
+	keys := map[vectordata.KeyType]any{vectordata.KeyString: "key", vectordata.KeyInt64: int64(42), vectordata.KeyUint64: uint64(18446744073709551615), vectordata.KeyUUID: "8f516db6-38ca-4e8f-ad79-d71b015f5419"}
 	for _, kind := range caps.KeyTypes {
 		t.Run(string(kind), func(t *testing.T) {
 			key, ok := keys[kind]
