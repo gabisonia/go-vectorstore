@@ -17,7 +17,7 @@ collection, err := store.EnsureModelCollection(ctx, "documents", definition,
 
 Use the same CollectionDefinition, struct codecs, typed wrappers, embedding
 defaults, filters, and model operations as memory/PostgreSQL. All 20 native data
-types, native keys, generated int64 keys, multiple named vectors, nullable vectors,
+types, string/int64/uint64/UUID keys, generated int64/UUID keys, multiple named vectors, nullable vectors,
 float16 rounding, and dense/binary/sparse exact search are supported. Binary and
 sparse search use their optional interfaces. Vector projections default to off.
 
@@ -52,6 +52,11 @@ Explicit keys do not advance the generated sequence: a collision fails without
 overwriting an existing record. SQL NULL and JSON null are stored distinctly;
 JSON numbers and exact decimals retain precision. Native timestamps and arrays
 are reconstructed according to the registered schema.
+
+Unsigned keys use exact JSON integer encoding and uint64 decoding, including
+MaxUint64; SQLite's signed INTEGER range does not limit them. UUIDs are generated
+in the application and inserted in the same transaction as the rest of the batch.
+Neither unsigned keys nor UUIDs consume `next_key` integer sequence values.
 
 A collection registration must exactly match the normalized definition; a stale
 handle returns ErrSchemaMismatch on reads/writes. Storage format 1 is internal to

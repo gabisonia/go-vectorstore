@@ -296,6 +296,16 @@ fields, transient-input ownership, migration-plan stripping and atomic failures
 when this capability is advertised. Its factory must propagate `InputEmbedder`.
 
 
+## Native keys
+
+For `KeyUint64`, canonical keys are uint64 and filter operands must retain integer
+precision. PostgreSQL uses numeric(20,0) with native uint64 binding/scanning; SQLite
+uses exact JSON numbers rather than float64. Do not truncate to int64. Generated
+UUID keys are application-generated random v4 values; generated insert requests
+must still reject collisions under Upsert. Only generated int64 keys use integer
+sequences/identity columns. The capability suite exercises key bounds, typed
+aliases, CRUD/filter/search behavior, generated UUIDs and migration compatibility.
+
 ## Optional vectors and array set filters
 
 Advertise `OptionalVectors` only when every supported vector kind can be absent.

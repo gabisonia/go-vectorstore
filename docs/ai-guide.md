@@ -102,8 +102,8 @@ it is not an importable public helper package.
 
 ## Rules that prevent common integration mistakes
 
-- Match `TypedModelCollection[K,T]`'s key type to the model key: string, int64 or
-  normalized UUID string. Generated int64 keys are returned from writes; do not
+- Match `TypedModelCollection[K,T]`'s key type to the model key: string, int64, uint64 or
+  a compatible UUID type. Generated int64/UUID keys are returned from writes; do not
   assume the input struct is modified with its generated ID.
 - Use `Column("Category")` for logical model fields and
   `DataPath("Details", "rating")` for a JSON data field. `Metadata(...)` belongs

@@ -272,7 +272,12 @@ func (c *Collection) write(ctx context.Context, records []vectordata.ModelRecord
 	keys = make([]any, len(prepared))
 	for i, r := range prepared {
 		generated := r.Key == nil
-		if generated {
+		if generated && c.definition.Key.Type == vectordata.KeyUUID {
+			r.Key, err = vectordata.NewUUIDKey()
+			if err != nil {
+				return nil, err
+			}
+		} else if generated {
 			if next == 0 {
 				return nil, fmt.Errorf("%w: generated key sequence exhausted", vectordata.ErrInvalidRecord)
 			}

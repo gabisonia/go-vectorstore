@@ -133,3 +133,39 @@ func Example_errorHandling() {
 	// true
 	// true
 }
+
+func Example_nativeKeys() {
+	type Event struct {
+		ID uint64 `vectordata:"key"`
+	}
+	type Document struct {
+		ID string `vectordata:"key,type=uuid,generated"`
+	}
+	ctx := context.Background()
+	store := memory.New()
+	events, err := vectordata.EnsureTypedModelCollection[uint64, Event](ctx, store, "events", nil, vectordata.ModelCollectionOptions{})
+	if err != nil {
+		panic(err)
+	}
+	if _, err := events.Upsert(ctx, []Event{{ID: 18446744073709551615}}); err != nil {
+		panic(err)
+	}
+	event, err := events.Get(ctx, 18446744073709551615, vectordata.RetrievalOptions{})
+	if err != nil {
+		panic(err)
+	}
+	documents, err := vectordata.EnsureTypedModelCollection[string, Document](ctx, store, "documents", nil, vectordata.ModelCollectionOptions{})
+	if err != nil {
+		panic(err)
+	}
+	keys, err := documents.Insert(ctx, []Document{{}})
+	if err != nil {
+		panic(err)
+	}
+	document, err := documents.Get(ctx, keys[0], vectordata.RetrievalOptions{})
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(event.ID, len(document.ID))
+	// Output: 18446744073709551615 36
+}

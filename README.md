@@ -122,7 +122,7 @@ with a deterministic instructional embedder, typed reads,
 array filtering, and generated keys. Use a real embedding model for semantic search.
 
 See [the model API guide](docs/model-api.md) for collection lifecycle, explicit
-schemas, native UUID/int64 keys, UUID/byte data, date-only/time-only properties,
+schemas, native UUID/int64/uint64 keys, generated UUIDs, UUID/byte data, date-only/time-only properties,
 exact decimals, and native numeric/bool/UUID/timestamp/calendar arrays,
 multiple vectors, iterator APIs, embeddings and
 PostgreSQL hybrid search. Models can opt into float16 (`halfvec`) storage with

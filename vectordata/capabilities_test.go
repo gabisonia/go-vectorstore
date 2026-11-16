@@ -28,7 +28,7 @@ func TestBuiltInCapabilitiesAreLocalSnapshots(t *testing.T) {
 			if before.Backend != tt.name || before.FullTextIndexing != tt.indexed || before.HybridSearch != tt.indexed || before.MigrationPlanning != tt.indexed || before.MigrationApplication != tt.indexed {
 				t.Fatalf("unexpected features: %+v", before)
 			}
-			if !slices.Equal(before.GeneratedKeyTypes, []vectordata.KeyType{vectordata.KeyInt64}) {
+			if !slices.Equal(before.GeneratedKeyTypes, []vectordata.KeyType{vectordata.KeyInt64, vectordata.KeyUUID}) {
 				t.Fatalf("generated keys: %v", before.GeneratedKeyTypes)
 			}
 			if !slices.Equal(before.VectorPrecisions, []vectordata.VectorPrecision{vectordata.VectorFloat32, vectordata.VectorFloat16}) {

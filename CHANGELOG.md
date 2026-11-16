@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add full-range `KeyUint64` with exact provider storage, typed mapping and filters,
+  plus application-generated UUID keys across memory, SQLite and PostgreSQL.
+- Preserve memory integer sequence state on failed batches and reject exhaustion
+  instead of wrapping; add native-key conformance, SQLite reopen and sample coverage.
 - Add optional `InputEmbedder` and typed `InputEmbeddingFunc[T]` for text, media
   bytes and custom application inputs, with store/collection/property overrides.
 - Support transient `ModelRecord.EmbeddingInputs`, direct string vector fields,
