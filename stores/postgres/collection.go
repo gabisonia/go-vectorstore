@@ -166,7 +166,8 @@ func (c *PostgresCollection) buildSearchPlan(vector []float32, topK int, opts ve
 	if err != nil {
 		return searchPlan{}, err
 	}
-	distanceExpr := fmt.Sprintf(`(%s %s $1::vector)`, quoteIdent(vectorColumn), operator)
+	rankingDistance := fmt.Sprintf(`(%s %s $1::vector)`, quoteIdent(vectorColumn), operator)
+	distanceExpr := reportedDistanceSQL(rankingDistance, defaultMetric(c.metric))
 	projection := resolveProjection(opts.Projection)
 
 	selectCols := []string{quoteIdent(idColumn)}
@@ -212,7 +213,11 @@ func (c *PostgresCollection) buildSearchPlan(vector []float32, topK int, opts ve
 		b.WriteString(" WHERE ")
 		b.WriteString(strings.Join(whereParts, " AND "))
 	}
-	b.WriteString(" ORDER BY distance ASC")
+	if c.metric == vectordata.DistanceL2Squared {
+		b.WriteString(" ORDER BY " + rankingDistance + " ASC")
+	} else {
+		b.WriteString(" ORDER BY distance ASC")
+	}
 	b.WriteString(fmt.Sprintf(" LIMIT $%d", nextArg))
 	args = append(args, topK)
 

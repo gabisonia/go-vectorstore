@@ -11,7 +11,7 @@ model sample; then select SQLite or PostgreSQL when persistence is needed.
 | Durable records, optional vectors, array filters | [sqlite-store](sqlite-store/README.md) | Writable SQLite file |
 | Typed filtered text retrieval | [typed-search](typed-search/README.md) | None in fixture mode; optional OpenAI |
 | Typed retrieval and cited context for generation | [typed-rag](typed-rag/README.md) | None in fixture mode; optional OpenAI |
-| Named vectors, iterators, capabilities, hybrid, migration preview | [recipes](recipes/README.md) | None for portable recipes; PostgreSQL for hybrid/migration |
+| Named vectors, squared distance, iterators, capabilities, hybrid, migration preview | [recipes](recipes/README.md) | None for portable recipes; PostgreSQL for hybrid/migration |
 | Original Record API semantic search | [semantic-search](semantic-search/README.md) | PostgreSQL and OpenAI key |
 | Original Record API RAG story demo | [ragrimosa](ragrimosa/README.md) | PostgreSQL and OpenAI key |
 
@@ -27,7 +27,7 @@ modes require explicit opt-in and can incur provider charges. The original Recor
 API examples remain supported; new model applications should start with the typed
 samples. The new samples are on master and included in source versions from v0.4.1;
 their library calls use APIs available in v0.4.0, except for input-embeddings,
-native-keys and the updated iterator/hybrid recipes,
+native-keys and the squared-distance and updated iterator/hybrid recipes,
 which require master after v0.4.1. Consult GitHub releases for
 published tags.
 

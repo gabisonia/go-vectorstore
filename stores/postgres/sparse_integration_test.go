@@ -71,7 +71,7 @@ func TestIntegrationSparseTransportAndBounds(t *testing.T) {
 }
 
 func TestIntegrationSparseHNSWPlansAndCleanup(t *testing.T) {
-	for _, metric := range []vectordata.DistanceMetric{vectordata.DistanceCosine, vectordata.DistanceL2, vectordata.DistanceInnerProduct, vectordata.DistanceL1} {
+	for _, metric := range []vectordata.DistanceMetric{vectordata.DistanceCosine, vectordata.DistanceL2, vectordata.DistanceL2Squared, vectordata.DistanceInnerProduct, vectordata.DistanceL1} {
 		t.Run(string(metric), func(t *testing.T) {
 			ctx := context.Background()
 			cfg, err := pgxpool.ParseConfig(integrationDSN)

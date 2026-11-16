@@ -35,7 +35,7 @@ func TestBuiltInCapabilitiesAreLocalSnapshots(t *testing.T) {
 				t.Fatalf("vector precisions: %v", before.VectorPrecisions)
 			}
 			if tt.indexed {
-				if len(before.VectorIndexCapabilities) != 20 {
+				if len(before.VectorIndexCapabilities) != 25 {
 					t.Fatalf("index combinations: %+v", before.VectorIndexCapabilities)
 				}
 				for _, index := range before.VectorIndexCapabilities {

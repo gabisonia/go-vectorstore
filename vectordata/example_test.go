@@ -210,3 +210,29 @@ func Example_readIterators() {
 	// Record: guide
 	// Match: guide
 }
+
+func Example_squaredEuclideanDistance() {
+	type Point struct {
+		ID      string    `vectordata:"key"`
+		Linear  []float32 `vectordata:"vector,dimensions=2,metric=l2"`
+		Squared []float32 `vectordata:"vector,dimensions=2,metric=l2_squared"`
+	}
+	ctx := context.Background()
+	points, err := vectordata.EnsureTypedModelCollection[string, Point](ctx, memory.New(), "points", nil, vectordata.ModelCollectionOptions{})
+	if err != nil {
+		panic(err)
+	}
+	if _, err := points.Upsert(ctx, []Point{{ID: "near", Linear: []float32{3, 4}, Squared: []float32{3, 4}}}); err != nil {
+		panic(err)
+	}
+	for _, property := range []string{"Linear", "Squared"} {
+		hits, err := points.Search(ctx, []float32{0, 0}, 1, vectordata.ModelSearchOptions{VectorProperty: property})
+		if err != nil {
+			panic(err)
+		}
+		fmt.Println(property, hits[0].Distance)
+	}
+	// Output:
+	// Linear 5
+	// Squared 25
+}

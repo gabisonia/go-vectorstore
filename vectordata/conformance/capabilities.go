@@ -32,6 +32,7 @@ func runCapabilities(t *testing.T, factory Factory) {
 		t.Fatal("capabilities must identify the backend and supported keys")
 	}
 	t.Run("l1", func(t *testing.T) { runL1(t, factory, caps) })
+	t.Run("l2_squared", func(t *testing.T) { runL2Squared(t, factory, caps) })
 	ctx := context.Background()
 	examples := map[vectordata.DataType]any{
 		vectordata.TypeString: "quiet hotel", vectordata.TypeInt64: int64(42), vectordata.TypeFloat64: 2.5,

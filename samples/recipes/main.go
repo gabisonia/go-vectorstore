@@ -23,10 +23,14 @@ type Named struct {
 	TitleVector []float32 `vectordata:"vector,dimensions=3"`
 	BodyVector  []float32 `vectordata:"vector,dimensions=3"`
 }
+type SquaredPoint struct {
+	ID     string    `vectordata:"key"`
+	Vector []float32 `vectordata:"vector,dimensions=2,metric=l2_squared"`
+}
 
 func run(ctx context.Context, args []string, out io.Writer) error {
 	flags := flag.NewFlagSet("recipes", flag.ContinueOnError)
-	recipe := flags.String("recipe", "named-vectors", "named-vectors, iterators, embedded-iterators, capabilities, hybrid, migration")
+	recipe := flags.String("recipe", "named-vectors", "named-vectors, squared-l2, iterators, embedded-iterators, capabilities, hybrid, migration")
 	dsn := flags.String("dsn", "", "PostgreSQL DSN (required for hybrid/migration)")
 	path := flags.String("sqlite", "", "SQLite file (default: memory)")
 	prefix := flags.String("prefix", "recipe_demo", "Dedicated collection prefix")
@@ -34,7 +38,7 @@ func run(ctx context.Context, args []string, out io.Writer) error {
 		return err
 	}
 	switch *recipe {
-	case "named-vectors", "iterators", "embedded-iterators", "capabilities", "hybrid", "migration":
+	case "named-vectors", "squared-l2", "iterators", "embedded-iterators", "capabilities", "hybrid", "migration":
 	default:
 		return fmt.Errorf("unknown recipe %q", *recipe)
 	}
@@ -67,6 +71,26 @@ func execute(ctx context.Context, store vectordata.ModelStore, recipe, prefix st
 	}
 	name := prefix + "_" + recipe
 	switch recipe {
+	case "squared-l2":
+		c, err := vectordata.EnsureTypedModelCollection[string, SquaredPoint](ctx, store, name, nil, vectordata.ModelCollectionOptions{})
+		if err != nil {
+			return err
+		}
+		if _, err := c.Upsert(ctx, []SquaredPoint{{ID: "origin", Vector: []float32{0, 0}}, {ID: "near", Vector: []float32{3, 4}}}); err != nil {
+			return err
+		}
+		for hit, err := range c.SearchIter(ctx, []float32{0, 0}, 2, vectordata.ModelSearchOptions{}) {
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(out, "%s: distance %.0f score %.6f\n", hit.Item.ID, hit.Distance, hit.Score)
+		}
+		limit := 5.0
+		hits, err := c.Search(ctx, []float32{0, 0}, 2, vectordata.ModelSearchOptions{DistanceThreshold: &limit})
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(out, "Squared-distance threshold 5: %d match\n", len(hits))
 	case "named-vectors":
 		c, err := vectordata.EnsureTypedModelCollection[string, Named](ctx, store, name, nil, vectordata.ModelCollectionOptions{})
 		if err != nil {

@@ -124,7 +124,7 @@ func TestSparseDistancesAgainstDenseOracle(t *testing.T) {
 			aa += xx * xx
 			bb += y * y
 		}
-		for metric, want := range map[vectordata.DistanceMetric]float64{vectordata.DistanceL2: math.Sqrt(sum), vectordata.DistanceL1: l1, vectordata.DistanceInnerProduct: -dot, vectordata.DistanceCosine: 1 - dot/math.Sqrt(aa*bb)} {
+		for metric, want := range map[vectordata.DistanceMetric]float64{vectordata.DistanceL2: math.Sqrt(sum), vectordata.DistanceL2Squared: sum, vectordata.DistanceL1: l1, vectordata.DistanceInnerProduct: -dot, vectordata.DistanceCosine: 1 - dot/math.Sqrt(aa*bb)} {
 			got, err := vectordata.SparseDistance(sparse(a), sparse(b), metric)
 			if err != nil || math.Abs(got-want) > 1e-12 {
 				t.Fatalf("%s sparse distance: %g want %g, %v", metric, got, want, err)

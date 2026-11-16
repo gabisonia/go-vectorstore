@@ -131,7 +131,7 @@ func FuzzSparseDistance(f *testing.F) {
 			aa += x * x
 			bb += y * y
 		}
-		expected := map[vectordata.DistanceMetric]float64{vectordata.DistanceL2: math.Sqrt(squared), vectordata.DistanceL1: l1, vectordata.DistanceInnerProduct: -dot}
+		expected := map[vectordata.DistanceMetric]float64{vectordata.DistanceL2: math.Sqrt(squared), vectordata.DistanceL2Squared: squared, vectordata.DistanceL1: l1, vectordata.DistanceInnerProduct: -dot}
 		if aa != 0 {
 			expected[vectordata.DistanceCosine] = 1 - math.Max(-1, math.Min(1, dot/(math.Sqrt(aa)*math.Sqrt(bb))))
 		}

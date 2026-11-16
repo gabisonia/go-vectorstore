@@ -24,7 +24,7 @@ func runSparseVectors(t *testing.T, factory Factory, caps vectordata.ProviderCap
 	if !slices.Contains(caps.VectorKinds, vectordata.VectorSparse) {
 		t.Skip("sparse vectors not advertised")
 	}
-	for _, metric := range []vectordata.DistanceMetric{vectordata.DistanceCosine, vectordata.DistanceL2, vectordata.DistanceInnerProduct, vectordata.DistanceL1} {
+	for _, metric := range []vectordata.DistanceMetric{vectordata.DistanceCosine, vectordata.DistanceL2, vectordata.DistanceL2Squared, vectordata.DistanceInnerProduct, vectordata.DistanceL1} {
 		t.Run(string(metric), func(t *testing.T) {
 			if !slices.Contains(caps.DistanceMetrics, metric) {
 				t.Skip("metric not advertised")
@@ -79,7 +79,7 @@ func runSparseVectors(t *testing.T, factory Factory, caps vectordata.ProviderCap
 			if err != nil || len(hits) != 3 {
 				t.Fatalf("sparse search: %v, %v", hits, err)
 			}
-			want := map[vectordata.DistanceMetric][]float64{vectordata.DistanceCosine: {0, 0.2, 1}, vectordata.DistanceL2: {0, math.Sqrt(2), math.Sqrt(6)}, vectordata.DistanceInnerProduct: {-5, -4, 0}, vectordata.DistanceL1: {0, 2, 4}}[metric]
+			want := map[vectordata.DistanceMetric][]float64{vectordata.DistanceCosine: {0, 0.2, 1}, vectordata.DistanceL2: {0, math.Sqrt(2), math.Sqrt(6)}, vectordata.DistanceL2Squared: {0, 2, 6}, vectordata.DistanceInnerProduct: {-5, -4, 0}, vectordata.DistanceL1: {0, 2, 4}}[metric]
 			for i, hit := range hits {
 				if hit.Record.Key != []string{"a", "b", "c"}[i] || math.Abs(hit.Distance-want[i]) > 1e-6 || math.Abs(hit.Score-vectordata.ScoreFromDistance(metric, want[i])) > 1e-6 || hit.ScoreKind != vectordata.ScoreSimilarity {
 					t.Fatalf("sparse %s ranking: %v", metric, hits)

@@ -42,7 +42,7 @@ func scoreSQL(distance string, metric vectordata.DistanceMetric) string {
 	switch metric {
 	case vectordata.DistanceCosine:
 		return "(1 - " + distance + ")"
-	case vectordata.DistanceL2, vectordata.DistanceL1, vectordata.DistanceHamming:
+	case vectordata.DistanceL2, vectordata.DistanceL2Squared, vectordata.DistanceL1, vectordata.DistanceHamming:
 		return "(1 / (1 + " + distance + "))"
 	default:
 		return "(-" + distance + ")"
@@ -78,7 +78,8 @@ func (c *ModelCollection) searchValuePlan(literal any, top int, opts vectordata.
 	if err != nil {
 		return "", nil, p, err
 	}
-	distance := "(t." + quoteIdent(p.StorageName) + " " + op + " $1::" + vectorQuerySQLType(p) + ")"
+	rankingDistance := "(t." + quoteIdent(p.StorageName) + " " + op + " $1::" + vectorQuerySQLType(p) + ")"
+	distance := reportedDistanceSQL(rankingDistance, p.Metric)
 	if err := vectordata.ValidateModelFilter(opts.Filter, c.definition); err != nil {
 		return "", nil, p, err
 	}
@@ -106,7 +107,11 @@ func (c *ModelCollection) searchValuePlan(literal any, top int, opts vectordata.
 	if len(predicates) > 0 {
 		query += " WHERE " + strings.Join(predicates, " AND ")
 	}
-	query += " ORDER BY __vs_distance ASC" + fmt.Sprintf(" LIMIT $%d OFFSET $%d", next, next+1)
+	order := "__vs_distance"
+	if p.Metric == vectordata.DistanceL2Squared {
+		order = rankingDistance
+	}
+	query += " ORDER BY " + order + " ASC" + fmt.Sprintf(" LIMIT $%d OFFSET $%d", next, next+1)
 	args = append(args, top, opts.Skip)
 	if relaxed {
 		query = "SELECT * FROM (" + query + ") AS __vs_nearest ORDER BY __vs_distance + 0 ASC"
@@ -323,7 +328,8 @@ func (c *ModelCollection) hybridValuePlan(literal any, keywords string, top int,
 	args := append([]any{literal, keywords}, filterArgs...)
 	bind := func(value any) string { ph := fmt.Sprintf("$%d", next); next++; args = append(args, value); return ph }
 	op, _ := modelMetricOperator(p)
-	distance := "(t." + quoteIdent(p.StorageName) + " " + op + " $1::" + vectorQuerySQLType(p) + ")"
+	rankingDistance := "(t." + quoteIdent(p.StorageName) + " " + op + " $1::" + vectorQuerySQLType(p) + ")"
+	distance := reportedDistanceSQL(rankingDistance, p.Metric)
 	key := "t." + quoteIdent(c.definition.Key.StorageName)
 	predicate := "t." + quoteIdent(p.StorageName) + " IS NOT NULL"
 	if where != "" {
@@ -333,7 +339,7 @@ func (c *ModelCollection) hybridValuePlan(literal any, keywords string, top int,
 	query := "plainto_tsquery('simple'::regconfig,$2)"
 	limit := bind(config.candidates)
 	rrf := bind(config.constant)
-	sql := `WITH __vs_vector AS MATERIALIZED (SELECT ` + key + ` AS __vs_key, ` + distance + ` AS __vs_distance FROM ` + c.table() + ` t WHERE ` + predicate + ` ORDER BY __vs_distance ASC LIMIT ` + limit + `),
+	sql := `WITH __vs_vector AS MATERIALIZED (SELECT ` + key + ` AS __vs_key, ` + rankingDistance + ` AS __vs_distance FROM ` + c.table() + ` t WHERE ` + predicate + ` ORDER BY __vs_distance ASC LIMIT ` + limit + `),
  __vs_text AS MATERIALIZED (SELECT ` + key + ` AS __vs_key, ts_rank_cd(` + text + `,` + query + `) AS __vs_rank FROM ` + c.table() + ` t WHERE (` + predicate + `) AND ` + text + ` @@ ` + query + ` ORDER BY __vs_rank DESC, ` + key + ` LIMIT ` + limit + `),
  __vs_ranks AS (SELECT __vs_key, row_number() OVER (ORDER BY __vs_distance, __vs_key) AS __vs_rank FROM __vs_vector UNION ALL SELECT __vs_key, row_number() OVER (ORDER BY __vs_rank DESC, __vs_key) FROM __vs_text),
  __vs_fused AS (SELECT __vs_key, sum(1.0 / (` + rrf + `::float8 + __vs_rank)) AS __vs_score FROM __vs_ranks GROUP BY __vs_key)
