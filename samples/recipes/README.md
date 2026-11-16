@@ -12,6 +12,7 @@ need no API key.
 | Early iterator exit and cancellation | `go run ./samples/recipes -recipe iterators` | `First: one`, then cancellation and a count of 2 |
 | Text/custom-input read iterators | `go run ./samples/recipes -recipe embedded-iterators` | `Search: costs`, then `Input: costs` |
 | Provider capabilities | `go run ./samples/recipes -recipe capabilities` | Backend name, hybrid/migration flags and physical index tuple count |
+| Store/collection metadata | `go run ./samples/recipes -recipe metadata` | `System: memory` and `Collection: recipe_demo_metadata` |
 | PostgreSQL hybrid search | `go run ./samples/recipes -recipe hybrid -dsn "$PG_DSN"` | Ranked IDs including `costs`, with `reciprocal_rank_fusion` scores |
 | PostgreSQL migration preview | `go run ./samples/recipes -recipe migration -dsn "$PG_DSN"` | Proposed optional Category column SQL/args and `Preview only; no migration applied.` |
 
@@ -23,6 +24,12 @@ export PG_DSN='postgres://postgres:postgres@localhost:54329/vectorstore_test?ssl
 go run ./samples/recipes -recipe hybrid -dsn "$PG_DSN"
 go run ./samples/recipes -recipe migration -dsn "$PG_DSN"
 ```
+
+The metadata recipe requires master after v0.4.1. It obtains a typed handle and
+prints system, database, namespace and collection identity without creating a
+collection. SQLite reports the filename and PostgreSQL the configured database
+and schema. Empty fields mean unavailable. This is local configuration discovery;
+it does not probe server health or collection existence.
 
 All recipes accept `-sqlite /tmp/recipes.db` or `-dsn` (mutually exclusive), and
 `-prefix` to change the default `recipe_demo` collection prefix. Capabilities is a
@@ -46,7 +53,7 @@ plan against that model's registered definition and review the full report using
 the [migration guide](../../docs/migrations.md).
 
 Named-vector, squared-distance and iterator fixtures upsert stable IDs. Records remain in persistent
-providers; reruns reuse their collections. Capabilities creates none. To clean up,
+providers; reruns reuse their collections. Capabilities and metadata create none. To clean up,
 remove a closed sample SQLite file and its sidecars, or delete only collections
 under your chosen prefix through `DeleteCollection`. Stop local PostgreSQL with
 `docker compose down`.

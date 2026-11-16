@@ -32,8 +32,9 @@ func DefaultStoreOptions() StoreOptions {
 
 // PostgresVectorStore implements vectordata.VectorStore using pgxpool.
 type PostgresVectorStore struct {
-	pool *pgxpool.Pool
-	opts StoreOptions
+	pool         *pgxpool.Pool
+	opts         StoreOptions
+	databaseName string
 }
 
 // NewVectorStore creates a Postgres-backed vector store.
@@ -45,7 +46,7 @@ func NewVectorStore(pool *pgxpool.Pool, opts StoreOptions) (*PostgresVectorStore
 	if err := normalized.validate(); err != nil {
 		return nil, err
 	}
-	return &PostgresVectorStore{pool: pool, opts: normalized}, nil
+	return &PostgresVectorStore{pool: pool, opts: normalized, databaseName: pool.Config().ConnConfig.Database}, nil
 }
 
 // Collection returns a handle to a collection without schema checks.

@@ -327,6 +327,7 @@ PostgreSQL float16 storage requires pgvector 0.7+ and a visible `halfvec` type.
 
 | Feature | Memory | SQLite | PostgreSQL |
 | --- | --- | --- | --- |
+| `Metadata` | True, store/collection identity | True, store/collection identity | True, store/collection identity |
 | `InputEmbedding` | True, dense outputs | True, dense outputs | True, dense outputs |
 | `ReadIterators` | True, buffered snapshots/pages | True, buffered snapshots/pages | True, cursor enumeration |
 | `OptionalVectors` | True | True | True |
@@ -375,9 +376,53 @@ their usual schema and deployment validation. Built-in stores return independent
 caller-owned slices; changing a snapshot does not configure the provider.
 
 `ModelStore` remains unchanged. A third-party provider without
-`CapabilityProvider` has unavailable metadata; this does not imply its optional
+`CapabilityProvider` has unavailable capability information; this does not imply its optional
 features are unsupported. Callers can still use the `HybridSearcher` interface
 and normal operation errors when metadata is unavailable.
+
+### Store and collection metadata
+
+On master after v0.4.1, optional `StoreMetadataProvider` and
+`CollectionMetadataProvider` interfaces identify configured handles. This serves
+the discovery workflow of Microsoft's
+[store metadata](https://learn.microsoft.com/en-us/dotnet/api/microsoft.extensions.vectordata.vectorstoremetadata)
+and [collection metadata](https://source.dot.net/Microsoft.Extensions.VectorData.Abstractions/VectorStoreCollectionMetadata.cs.html)
+without a general-purpose service locator.
+
+```go
+// store is a ModelStore; collection is a model or typed collection handle.
+storeInfo := vectordata.GetStoreMetadata(store)
+collectionInfo := vectordata.GetCollectionMetadata(collection)
+fmt.Printf("%s / %s / %s / %s\n", storeInfo.SystemName,
+    storeInfo.DatabaseName, storeInfo.Namespace, collectionInfo.CollectionName)
+```
+
+| Provider | `SystemName` | `DatabaseName` | `Namespace` |
+| --- | --- | --- | --- |
+| Memory | `memory` | Empty | Empty |
+| SQLite | `sqlite` | Absolute literal filename, or `:memory:` | Empty |
+| PostgreSQL | `postgresql` | Database from the pool's configured connection | Configured schema, default `public` |
+
+`SystemName` describes the database system; the existing capability backend
+identifier remains `postgres` for PostgreSQL. Collection metadata embeds the store
+metadata and adds `CollectionName`, preserving the logical, unquoted handle name.
+No connection string, host, username, password or runtime connection options are
+included. Filenames are normalized when SQLite opens, so relative names remain
+stable if the working directory later changes. Discovery does not resolve symlinks.
+
+The helpers perform no database I/O, invoke no codecs, and return caller-owned
+value snapshots. Results describe configuration even before creation, after
+deletion, or after a store/pool closes. They do not validate registration, health
+or existence, or query a server to resolve its actual database name. Use `Exists`
+and normal operations for those checks. `Capabilities().Metadata` advertises both
+optional interfaces on built-ins. Empty fields mean unavailable.
+
+Existing providers need no changes: `GetStoreMetadata` returns an empty value
+without the optional interface; `GetCollectionMetadata` falls back to `Name()`.
+Nil and typed-nil handles return empty values. Both typed wrappers forward
+collection metadata with this fallback. PostgreSQL's original Record collection
+also exposes it. Run `go run ./samples/recipes -recipe metadata` for a complete
+example that creates no collection.
 
 ## Lifecycle and retrieval
 

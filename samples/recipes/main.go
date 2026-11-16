@@ -30,7 +30,7 @@ type SquaredPoint struct {
 
 func run(ctx context.Context, args []string, out io.Writer) error {
 	flags := flag.NewFlagSet("recipes", flag.ContinueOnError)
-	recipe := flags.String("recipe", "named-vectors", "named-vectors, squared-l2, iterators, embedded-iterators, capabilities, hybrid, migration")
+	recipe := flags.String("recipe", "named-vectors", "named-vectors, squared-l2, iterators, embedded-iterators, metadata, capabilities, hybrid, migration")
 	dsn := flags.String("dsn", "", "PostgreSQL DSN (required for hybrid/migration)")
 	path := flags.String("sqlite", "", "SQLite file (default: memory)")
 	prefix := flags.String("prefix", "recipe_demo", "Dedicated collection prefix")
@@ -38,7 +38,7 @@ func run(ctx context.Context, args []string, out io.Writer) error {
 		return err
 	}
 	switch *recipe {
-	case "named-vectors", "squared-l2", "iterators", "embedded-iterators", "capabilities", "hybrid", "migration":
+	case "named-vectors", "squared-l2", "iterators", "embedded-iterators", "metadata", "capabilities", "hybrid", "migration":
 	default:
 		return fmt.Errorf("unknown recipe %q", *recipe)
 	}
@@ -71,6 +71,13 @@ func execute(ctx context.Context, store vectordata.ModelStore, recipe, prefix st
 	}
 	name := prefix + "_" + recipe
 	switch recipe {
+	case "metadata":
+		c, err := vectordata.GetTypedModelCollection[string, Named](store, name, nil, vectordata.ModelCollectionOptions{})
+		if err != nil {
+			return err
+		}
+		m := c.CollectionMetadata()
+		fmt.Fprintf(out, "System: %s\nDatabase: %s\nNamespace: %s\nCollection: %s\n", m.SystemName, m.DatabaseName, m.Namespace, m.CollectionName)
 	case "squared-l2":
 		c, err := vectordata.EnsureTypedModelCollection[string, SquaredPoint](ctx, store, name, nil, vectordata.ModelCollectionOptions{})
 		if err != nil {

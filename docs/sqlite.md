@@ -30,6 +30,9 @@ invalid byte sequences are rejected rather than replaced during JSON encoding.
 The parent directory must exist. `:memory:` opens a private
 transient database for that Store. Collection names are bound parameters. Runtime
 embedders are never serialized; configure them again when reopening a store.
+`StoreMetadata` reports system `sqlite` and the absolute literal filename (or
+`:memory:`). Collection metadata adds the handle name. Discovery works after
+close and does not inspect registrations; see [metadata discovery](model-api.md#store-and-collection-metadata).
 
 ## Durability and concurrency
 

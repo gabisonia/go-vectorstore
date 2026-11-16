@@ -31,8 +31,9 @@ type StoreOptions struct {
 }
 
 type Store struct {
-	db      *sql.DB
-	options vectordata.ModelCollectionOptions
+	db           *sql.DB
+	options      vectordata.ModelCollectionOptions
+	databaseName string
 }
 
 var _ vectordata.ModelStore = (*Store)(nil)
@@ -51,6 +52,7 @@ func Open(ctx context.Context, path string, opts StoreOptions) (*Store, error) {
 		return nil, fmt.Errorf("%w: database path is empty", vectordata.ErrSchemaMismatch)
 	}
 	var dsn string
+	databaseName := path
 	if path == ":memory:" {
 		dsn = path
 	} else {
@@ -59,6 +61,7 @@ func Open(ctx context.Context, path string, opts StoreOptions) (*Store, error) {
 			return nil, err
 		}
 		dsn = (&url.URL{Scheme: "file", Path: absolute}).String()
+		databaseName = absolute
 	}
 	q := url.Values{}
 	// Disable native sleeping: retryBusy supplies bounded, cancelable waits.
@@ -73,7 +76,7 @@ func Open(ctx context.Context, path string, opts StoreOptions) (*Store, error) {
 	}
 	db.SetMaxOpenConns(1)
 	db.SetMaxIdleConns(1)
-	s := &Store{db: db, options: defaults}
+	s := &Store{db: db, options: defaults, databaseName: databaseName}
 	if err := s.initialize(ctx); err != nil {
 		db.Close()
 		return nil, err

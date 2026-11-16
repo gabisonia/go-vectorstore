@@ -128,6 +128,8 @@ multiple vectors, iterator APIs, embeddings and
 PostgreSQL hybrid search. Models can opt into float16 (`halfvec`) storage with
 `precision=float16` while keeping `[]float32` inputs and outputs. Stores also expose optional `CapabilityProvider`
 metadata for supported keys, data types, metrics, index combinations and hybrid search.
+Optional [store and collection metadata](docs/model-api.md#store-and-collection-metadata)
+reports system, database, namespace and collection identity without database I/O.
 All three providers support Manhattan (`DistanceL1`) search; PostgreSQL supports L1 HNSW
 indexes and rejects unsupported L1/IVFFlat combinations before database work.
 Models can also use packed `BinaryVector` fields with `kind=binary`, Hamming

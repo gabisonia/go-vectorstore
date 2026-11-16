@@ -67,7 +67,7 @@ func TestIntegrationPostgresRecipes(t *testing.T) {
 			t.Error(err)
 		}
 	})
-	for _, recipe := range []string{"named-vectors", "squared-l2", "iterators", "embedded-iterators", "capabilities", "hybrid", "migration"} {
+	for _, recipe := range []string{"named-vectors", "squared-l2", "iterators", "embedded-iterators", "metadata", "capabilities", "hybrid", "migration"} {
 		t.Run(recipe, func(t *testing.T) {
 			var out bytes.Buffer
 			// Running twice also checks that fixtures and previews can be reused.

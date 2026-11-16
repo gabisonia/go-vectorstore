@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Add optional store/collection identity metadata across all providers and both
+  typed wrappers, with system/database/namespace names, local snapshots and
+  compatibility fallbacks. Include lifecycle conformance and a metadata recipe.
 - Add explicit squared Euclidean distance (`DistanceL2Squared` / `l2_squared`)
   across all providers for dense float32/float16 and sparse vectors, with squared
   distance thresholds and reciprocal similarity scores. Preserve existing L2 units.
