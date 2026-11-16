@@ -67,7 +67,7 @@ func TestIntegrationPostgresRecipes(t *testing.T) {
 			t.Error(err)
 		}
 	})
-	for _, recipe := range []string{"named-vectors", "squared-l2", "iterators", "embedded-iterators", "metadata", "capabilities", "hybrid", "migration"} {
+	for _, recipe := range []string{"named-vectors", "key-filters", "squared-l2", "iterators", "embedded-iterators", "metadata", "capabilities", "hybrid", "migration"} {
 		t.Run(recipe, func(t *testing.T) {
 			var out bytes.Buffer
 			// Running twice also checks that fixtures and previews can be reused.
@@ -78,6 +78,9 @@ func TestIntegrationPostgresRecipes(t *testing.T) {
 			}
 			if recipe == "hybrid" && (!strings.Contains(out.String(), "costs:") || !strings.Contains(out.String(), "reciprocal_rank_fusion") || !strings.Contains(out.String(), "Keyword list: costs:")) {
 				t.Fatalf("missing fused results: %s", &out)
+			}
+			if recipe == "key-filters" && !strings.Contains(out.String(), "Matched keys: 2\nPaged key: 2\nExact-key count: 1") {
+				t.Fatalf("unexpected key-filter results: %s", &out)
 			}
 			if recipe == "migration" {
 				if !strings.Contains(out.String(), "ADD COLUMN") || !strings.Contains(out.String(), "Preview only;") {

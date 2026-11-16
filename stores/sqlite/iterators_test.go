@@ -89,4 +89,16 @@ func TestReadIteratorsReleaseConnectionBeforeCallerCode(t *testing.T) {
 		}
 		break
 	}
+	for _, filter := range []vectordata.Filter{vectordata.Eq(vectordata.Column("ID"), "a"), vectordata.In(vectordata.Column("ID"), "b", "a")} {
+		before := checking.calls
+		for _, err := range typed.QueryIter(ctx, filter, 2, vectordata.QueryOptions{}) {
+			if err != nil {
+				t.Fatal(err)
+			}
+			break
+		}
+		if checking.calls != before+1 {
+			t.Fatal("key query decoded after early termination")
+		}
+	}
 }

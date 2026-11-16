@@ -15,7 +15,7 @@ import (
 // WAL writer. Close idle provider connections so the external connection can
 // obtain the exclusive file lock before the operation reconnects.
 func TestExclusiveReadDeadlines(t *testing.T) {
-	for _, operation := range []string{"list", "exists", "get", "get_many", "query", "count", "search", "open"} {
+	for _, operation := range []string{"list", "exists", "get", "get_many", "query", "query_key", "count", "count_key", "search", "open"} {
 		t.Run(operation, func(t *testing.T) {
 			ctx := context.Background()
 			path := filepath.Join(t.TempDir(), "exclusive.db")
@@ -64,10 +64,14 @@ func TestExclusiveReadDeadlines(t *testing.T) {
 				_, err = c.GetMany(deadline, []any{"kept"}, vectordata.RetrievalOptions{})
 			case "query":
 				_, err = c.Query(deadline, nil, 1, vectordata.QueryOptions{})
+			case "query_key":
+				_, err = c.Query(deadline, vectordata.Eq(vectordata.Column("ID"), "kept"), 1, vectordata.QueryOptions{})
 			case "search":
 				_, err = c.Search(deadline, []float32{0}, 1, vectordata.ModelSearchOptions{})
 			case "count":
 				_, err = c.Count(deadline, nil)
+			case "count_key":
+				_, err = c.Count(deadline, vectordata.In(vectordata.Column("ID"), "kept", "missing"))
 			case "open":
 				var other *Store
 				other, err = Open(deadline, path, StoreOptions{})

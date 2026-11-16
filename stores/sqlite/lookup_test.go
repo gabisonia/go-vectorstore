@@ -96,6 +96,40 @@ func TestGetManyBatchesAndOwnership(t *testing.T) {
 	if row.Data["Tags"].([]string)[0] != "one" || row.Data["JSON"].(map[string]any)["number"] != json.Number("9007199254740993") || row.Vectors["Dense"][0] != 1 || row.BinaryVectors["Bits"].Bytes[0] == 0 || row.SparseVectors["Sparse"].Values[0] != 1 {
 		t.Fatalf("read aliases storage: %+v", row)
 	}
+	f := vectordata.In(vectordata.Column("ID"), append(keys, nil)...)
+	if n, err := c.Count(ctx, f); err != nil || n != int64(size) {
+		t.Fatalf("batched key count with duplicates: %d %v", n, err)
+	}
+	for _, include := range []bool{false, true} {
+		selected, err := c.Query(ctx, f, size, vectordata.QueryOptions{IncludeVectors: include})
+		if err != nil || len(selected) != size || selected[0].Key != int64(0) {
+			t.Fatalf("batched key query: %d %v", len(selected), err)
+		}
+		first := selected[0]
+		if first.Data["JSON"].(map[string]any)["number"] != json.Number("9007199254740993") {
+			t.Fatal("query lost JSON number precision")
+		}
+		first.Data["Tags"].([]string)[0] = "changed"
+		first.Data["JSON"].(map[string]any)["number"] = 0
+		if include {
+			if !reflect.DeepEqual(first.Vectors["Dense"], []float32{1, 0}) || !reflect.DeepEqual(first.BinaryVectors["Bits"], bits) || !reflect.DeepEqual(first.SparseVectors["Sparse"], sparse) {
+				t.Fatalf("query vector projection: %+v", first)
+			}
+			first.Vectors["Dense"][0] = 9
+			first.BinaryVectors["Bits"].Bytes[0] = 0
+			first.SparseVectors["Sparse"].Values[0] = 9
+		} else if first.Vectors != nil || first.BinaryVectors != nil || first.SparseVectors != nil {
+			t.Fatal("query default included vectors")
+		}
+	}
+	selected, err := c.Query(ctx, vectordata.Eq(vectordata.Column("ID"), int64(0)), 1, vectordata.QueryOptions{IncludeVectors: true})
+	if err != nil || len(selected) != 1 {
+		t.Fatal(err)
+	}
+	row = selected[0]
+	if row.Data["Tags"].([]string)[0] != "one" || row.Data["JSON"].(map[string]any)["number"] != json.Number("9007199254740993") || row.Vectors["Dense"][0] != 1 || row.BinaryVectors["Bits"].Bytes[0] == 0 || row.SparseVectors["Sparse"].Values[0] != 1 {
+		t.Fatalf("query aliases storage: %+v", row)
+	}
 	if n, err := c.Count(ctx, nil); err != nil || n != int64(size) {
 		t.Fatalf("unfiltered count: %d %v", n, err)
 	}
@@ -225,6 +259,8 @@ func TestLookupAndCountIndexPlans(t *testing.T) {
 		constraint string
 	}{
 		{lookupSQL(2), []any{c.name, keyToken("one"), keyToken("two")}, "key=?"},
+		{countKeysSQL(2), []any{c.name, keyToken("one"), keyToken("two")}, "COVERING INDEX"},
+		{countKeysSQL(2), []any{c.name, keyToken("one"), keyToken("two")}, "key=?"},
 		{countAllSQL, []any{c.name}, "COVERING INDEX"},
 	} {
 		rows, err := s.db.QueryContext(ctx, "EXPLAIN QUERY PLAN "+tt.query, tt.args...)

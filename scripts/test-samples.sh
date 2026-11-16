@@ -13,6 +13,6 @@ go run ./samples/sqlite-store -db "$sample_tmp/documents.db"
 go run ./samples/sqlite-store -db "$sample_tmp/documents.db"
 go run ./samples/typed-search -category architecture
 go run ./samples/typed-rag -sqlite "$sample_tmp/rag.db"
-for recipe in named-vectors squared-l2 iterators embedded-iterators metadata capabilities; do
+for recipe in named-vectors key-filters squared-l2 iterators embedded-iterators metadata capabilities; do
   go run ./samples/recipes -recipe "$recipe"
 done

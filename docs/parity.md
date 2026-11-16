@@ -45,6 +45,11 @@ also depends on deployed pgvector version, permissions, index dimensions and NNZ
 limits. See [model API](model-api.md), [SQLite costs](sqlite.md), and
 [migration limits](migrations.md).
 
+SQLite uses its existing primary key index for top-level key equality/`In`
+queries and counts, with one read snapshot across batches. Other query predicates
+retain full-snapshot evaluation; accepted index hints do not add property or ANN
+indexes. See [measured key-filter behavior](performance.md#sqlite-key-filter-verification).
+
 ## Deliberate differences and future extensions
 
 Go uses interfaces, generics, tags, explicit filter nodes, iterators and contexts
