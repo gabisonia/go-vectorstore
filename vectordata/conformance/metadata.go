@@ -2,6 +2,7 @@ package conformance
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/gabisonia/go-vectorstore/vectordata"
@@ -37,6 +38,16 @@ func runMetadata(t *testing.T, factory Factory, caps vectordata.ProviderCapabili
 	}
 	if err := c.EnsureExists(ctx); err != nil {
 		t.Fatal(err)
+	}
+	if _, err := c.Get(ctx, "missing", vectordata.RetrievalOptions{}); !errors.Is(err, vectordata.ErrNotFound) {
+		t.Fatalf("missing record: %v", err)
+	} else {
+		// Existing providers may omit both wrapping and error metadata. When
+		// supplied, identity must agree with the collection's local metadata.
+		var operation *vectordata.OperationError
+		if errors.As(err, &operation) && operation.StoreMetadata != (vectordata.StoreMetadata{}) && (operation.StoreMetadata != wantStore || operation.Collection != c.Name() || operation.Operation == "") {
+			t.Fatalf("operation identity differs from collection: %+v", operation)
+		}
 	}
 	if got := vectordata.GetCollectionMetadata(c); got != want {
 		t.Fatalf("created collection metadata: %+v", got)

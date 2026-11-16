@@ -227,6 +227,10 @@ type HybridSearcher interface {
 
 // OperationError adds provider context while preserving errors.Is/As through Unwrap.
 type OperationError struct {
+	// StoreMetadata identifies configured storage without a live lookup. Empty
+	// fields are permitted for existing providers and manually constructed errors.
+	// Error retains its existing text; inspect these fields with errors.As.
+	StoreMetadata
 	Backend, Collection, Operation string
 	Err                            error
 }

@@ -40,7 +40,7 @@ func (c *ModelCollection) operation(op string, err error) error {
 	if errors.As(err, &pgErr) && pgErr.Code == "42P01" {
 		err = fmt.Errorf("%w: %w", vectordata.ErrCollectionNotFound, err)
 	}
-	return &vectordata.OperationError{Backend: "postgres", Collection: c.name, Operation: op, Err: err}
+	return c.store.operation(c.name, op, err)
 }
 func (c *ModelCollection) Exists(ctx context.Context) (bool, error) {
 	return c.store.CollectionExists(ctx, c.name)

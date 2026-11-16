@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/gabisonia/go-vectorstore/stores/memory"
+	"github.com/gabisonia/go-vectorstore/stores/sqlite"
 	"github.com/gabisonia/go-vectorstore/vectordata"
 )
 
@@ -151,6 +152,28 @@ func Example_namedVectors() {
 	}
 	fmt.Println(hits[0].Item.ID, hits[0].Distance, len(hits[0].Item.Body))
 	// Output: guide 0 2
+}
+
+func ExampleOperationError() {
+	ctx := context.Background()
+	store, err := sqlite.Open(ctx, ":memory:", sqlite.StoreOptions{})
+	if err != nil {
+		panic(err)
+	}
+	defer store.Close()
+	collection, err := store.EnsureModelCollection(ctx, "docs", vectordata.CollectionDefinition{Key: vectordata.KeyProperty{Name: "ID"}}, vectordata.ModelCollectionOptions{})
+	if err != nil {
+		panic(err)
+	}
+	_, err = collection.Get(ctx, "missing", vectordata.RetrievalOptions{})
+	var operation *vectordata.OperationError
+	if errors.As(err, &operation) {
+		fmt.Println(operation.SystemName, operation.DatabaseName, operation.Collection, operation.Operation)
+	}
+	fmt.Println(errors.Is(err, vectordata.ErrNotFound))
+	// Output:
+	// sqlite :memory: docs get
+	// true
 }
 
 func Example_errorHandling() {

@@ -21,6 +21,7 @@ It is a workflow comparison, not a claim of API or feature equivalence with ever
 | Hybrid keyword/vector search | Optional HybridSearcher and binary/sparse variants, RRF; string queries or plain-text KeywordTerms lists | PostgreSQL; inspect HybridKeywordTerms capability |
 | Provider discovery | CapabilityProvider reports keys, types, vector kinds, physical index tuples and optional workflows | Implemented |
 | Store/collection metadata | Optional metadata interfaces and helpers report system, database, namespace and collection identity; typed wrappers forward discovery | All three providers; local configuration snapshots |
+| Error diagnostics | OperationError preserves error chains and embeds configured store identity for structured diagnostics | PostgreSQL/SQLite model wrappers and PostgreSQL migrations; wrapping is optional |
 | Schema evolution | Read-only plans, drift detection, explicit reviewed additive application | PostgreSQL |
 | Durable provider portability | PostgreSQL and embedded SQLite | Implemented; memory is transient |
 

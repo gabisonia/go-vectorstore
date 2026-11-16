@@ -211,7 +211,7 @@ func (c *Collection) operation(op string, err error) error {
 	if errors.As(err, &sqliteErr) && sqliteErr.Code()&255 == 19 {
 		err = fmt.Errorf("%w: %w", vectordata.ErrInvalidRecord, err)
 	}
-	return &vectordata.OperationError{Backend: "sqlite", Collection: c.name, Operation: op, Err: err}
+	return &vectordata.OperationError{StoreMetadata: vectordata.GetStoreMetadata(c.store), Backend: "sqlite", Collection: c.name, Operation: op, Err: err}
 }
 func (c *Collection) checkDefinition(registration string, format int) error {
 	if format != 1 || registration != c.registration {
