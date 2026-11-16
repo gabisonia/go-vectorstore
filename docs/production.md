@@ -54,14 +54,17 @@ migration ownership solely to simplify startup.
 ## Contexts, iterators and shutdown
 
 Pass the request context through reads, writes and embeddings. Check every
-iterator error. PostgreSQL query/search iterators check cancellation between
-buffered rows and after exhaustion; cancellation during the final item is reported
+iterator error. Listing, batch, text/input and hybrid iterators check cancellation
+before starting, between values and at exhaustion. PostgreSQL also checks between
+buffered query/vector-search rows and at exhaustion; cancellation during the final item is reported
 if iteration continues. Breaking the loop deliberately ends iteration and closes
 its resources. Consumers should also check ctx.Err before expensive per-item work.
 
 Release cursors by finishing/breaking the range before issuing another operation
-through a single-connection pool. Memory/SQLite materialize query results or
-search pages before application iteration. Stop new requests, finish/cancel
+through a single-connection PostgreSQL pool. Memory/SQLite materialize listing,
+lookup/query snapshots or search pages and release locks/SQLite's connection
+before application iteration. Re-enumerating a sequence reruns reads and query
+embedding; cache results explicitly when replay is needed. Stop new requests, finish/cancel
 in-flight operations and iterators, then close the owning pool/SQLite Store.
 
 ## Failure outcomes and retries

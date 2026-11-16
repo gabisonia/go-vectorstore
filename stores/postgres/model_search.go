@@ -6,6 +6,7 @@ import (
 	"iter"
 	"strings"
 
+	"github.com/gabisonia/go-vectorstore/internal/iteration"
 	"github.com/gabisonia/go-vectorstore/stores/postgres/filtersql"
 	"github.com/gabisonia/go-vectorstore/vectordata"
 	"github.com/jackc/pgx/v5"
@@ -136,6 +137,9 @@ func (c *ModelCollection) SearchText(ctx context.Context, text string, top int, 
 	return c.SearchInput(ctx, text, top, opts)
 }
 func (c *ModelCollection) SearchInput(ctx context.Context, input any, top int, opts vectordata.ModelSearchOptions) ([]vectordata.ModelSearchResult, error) {
+	return iteration.Collect(c.SearchInputIter(ctx, input, top, opts))
+}
+func (c *ModelCollection) embedSearchInput(ctx context.Context, input any, top int, opts vectordata.ModelSearchOptions) ([]float32, error) {
 	p, err := c.definition.Vector(opts.VectorProperty)
 	if err != nil {
 		return nil, err
@@ -153,7 +157,7 @@ func (c *ModelCollection) SearchInput(ctx context.Context, input any, top int, o
 	if err != nil {
 		return nil, c.operation("embed_query", err)
 	}
-	return c.Search(ctx, vector, top, opts)
+	return vector, nil
 }
 
 type scoreScanner struct {
@@ -289,41 +293,10 @@ func (c *ModelCollection) HybridSearchText(ctx context.Context, text, keywords s
 	return c.HybridSearchInput(ctx, text, keywords, top, opts)
 }
 func (c *ModelCollection) HybridSearchInput(ctx context.Context, input any, keywords string, top int, opts vectordata.HybridSearchOptions) ([]vectordata.ModelSearchResult, error) {
-	config, err := c.validateHybridOptions(keywords, top, opts)
-	if err != nil {
-		return nil, err
-	}
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	vector, err := vectordata.EmbedInputQuery(ctx, input, config.vector, c.options)
-	if err != nil {
-		return nil, c.operation("embed_query", err)
-	}
-	return c.HybridSearch(ctx, vector, keywords, top, opts)
+	return iteration.Collect(c.HybridSearchInputIter(ctx, input, keywords, top, opts))
 }
 func (c *ModelCollection) HybridSearch(ctx context.Context, vector []float32, keywords string, top int, opts vectordata.HybridSearchOptions) ([]vectordata.ModelSearchResult, error) {
-	sql, args, p, err := c.hybridPlan(vector, keywords, top, opts)
-	if err != nil {
-		return nil, err
-	}
-	return c.runHybrid(ctx, sql, args, p, opts)
-}
-func (c *ModelCollection) runHybrid(ctx context.Context, sql string, args []any, p vectordata.VectorProperty, opts vectordata.HybridSearchOptions) ([]vectordata.ModelSearchResult, error) {
-	out := []vectordata.ModelSearchResult{}
-	var failure error
-	c.runSearch(ctx, sql, args, p, opts.ModelSearchOptions, true, func(r vectordata.ModelSearchResult, err error) bool {
-		if err != nil {
-			failure = err
-			return false
-		}
-		out = append(out, r)
-		return true
-	})
-	if failure != nil {
-		return nil, failure
-	}
-	return out, nil
+	return iteration.Collect(c.HybridSearchIter(ctx, vector, keywords, top, opts))
 }
 func (c *ModelCollection) hybridPlan(vector []float32, keywords string, top int, opts vectordata.HybridSearchOptions) (string, []any, vectordata.VectorProperty, error) {
 	config, err := c.validateHybridOptions(keywords, top, opts)

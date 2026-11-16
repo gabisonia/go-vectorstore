@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"iter"
 	"strings"
 
+	"github.com/gabisonia/go-vectorstore/internal/iteration"
 	"github.com/gabisonia/go-vectorstore/vectordata"
 	"github.com/jackc/pgx/v5"
 )
@@ -27,30 +29,42 @@ func (s *PostgresVectorStore) registryExists(ctx context.Context) (bool, error) 
 	return exists, err
 }
 func (s *PostgresVectorStore) ListCollectionNames(ctx context.Context) ([]string, error) {
-	query := `SELECT DISTINCT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname=$1 AND c.relkind IN ('r','p') AND EXISTS (SELECT 1 FROM pg_attribute a JOIN pg_type t ON t.oid=a.atttypid WHERE a.attrelid=c.oid AND NOT a.attisdropped AND t.typname IN ('vector','halfvec'))`
-	exists, err := s.registryExists(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if exists {
-		query += ` UNION SELECT m.name FROM ` + qualifiedTable(s.opts.Schema, modelRegistry) + ` m JOIN pg_class c ON c.relname=m.name JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname=$1 AND c.relkind IN ('r','p')`
-	}
-	query += " ORDER BY 1"
-	rows, err := s.pool.Query(ctx, query, s.opts.Schema)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	names := []string{}
-	for rows.Next() {
-		var name string
-		if err := rows.Scan(&name); err != nil {
-			return nil, err
-		}
-		names = append(names, name)
-	}
-	return names, rows.Err()
+	return iteration.Collect(s.ListCollectionNamesIter(ctx))
 }
+func (s *PostgresVectorStore) ListCollectionNamesIter(ctx context.Context) iter.Seq2[string, error] {
+	return iteration.WithContext(ctx, func(yield func(string, error) bool) {
+		query := `SELECT DISTINCT c.relname FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname=$1 AND c.relkind IN ('r','p') AND EXISTS (SELECT 1 FROM pg_attribute a JOIN pg_type t ON t.oid=a.atttypid WHERE a.attrelid=c.oid AND NOT a.attisdropped AND t.typname IN ('vector','halfvec'))`
+		exists, err := s.registryExists(ctx)
+		if err != nil {
+			yield("", err)
+			return
+		}
+		if exists {
+			query += ` UNION SELECT m.name FROM ` + qualifiedTable(s.opts.Schema, modelRegistry) + ` m JOIN pg_class c ON c.relname=m.name JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname=$1 AND c.relkind IN ('r','p')`
+		}
+		query += " ORDER BY 1"
+		rows, err := s.pool.Query(ctx, query, s.opts.Schema)
+		if err != nil {
+			yield("", err)
+			return
+		}
+		defer rows.Close()
+		for rows.Next() {
+			var name string
+			if err := rows.Scan(&name); err != nil {
+				yield("", err)
+				return
+			}
+			if !yield(name, nil) {
+				return
+			}
+		}
+		if err := rows.Err(); err != nil {
+			yield("", err)
+		}
+	})
+}
+
 func (s *PostgresVectorStore) CollectionExists(ctx context.Context, name string) (bool, error) {
 	if err := validCollectionName(name); err != nil {
 		return false, err

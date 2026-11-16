@@ -25,6 +25,10 @@ type VectorIndexCapability struct {
 // particular collection or deployment enables them. Unless stated otherwise,
 // empty slices mean no support. Built-in providers return caller-owned slices.
 type ProviderCapabilities struct {
+	// ReadIterators adds native collection listing, batch reads and text search
+	// iterators. InputEmbedding/HybridSearch also add their input/hybrid iterators.
+	// This reports API support, not whether a provider buffers snapshots/results.
+	ReadIterators bool
 	// InputEmbedding supports transient/custom inputs and InputSearcher for dense vectors.
 	InputEmbedding bool
 	// OptionalVectors permits SQL NULL / missing values for every supported vector kind.

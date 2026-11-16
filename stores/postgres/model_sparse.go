@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/gabisonia/go-vectorstore/internal/iteration"
 	"github.com/gabisonia/go-vectorstore/vectordata"
 	"github.com/jackc/pgx/v5"
 )
@@ -169,19 +170,7 @@ func (c *ModelCollection) SearchSparse(ctx context.Context, v vectordata.SparseV
 	return out, nil
 }
 func (c *ModelCollection) HybridSearchSparse(ctx context.Context, v vectordata.SparseVector, keywords string, top int, opts vectordata.HybridSearchOptions) ([]vectordata.ModelSearchResult, error) {
-	config, err := c.validateHybridOptions(keywords, top, opts)
-	if err != nil {
-		return nil, err
-	}
-	v, err = vectordata.NormalizeSparseVector(v, config.vector)
-	if err != nil {
-		return nil, err
-	}
-	sql, args, p, err := c.hybridValuePlan(sparseLiteral(v), keywords, top, opts)
-	if err != nil {
-		return nil, err
-	}
-	return c.runHybrid(ctx, sql, args, p, opts)
+	return iteration.Collect(c.HybridSearchSparseIter(ctx, v, keywords, top, opts))
 }
 
 func modelVectorTuning(value any, p vectordata.VectorProperty) ([]searchSetting, bool, bool, error) {

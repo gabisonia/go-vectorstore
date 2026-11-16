@@ -18,6 +18,7 @@ func runCapabilities(t *testing.T, factory Factory) {
 		t.Skip("provider does not expose optional capability metadata")
 	}
 	caps := provider.Capabilities()
+	t.Run("read_iterators", func(t *testing.T) { runReadIterators(t, factory, caps) })
 	t.Run("native_keys", func(t *testing.T) { runNativeKeys(t, factory, caps) })
 	t.Run("optional_vectors", func(t *testing.T) { runOptionalVectors(t, factory, caps) })
 	t.Run("native_arrays", func(t *testing.T) { runNativeArrays(t, factory, caps) })

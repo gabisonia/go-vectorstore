@@ -9,6 +9,7 @@ need no API key.
 | --- | --- | --- |
 | Named vectors and projection | `go run ./samples/recipes -recipe named-vectors` | `guide: BodyVector distance 0.000; loaded dimensions 3` |
 | Early iterator exit and cancellation | `go run ./samples/recipes -recipe iterators` | `First: one`, then cancellation and a count of 2 |
+| Text/custom-input read iterators | `go run ./samples/recipes -recipe embedded-iterators` | `Search: costs`, then `Input: costs` |
 | Provider capabilities | `go run ./samples/recipes -recipe capabilities` | Backend name, hybrid/migration flags and physical index tuple count |
 | PostgreSQL hybrid search | `go run ./samples/recipes -recipe hybrid -dsn "$PG_DSN"` | Ranked IDs including `costs`, with `reciprocal_rank_fusion` scores |
 | PostgreSQL migration preview | `go run ./samples/recipes -recipe migration -dsn "$PG_DSN"` | Proposed optional Category column SQL/args and `Preview only; no migration applied.` |
@@ -48,6 +49,12 @@ providers; reruns reuse their collections. Capabilities creates none. To clean u
 remove a closed sample SQLite file and its sidecars, or delete only collections
 under your chosen prefix through `DeleteCollection`. Stop local PostgreSQL with
 `docker compose down`.
+
+The iterator recipe also lists collections and batch-reads a found/missing key.
+The hybrid recipe enumerates `HybridSearchTextIter`. These iterator APIs require
+master after v0.4.1. PostgreSQL reads cursor rows; memory/SQLite buffer snapshots
+or pages before yielding. A break closes the operation, and every enumeration
+reruns its read and embedding work.
 
 Portable workflows are exercised by [main_test.go](main_test.go). PostgreSQL
 16/18 integration runs every recipe twice and checks that previewing a migration

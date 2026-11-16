@@ -26,7 +26,7 @@ type Named struct {
 
 func run(ctx context.Context, args []string, out io.Writer) error {
 	flags := flag.NewFlagSet("recipes", flag.ContinueOnError)
-	recipe := flags.String("recipe", "named-vectors", "named-vectors, iterators, capabilities, hybrid, migration")
+	recipe := flags.String("recipe", "named-vectors", "named-vectors, iterators, embedded-iterators, capabilities, hybrid, migration")
 	dsn := flags.String("dsn", "", "PostgreSQL DSN (required for hybrid/migration)")
 	path := flags.String("sqlite", "", "SQLite file (default: memory)")
 	prefix := flags.String("prefix", "recipe_demo", "Dedicated collection prefix")
@@ -34,7 +34,7 @@ func run(ctx context.Context, args []string, out io.Writer) error {
 		return err
 	}
 	switch *recipe {
-	case "named-vectors", "iterators", "capabilities", "hybrid", "migration":
+	case "named-vectors", "iterators", "embedded-iterators", "capabilities", "hybrid", "migration":
 	default:
 		return fmt.Errorf("unknown recipe %q", *recipe)
 	}
@@ -90,6 +90,22 @@ func execute(ctx context.Context, store vectordata.ModelStore, recipe, prefix st
 		if _, err := c.Upsert(ctx, []Note{{ID: "one", Text: "first"}, {ID: "two", Text: "second"}}); err != nil {
 			return err
 		}
+		for collectionName, err := range vectordata.ListCollectionNamesIter(ctx, store) {
+			if err != nil {
+				return err
+			}
+			if collectionName == name {
+				fmt.Fprintf(out, "Collection: %s\n", collectionName)
+				break
+			}
+		}
+		for note, err := range c.GetManyIter(ctx, []string{"one", "missing"}, vectordata.RetrievalOptions{}) {
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(out, "Batch: %s\n", note.ID)
+			break
+		}
 		// Leaving the range closes a PostgreSQL cursor. Memory/SQLite materialize
 		// before yielding. Check the iterator's error value on every iteration.
 		for note, err := range c.QueryIter(ctx, nil, 2, vectordata.QueryOptions{}) {
@@ -125,6 +141,28 @@ func execute(ctx context.Context, store vectordata.ModelStore, recipe, prefix st
 			return err
 		}
 		fmt.Fprintf(out, "Cancellation observed; count after iterator: %d\n", count)
+	case "embedded-iterators":
+		c, err := vectordata.EnsureTypedModelCollection[string, demo.Article](ctx, store, name, nil, vectordata.ModelCollectionOptions{})
+		if err != nil {
+			return err
+		}
+		if _, err := c.Upsert(ctx, demo.Articles()); err != nil {
+			return err
+		}
+		for hit, err := range c.SearchTextIter(ctx, "reduce cloud costs", 2, vectordata.ModelSearchOptions{}) {
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(out, "Search: %s\n", hit.Item.ID)
+			break
+		}
+		for hit, err := range c.SearchInputIter(ctx, "reduce cloud costs", 2, vectordata.ModelSearchOptions{}) {
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(out, "Input: %s\n", hit.Item.ID)
+			break
+		}
 	case "hybrid":
 		c, err := vectordata.EnsureTypedModelCollection[string, demo.Article](ctx, store, name, nil, vectordata.ModelCollectionOptions{})
 		if err != nil {
@@ -133,11 +171,10 @@ func execute(ctx context.Context, store vectordata.ModelStore, recipe, prefix st
 		if _, err := c.Upsert(ctx, demo.Articles()); err != nil {
 			return err
 		}
-		hits, err := c.HybridSearchText(ctx, "reduce cloud costs", "caching", 2, vectordata.HybridSearchOptions{TextProperty: "Body", CandidateLimit: 10})
-		if err != nil {
-			return err
-		}
-		for _, hit := range hits {
+		for hit, err := range c.HybridSearchTextIter(ctx, "reduce cloud costs", "caching", 2, vectordata.HybridSearchOptions{TextProperty: "Body", CandidateLimit: 10}) {
+			if err != nil {
+				return err
+			}
 			fmt.Fprintf(out, "%s: %s score %.6f\n", hit.Item.ID, hit.ScoreKind, hit.Score)
 		}
 	case "migration":

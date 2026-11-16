@@ -169,3 +169,44 @@ func Example_nativeKeys() {
 	fmt.Println(event.ID, len(document.ID))
 	// Output: 18446744073709551615 36
 }
+
+func Example_readIterators() {
+	type Document struct {
+		ID     string    `vectordata:"key"`
+		Body   string    `vectordata:"data"`
+		Vector []float32 `vectordata:"vector,dimensions=2,metric=l2,source=Body"`
+	}
+	ctx := context.Background()
+	store := memory.New()
+	embedder := vectordata.EmbeddingFunc(func(context.Context, []string) ([][]float32, error) { return [][]float32{{1, 0}}, nil })
+	documents, err := vectordata.EnsureTypedModelCollection[string, Document](ctx, store, "docs", nil, vectordata.ModelCollectionOptions{Embedder: embedder})
+	if err != nil {
+		panic(err)
+	}
+	if _, err := documents.Upsert(ctx, []Document{{ID: "guide", Body: "A guide"}}); err != nil {
+		panic(err)
+	}
+	for name, err := range vectordata.ListCollectionNamesIter(ctx, store) {
+		if err != nil {
+			panic(err)
+		}
+		fmt.Println("Collection:", name)
+	}
+	for document, err := range documents.GetManyIter(ctx, []string{"missing", "guide"}, vectordata.RetrievalOptions{}) {
+		if err != nil {
+			panic(err)
+		}
+		fmt.Println("Record:", document.ID)
+	}
+	for hit, err := range documents.SearchTextIter(ctx, "guide", 1, vectordata.ModelSearchOptions{}) {
+		if err != nil {
+			panic(err)
+		}
+		fmt.Println("Match:", hit.Item.ID)
+		break
+	}
+	// Output:
+	// Collection: docs
+	// Record: guide
+	// Match: guide
+}

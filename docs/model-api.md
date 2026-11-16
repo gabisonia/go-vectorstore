@@ -328,6 +328,7 @@ PostgreSQL float16 storage requires pgvector 0.7+ and a visible `halfvec` type.
 | Feature | Memory | SQLite | PostgreSQL |
 | --- | --- | --- | --- |
 | `InputEmbedding` | True, dense outputs | True, dense outputs | True, dense outputs |
+| `ReadIterators` | True, buffered snapshots/pages | True, buffered snapshots/pages | True, cursor enumeration |
 | `OptionalVectors` | True | True | True |
 | `VectorIndexMethods` | None | None | HNSW, IVFFlat |
 | `VectorIndexCapabilities` | None | None | Supported method/metric/precision combinations and dimension/nonzero limits |
@@ -421,6 +422,69 @@ Querying a deleted/missing collection returns `ErrCollectionNotFound`. PostgreSQ
 and SQLite operation errors add backend, collection, and operation context through
 `OperationError`, preserving
 `errors.Is`/`errors.As`.
+
+### Complete read iteration
+
+Built-in stores/collections support iterator forms for all model reads:
+
+| Operation | Optional interface | Iterator |
+| --- | --- | --- |
+| Collection listing | `CollectionNameIterator` | `ListCollectionNamesIter` |
+| Batch retrieval | `ModelBatchIterator` | `GetManyIter` |
+| Text vector search | `TextSearchIterator` | `SearchTextIter` |
+| Custom embedding input | `InputSearchIterator` | `SearchInputIter` |
+| Dense/text hybrid search | `HybridSearchIterator` | `HybridSearchIter`, `HybridSearchTextIter` |
+| Custom-input hybrid search | `InputHybridSearchIterator` | `HybridSearchInputIter` |
+| Binary/sparse hybrid search | `BinaryHybridSearchIterator`, `SparseHybridSearchIterator` | `HybridSearchBinaryIter`, `HybridSearchSparseIter` |
+
+Hybrid iterators require a hybrid-capable provider (currently PostgreSQL).
+The typed model wrapper exposes the collection iterator methods directly.
+When using `ModelStore` or `ModelCollection` interfaces, call package helpers such
+as `vectordata.ListCollectionNamesIter(ctx, store)` and
+`vectordata.SearchTextIter(ctx, collection, text, top, options)`. Helpers prefer
+the optional iterator interfaces and buffer the existing slice methods when a
+third-party provider has not implemented them. Unsupported input/hybrid methods
+yield `ErrUnsupported`. The original provider interfaces remain compatible.
+`ReadIterators` advertises native implementations, not bounded memory or latency.
+
+```go
+for record, err := range documents.GetManyIter(ctx, []string{"guide", "missing"},
+    vectordata.RetrievalOptions{}) {
+    if err != nil { return err }
+    fmt.Println(record.ID)
+}
+for hit, err := range documents.SearchTextIter(ctx, "mountains", 3,
+    vectordata.ModelSearchOptions{}) {
+    if err != nil { return err }
+    fmt.Println(hit.Item.ID, hit.Score)
+    break // Releases a PostgreSQL cursor immediately.
+}
+```
+
+Constructing a sequence does no database access, embedding or model decoding.
+Each enumeration reruns the operation, including one embedding request for text
+or input queries. Keep inputs unchanged during consumption. Options/filters are
+validated before embedding. Errors are yielded once and stop enumeration; a late
+error can follow earlier valid results. Existing slice methods return no partial
+values on error. Typed codecs decode only consumed results and stop on the first
+decode error. Check every yielded error, including one at exhaustion if the final
+item canceled the context. Breaking ends the operation deliberately, without an
+additional error result.
+
+PostgreSQL enumerates listing, batch lookup and embedded/hybrid search rows from
+cursors and closes them on completion, error, cancellation or break. It validates
+and deduplicates all batch keys before querying, then reads bounded SQL chunks;
+breaking stops before the next chunk. Batch retrieval preserves the existing
+behavior of separate read statements rather than promising one snapshot across
+all chunks. Ranking/RRF work still runs in PostgreSQL before results are available.
+Consume or close the sequence before issuing a nested operation through a
+single-connection PostgreSQL pool.
+
+Memory and SQLite buffer listing/lookup snapshots and selected search pages
+before yielding. SQLite preserves its single WAL snapshot for GetMany, releases
+its one connection before caller callbacks/codecs run, and never retries after
+yielding. These iterator APIs do not add SQLite ANN or SQL filter acceleration.
+See the [iterator recipes](../samples/recipes/README.md).
 
 ## Filtering
 

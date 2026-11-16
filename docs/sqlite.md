@@ -77,6 +77,14 @@ snapshot while other connections can write. Only matching payloads are decoded
 and validated; missing keys are omitted, duplicates collapse, and ordering is
 unspecified. The connection is released before results reach the caller.
 
+`ListCollectionNamesIter`, `GetManyIter`, `SearchTextIter`, and `SearchInputIter`
+are lazy at construction. They load their snapshot/result page before yielding
+and release the connection before invoking application callbacks or typed codecs.
+They do not promise bounded lookup-result memory or incremental SQL decoding.
+GetManyIter shares the same one-snapshot semantics as GetMany. Cancellation is
+checked before loading, between results and at exhaustion; a break terminates
+without yielding another error. Enumeration never retries after exposing results.
+
 Count with a nil filter uses SQL COUNT over the collection's record index, with
 schema/format validation in the same statement. It does not deserialize payloads
 and uses bounded Go memory; counting still scans the matching index entries and

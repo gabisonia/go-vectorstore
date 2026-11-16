@@ -5,6 +5,7 @@ import (
 	"iter"
 
 	"github.com/gabisonia/go-vectorstore/internal/exactsearch"
+	"github.com/gabisonia/go-vectorstore/internal/iteration"
 	"github.com/gabisonia/go-vectorstore/stores/memory"
 	"github.com/gabisonia/go-vectorstore/vectordata"
 )
@@ -117,24 +118,9 @@ func (c *Collection) Query(ctx context.Context, filter vectordata.Filter, top in
 	return engine.Query(ctx, filter, top, opts)
 }
 func sequence[T any](ctx context.Context, run func() ([]T, error)) iter.Seq2[T, error] {
-	return func(yield func(T, error) bool) {
-		var zero T
-		items, err := run()
-		if err != nil {
-			yield(zero, err)
-			return
-		}
-		for _, item := range items {
-			if err := ctx.Err(); err != nil {
-				yield(zero, err)
-				return
-			}
-			if !yield(item, nil) {
-				return
-			}
-		}
-	}
+	return iteration.FromSlice(ctx, run)
 }
+
 func (c *Collection) QueryIter(ctx context.Context, f vectordata.Filter, top int, o vectordata.QueryOptions) iter.Seq2[vectordata.ModelRecord, error] {
 	return sequence(ctx, func() ([]vectordata.ModelRecord, error) { return c.Query(ctx, f, top, o) })
 }
