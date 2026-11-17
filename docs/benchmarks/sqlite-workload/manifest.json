@@ -1,0 +1,17 @@
+{
+  "schema": 1,
+  "fixed_source": "b38b1eafd7b181a3fcea5e61a1764e9af38fd235",
+  "diagnostic_source": "96cdace22192d2e961c3631858f00836a607fc4e",
+  "complete_random_fixtures": 4,
+  "complete_tied_fixtures": 1,
+  "verified_timed_pages": 360,
+  "diagnostic_complete": false,
+  "sha256": {
+    "random.jsonl": "a91a1401aa95620daeec06d3539aef826246231ca9b2176d7e7ddf84cf99a3cf",
+    "ties.jsonl": "c10a3e43b6caa5f7b29489f3c06efc9209d600a3fdd7f9aa6dad50bf3b80acd7",
+    "diagnostic-before-partial.jsonl": "83e5712b4117ec908f8cad04ae43225208bfb8758f998118f130c4235f2ffa45",
+    "report.md": "1aebd586f07012d297e39a7c689fc4dbe05ca11cc5e055b911558c85115033e8",
+    "summary.csv": "b581e1ced401f0322a1e4173993e386e83ba624f0e63c03a3b4bdec05015926b",
+    "../../../samples/sqlite-workload/summarize.py": "65f04a4bbe1d75a182090b968631646d5d395fd66d522cb0637c1cbd3eaea4fc"
+  }
+}

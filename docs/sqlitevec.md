@@ -118,6 +118,9 @@ complete tie candidates, real SQL use, concurrent WAL writers, malformed off-pag
 projections, cancellation, older-writer invalidation and missing-extension rejection
 in a separate binary. CI runs the adapter and native SQL proofs on all three OSes.
 
-See [measured fixture and limitations](performance.md#sqlite-vec-l1-verification).
-Broader workloads, cold I/O, write/rebuild cost and additional native metrics remain
-separate increments in the [parity plan](parity-plan.md).
+See [measured fixture and limitations](performance.md#sqlite-vec-l1-verification)
+and the [larger workload evidence](benchmarks/sqlite-workload/README.md): 10k/100k,
+128/768 dimensions, filtered eligibility, tied vectors, writes/rebuilds and storage.
+The write-plan correction requires the existing point index without changing the
+format. Controlled cold I/O, tail/concurrent-service measurements and additional
+native metrics remain separate work in the [parity plan](parity-plan.md).

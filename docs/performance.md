@@ -68,6 +68,21 @@ rebuild and exact projected search. The immutable release fixture is checked in 
 
 ## SQLite-vec L1 verification
 
+The [workload harness](../samples/sqlite-workload/README.md) extends this microbenchmark
+with filtered eligibility, top 100, larger dimensions/collections, reopened
+connections, writes/rebuilds and storage observations. Its independent page checks
+run in normal and CGo-free three-OS CI; full measurements are opt-in and sequential.
+
+The [published workload evidence](benchmarks/sqlite-workload/README.md) includes
+the complete 10k/100k by 128/768 matrix and tied-vector profile, with raw JSONL,
+checksums and reproducible Markdown/CSV summaries. It exposed a collection-only
+cleanup scan per vector write; the existing key index is now required. At 10k/768,
+the diagnostic projected load/rebuild observations were 71.8/71.6 seconds versus
+1.46/1.90 seconds after the fix. These are single-operation observations on matching
+fixtures, not general throughput estimates. Filtered searches retain full canonical
+cost, and native tie handling can be slower than packed Go; the report preserves
+those cases and all timing outliers.
+
 ```sh
 go test -race ./stores/sqlitevec ./internal/exactsearch
 go test -race -tags=sqlitevecprobe -run TestNativeVector ./stores/sqlite

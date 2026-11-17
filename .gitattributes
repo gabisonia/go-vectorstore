@@ -1,0 +1,3 @@
+# Preserve checksum-bearing evidence and its generator across platform checkouts.
+/docs/benchmarks/sqlite-workload/* text eol=lf
+/samples/sqlite-workload/*.py text eol=lf

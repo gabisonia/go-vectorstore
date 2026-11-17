@@ -11,6 +11,7 @@ This file describes contributing to this repository.
 - `internal/exactsearch`: shared bounded exact-search ranking for memory/SQLite.
 - `vectordata/conformance`: shared provider behavior and filter parity fixtures.
 - `samples`: runnable workflows; sample-only helpers live in `samples/internal`.
+- `samples/sqlite-workload`: opt-in sequential measurement harness; generated JSONL and fixture limits are documented in its README.
 - `docs`: usage, provider limits, migrations, architecture and measured performance.
 
 The module requires Go 1.25+. `VERSION` selects the source version being prepared or tagged; CHANGELOG describes
@@ -53,6 +54,13 @@ reapply exact Go ranking. Preserve canonical fallback for unsupported shapes and
 metrics; vec0 float32 KNN does not have this proof. Keep extension imports out of
 the base provider and follow [docs/sqlitevec.md](docs/sqlitevec.md) for limits and
 dependency-update review.
+
+The SQLite workload harness has small random/tied correctness profiles in normal
+tests and CGo-free platform CI. Full 10k/100k by 128/768 runs are opt-in. Keep
+generation/validation outside API timers, require a final JSONL completion event,
+and preserve owned-fixture cleanup on cancellation. Reopened handles do not imply
+cold OS caches. Record source revision/toolchain/hardware and avoid competing
+tests while measuring. See [samples/sqlite-workload](samples/sqlite-workload/README.md).
 
 PostgreSQL and sample recipe integration tests need Docker:
 
@@ -138,6 +146,8 @@ ten-minute timeout, while storage checks retain five minutes.
   Keep rebuild explicit, keyset-batched and atomic. Rank packed vectors and fetch
   the selected payload page in one deferred WAL snapshot; filtered/binary/sparse
   searches retain canonical fallback. Do not infer native vector index support.
+  Require the existing collection/key index for per-record projection cleanup;
+  SQLite can otherwise select a collection-only primary-key scan without ANALYZE.
 - PostgreSQL migrations separate read-only planning from explicit application.
   Preserve review/staleness validation and additive-application limits.
 - ProviderAnnotations are immutable JSON values. Omit empty values and preserve
