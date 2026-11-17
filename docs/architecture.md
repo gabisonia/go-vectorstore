@@ -404,5 +404,6 @@ native-key ties, fuses with RRF, then thresholds/pages. HNSW can be approximate;
 FLAT, exact tuning, unsupported filters/vectors and unresolved ties use exact Go
 vector ranking over the guarded generation. Keyword matches are retrieved fully
 for filtering/ties. Embedding forms validate/preflight before callbacks, freeze
-operands and embed once across retries. Plain/old/missing TEXT indexes return
+operands and keyword lists and embed once across retries. KeywordTerms bind
+literal AND groups joined by OR within the selected TEXT field. Plain/old/missing TEXT indexes return
 unsupported rather than an incomplete vector-only hybrid result.

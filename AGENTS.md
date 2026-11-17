@@ -78,7 +78,8 @@ rebuild/native writes. Validate observable TEXT settings. Native hybrid reads
 must fetch both candidate lists and their canonical payloads from one guarded
 generation; filter/exclude missing vectors before candidate limits, preserve exact
 key ties and RRF score units, and reject missing TEXT indexes without partial
-results or implicit rebuilds. KeywordTerms lists remain unadvertised. Freeze
+results or implicit rebuilds. KeywordTerms lists OR plain-text AND groups with
+bound operands and the same guarded reads. Freeze
 operands before embedding callbacks and embed once across read retries.
 Keep filtering/KNN/wrapper reads in the
 manifest/readiness Lua guard.

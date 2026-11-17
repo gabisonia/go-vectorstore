@@ -366,7 +366,8 @@ for four dense metrics and two precisions (16 tuples, up to 4,096 dimensions).
 Both native layouts advertise indexed string/int64/float64/bool data and
 `FullTextIndexing` for strings marked `IsFullTextIndexed`/`fulltext`. JSON version-5
 indexes add TEXT on explicit rebuild/native writes; older schemas remain readable.
-Native Redis advertises dense hybrid search; HybridKeywordTerms/migrations remain false.
+Native Redis advertises dense hybrid search and HybridKeywordTerms; migrations
+remain false.
 This creates Redis TEXT fields but adds no keyword-query API. `SearchText` still
 embeds its input for vector search. This is local discovery; see
 [Redis runtime limits and costs](redis.md).
@@ -1024,14 +1025,15 @@ HASH/JSON TEXT generations. Its plain keyword string uses bound AND terms with
 English stemming/default stopwords and Redis BM25 ranking. Filters and optional
 vector eligibility apply before each candidate limit. Both lists and canonical
 payloads come from one guarded generation; distances are remeasured in Go.
-KeywordTerms lists remain unsupported. Plain Redis and legacy/missing TEXT indexes
+KeywordTerms lists OR plain-text AND groups. Plain Redis and legacy/missing TEXT indexes
 return `ErrUnsupported`; rebuilds are explicit. See Redis-specific keyword,
 read-cost and readiness rules before comparing rankings across providers.
 See [SQLite storage and limits](sqlite.md) and [Redis limits](redis.md).
 
 ### Keyword lists
 
-On master after v0.4.1, PostgreSQL also accepts `HybridSearchOptions.KeywordTerms`,
+On master after v0.4.1, PostgreSQL and native Redis accept
+`HybridSearchOptions.KeywordTerms`,
 covering the keyword-list workflow of Microsoft's
 [hybrid search contract](https://source.dot.net/Microsoft.Extensions.VectorData.Abstractions/IKeywordHybridSearchable.cs.html).
 Check `Capabilities().HybridKeywordTerms` before using this option with a provider.
@@ -1055,22 +1057,28 @@ the existing string behavior; a non-nil empty list, a blank entry, or simultaneo
 nonblank positional keywords returns `ErrInvalidSearchOptions` before embedding
 or database access. List entries must be valid UTF-8 without NUL.
 
-PostgreSQL matches any entry (OR), with plain-text AND matching between the words
+Both providers match any entry (OR), with plain-text AND matching between the words
 within each entry. Thus the example matches documents containing both `cloud` and
-`costs`, or containing `caching`. Each entry is independently normalized using
+`costs`, or containing `caching`. PostgreSQL independently normalizes each entry
+using
 `plainto_tsquery('simple', ...)`; punctuation is ignored and query operators are
 not interpreted. See [PostgreSQL's plain-text query rules](https://www.postgresql.org/docs/current/textsearch-controls.html#TEXTSEARCH-PARSING-QUERIES).
 Entries producing no lexemes, such as `"---"`, add no keyword candidates. Vector
 candidates can still be returned even when the keyword side matches nothing.
 
-Terms use a bound text-array parameter, and the query retains GIN full-text index
-eligibility. Typed and dynamic dense/text/custom-input/binary/sparse hybrid APIs,
+PostgreSQL uses a bound text-array parameter and retains GIN full-text index
+eligibility. Redis binds individual lexical tokens into parenthesized AND groups
+joined by OR, using English stemming/default stopwords and BM25. Redis limits the
+whole list to 128 groups, 128 lexical tokens and 16,384 UTF-8 bytes. Punctuation-only
+groups contribute no keyword candidates. Native Redis supports dense forms;
+PostgreSQL also supports binary/sparse forms. Typed and dynamic supported hybrid APIs,
 including iterators, use the same option. Each enumeration snapshots the list
 before invoking embedding code; repeated enumerations read the current supplied
 list again. Callers must avoid concurrent mutation during enumeration. Filters,
 projection, paging, candidate limits, distance thresholds and RRF score thresholds
 keep their existing meanings. Existing string keywords continue to require all
-words through `plainto_tsquery`. Run the PostgreSQL `hybrid` recipe to see both forms.
+words using each provider's tokenizer. Run the PostgreSQL `hybrid` recipe or the
+Redis `-keyword-terms` sample to see both forms.
 
 ## Verification and scope
 

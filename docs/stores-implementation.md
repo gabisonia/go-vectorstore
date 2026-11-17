@@ -302,9 +302,9 @@ implicit rebuild; an explicit rebuild/native write adds scalar fields. Full-text
 hints select version 5 with a separate raw-string JSON map and safe TEXT aliases.
 Version-4 scalar/vector fields stay unchanged until explicit rebuild/native writes;
 TEXT uses the same tokenizer/observable schema checks as HASH. Canonical payloads
-stay opaque. Native dense hybrid supports plain string keywords; KeywordTerms
-lists and standalone keyword queries remain absent. Cleanup protects JSON leases and
-current generations, including uncertain writes. See [RedisJSON storage](redis.md#redisjson-storage).
+stay opaque. Native dense hybrid supports string keywords and KeywordTerms lists
+with OR between plain-text AND groups; standalone keyword queries remain absent.
+Cleanup protects JSON leases and current generations, including uncertain writes. See [RedisJSON storage](redis.md#redisjson-storage).
 
 Redis hybrid executes vector search, BM25 keyword search and canonical union
 fetching in one guarded Lua execution. Unsupported filters or vector-index cases

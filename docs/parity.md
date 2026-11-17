@@ -18,7 +18,7 @@ It is a workflow comparison, not a claim of API or feature equivalence with ever
 | Automatic embeddings | Text/custom-input embedders, direct input fields, store/collection/property overrides, bounded batches, SearchText/SearchInput | Implemented for dense outputs |
 | Filtered retrieval/search | Portable AST, JSON paths, native arrays, Contains/ContainsAny/ContainsAll | Implemented |
 | Read iteration and cancellation | Listing, batch reads, text/custom-input and every supported hybrid variant use iter.Seq2/context.Context | Implemented; PostgreSQL cursor enumeration, memory/SQLite/Redis snapshots/pages; compatibility fallbacks buffer slices |
-| Hybrid keyword/vector search | Optional HybridSearcher and binary/sparse variants, RRF; string queries or plain-text KeywordTerms lists | PostgreSQL and native Redis dense/string-keyword hybrid; inspect HybridKeywordTerms capability |
+| Hybrid keyword/vector search | Optional HybridSearcher and binary/sparse variants, RRF; string queries or plain-text KeywordTerms lists | PostgreSQL and native Redis dense hybrid with string/list keywords; inspect HybridKeywordTerms capability |
 | Provider discovery | CapabilityProvider reports keys, types, vector kinds, physical index tuples and optional workflows | Implemented |
 | Store/collection metadata | Optional metadata interfaces and helpers report system, database, namespace and collection identity; typed wrappers forward discovery | All providers; local configuration snapshots |
 | Error diagnostics | OperationError preserves error chains and embeds configured store identity for structured diagnostics | PostgreSQL/SQLite/Redis model wrappers and PostgreSQL migrations; wrapping is optional |
@@ -37,7 +37,7 @@ It is a workflow comparison, not a claim of API or feature equivalence with ever
 | Physical vector indexes | HNSW/IVFFlat, supported tuples | No | No | Opt-in HNSW/FLAT, 16 dense tuples |
 | Native data indexes | B-tree/GIN by property type | No | No | Opt-in HASH/JSON scalar TAG / split-integer NUMERIC |
 | Full-text indexing | Yes | No | No | Opt-in HASH/JSON TEXT for strings |
-| Hybrid search | Yes | No | No | Native dense/string keywords, HASH/JSON |
+| Hybrid search | Yes | No | No | Native dense/string/list keywords, HASH/JSON |
 | Migration planning/application | Yes, additive subset | No | No | No |
 | Original Record API | Yes | No | No | No |
 
@@ -75,8 +75,8 @@ and NULL truth. Version-3 vector-only indexes retain Go filtering until an expli
 rebuild/native write. JSON index metadata version 5 adds TEXT projections when
 full-text hints exist; older version-3/4 schemas keep their fields until explicit
 rebuild/native writes. Native Redis supports dense RRF hybrid search with plain
-string keywords, shared-generation candidate reads and Go remeasurement/filtering.
-Standalone keyword queries, KeywordTerms lists and schema migrations remain absent. See
+string keywords or KeywordTerms OR groups, shared-generation candidate reads and
+Go remeasurement/filtering. Standalone keyword queries and schema migrations remain absent. See
 [native support, costs and guarantees](redis.md#native-indexes-and-search).
 
 ## Deliberate differences and future extensions

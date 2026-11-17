@@ -136,6 +136,10 @@ jobs:
           go run ./samples/redis-store -namespace redis_hybrid_demo -native -hybrid
           go run ./samples/redis-store -namespace redis_json_hybrid_demo -storage json -native -index flat -hybrid
           go run ./samples/redis-store -namespace redis_json_hybrid_demo -storage json -native -index flat -hybrid
+          go run ./samples/redis-store -namespace redis_terms_demo -native -keyword-terms
+          go run ./samples/redis-store -namespace redis_terms_demo -native -keyword-terms
+          go run ./samples/redis-store -namespace redis_json_terms_demo -storage json -native -index flat -keyword-terms
+          go run ./samples/redis-store -namespace redis_json_terms_demo -storage json -native -index flat -keyword-terms
 
   local-doc-agent:
     name: Local doc agent (Go ${{ matrix.go }})

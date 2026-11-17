@@ -181,7 +181,12 @@ func TestIntegrationNativeHybridGenerationAndEmbedding(t *testing.T) {
 					t.Fatal(err)
 				}
 				changed, calls, embeddings := false, 0, 0
-				c.options.Embedder = vectordata.EmbeddingFunc(func(context.Context, []string) ([][]float32, error) { embeddings++; return [][]float32{{0, 1}}, nil })
+				terms := []string{"apple"}
+				c.options.Embedder = vectordata.EmbeddingFunc(func(context.Context, []string) ([][]float32, error) {
+					embeddings++
+					terms[0] = "absent"
+					return [][]float32{{0, 1}}, nil
+				})
 				s.client.AddHook(hashFailureHook{process: func(ctx context.Context, cmd goredis.Cmder, next goredis.ProcessHook) error {
 					if !scriptIs(cmd, nativeHybridExecute) {
 						return next(ctx, cmd)
@@ -213,7 +218,7 @@ func TestIntegrationNativeHybridGenerationAndEmbedding(t *testing.T) {
 					}
 					return write()
 				}})
-				hits, err := c.HybridSearchText(ctx, "embedding query", "apple", 3, vectordata.HybridSearchOptions{CandidateLimit: 3})
+				hits, err := c.HybridSearchText(ctx, "embedding query", "", 3, vectordata.HybridSearchOptions{CandidateLimit: 3, KeywordTerms: terms})
 				want, first := "before", any("b")
 				if when == "before" {
 					want, first = "after", "a"
@@ -237,8 +242,8 @@ func TestIntegrationNativeHybridIndexReadinessAndInput(t *testing.T) {
 		s, c := hybridCollection(t, mode, vectordata.IndexMethodFlat, vectordata.DistanceL2, vectordata.VectorFloat32)
 		calls := 0
 		c.options.InputEmbedder = vectordata.InputEmbeddingFunc[[]byte](func(context.Context, [][]byte) ([][]float32, error) { calls++; return [][]float32{{0, 1}}, nil })
-		o := vectordata.HybridSearchOptions{CandidateLimit: 3}
-		hits, err := c.HybridSearchInput(ctx, []byte{1}, "apple", 3, o)
+		o := vectordata.HybridSearchOptions{CandidateLimit: 3, KeywordTerms: []string{"apple"}}
+		hits, err := c.HybridSearchInput(ctx, []byte{1}, "", 3, o)
 		if err != nil || !reflect.DeepEqual(hybridKeys(hits), []any{"b", "c", "a"}) || calls != 1 {
 			t.Fatalf("custom input: %+v %v calls=%d", hits, err, calls)
 		}
@@ -246,7 +251,7 @@ func TestIntegrationNativeHybridIndexReadinessAndInput(t *testing.T) {
 		if err := s.client.Do(ctx, "FT.DROPINDEX", m.Index).Err(); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := c.HybridSearchInput(ctx, []byte{1}, "apple", 3, o); !errors.Is(err, vectordata.ErrUnsupported) || calls != 1 {
+		if _, err := c.HybridSearchInput(ctx, []byte{1}, "", 3, o); !errors.Is(err, vectordata.ErrUnsupported) || calls != 1 {
 			t.Fatalf("missing index embedded/returned partial hybrid: %v calls=%d", err, calls)
 		}
 		if err := c.RebuildNativeIndexes(ctx); err != nil {
@@ -263,7 +268,7 @@ func TestIntegrationNativeHybridIndexReadinessAndInput(t *testing.T) {
 		if err := s.client.Do(ctx, "FT.CREATE", m.Index, "ON", keytype, "PREFIX", 1, "wrong-prefix:", "SCHEMA", path, "AS", "wrong", "TEXT").Err(); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := c.HybridSearchInput(ctx, []byte{1}, "apple", 3, o); !errors.Is(err, vectordata.ErrSchemaMismatch) || calls != 1 {
+		if _, err := c.HybridSearchInput(ctx, []byte{1}, "", 3, o); !errors.Is(err, vectordata.ErrSchemaMismatch) || calls != 1 {
 			t.Fatalf("drifted index embedded/escaped: %v calls=%d", err, calls)
 		}
 	})

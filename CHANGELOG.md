@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add native Redis hybrid KeywordTerms lists for HASH/JSON with OR between
+  plain-text AND groups, literal bound tokens, validation before embedding and
+  caller-owned list snapshots. Enable capability discovery, shared typed/input/
+  iterator contracts, rerunnable samples and CI coverage.
+
 - Add native dense Redis hybrid search for HASH/JSON TEXT generations, combining
   plain keyword BM25 ranks and canonical vector ranks with RRF. Read both lists
   and payloads under one manifest/readiness guard; preserve filters, optional
@@ -9,7 +14,7 @@
   text/custom-input forms, lazy iterators, local validation before embedding,
   compatibility/readiness errors and native hybrid capability discovery. Cover
   contracts, RRF/reference cases, recall and generation consistency; add rerunnable
-  samples and CI. KeywordTerms lists and standalone keyword queries remain absent.
+  samples and CI. Standalone keyword queries remain absent.
 
 - Honor string full-text hints in native RedisJSON mode with separate raw TEXT
   projections, capability discovery and index metadata version 5. Preserve legacy

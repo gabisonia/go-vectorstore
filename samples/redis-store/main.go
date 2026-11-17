@@ -30,6 +30,7 @@ func main() {
 	index := flag.String("index", "hnsw", "Native vector index: hnsw or flat; use a separate namespace per model")
 	fullText := flag.Bool("fulltext", false, "Index Title as Redis TEXT; requires -native and a separate namespace")
 	hybrid := flag.Bool("hybrid", false, "Run keyword/vector RRF search; implies -fulltext and requires -native")
+	keywordTerms := flag.Bool("keyword-terms", false, "Run OR groups of plain keyword terms; implies -hybrid")
 	upgrade := flag.Bool("upgrade-hash", false, "Explicitly upgrade the sample collection to hash storage")
 	upgradeJSON := flag.Bool("upgrade-json", false, "Explicitly convert the sample collection to RedisJSON storage")
 	flag.Parse()
@@ -40,12 +41,15 @@ func main() {
 	opts := redis.StoreOptions{Addr: *addr, Namespace: *namespace, DB: *db, Username: os.Getenv("REDIS_USERNAME"), Password: os.Getenv("REDIS_PASSWORD"), TLSConfig: tlsConfig, StorageMode: redis.StorageMode(*storage), NativeIndexes: *native}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	if err := run(ctx, opts, *upgrade, vectordata.IndexMethod(*index), *fullText, *upgradeJSON, *hybrid); err != nil {
+	if err := run(ctx, opts, *upgrade, vectordata.IndexMethod(*index), *fullText, *upgradeJSON, *hybrid, *keywordTerms); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
-func run(ctx context.Context, opts redis.StoreOptions, upgrade bool, method vectordata.IndexMethod, fullText, upgradeJSON, hybrid bool) error {
+func run(ctx context.Context, opts redis.StoreOptions, upgrade bool, method vectordata.IndexMethod, fullText, upgradeJSON, hybrid, keywordTerms bool) error {
+	if keywordTerms {
+		hybrid = true
+	}
 	if hybrid {
 		if !opts.NativeIndexes {
 			return fmt.Errorf("-hybrid requires -native")
@@ -119,7 +123,13 @@ func run(ctx context.Context, opts redis.StoreOptions, upgrade bool, method vect
 		fmt.Printf("Nearest: %s (distance %.3f)\n", hit.Item.Title, hit.Distance)
 	}
 	if hybrid {
-		results, err := c.HybridSearch(ctx, []float32{1, 0, 0}, "storage", 1, vectordata.HybridSearchOptions{ModelSearchOptions: vectordata.ModelSearchOptions{Filter: filter}})
+		keywords := "storage"
+		options := vectordata.HybridSearchOptions{ModelSearchOptions: vectordata.ModelSearchOptions{Filter: filter}}
+		if keywordTerms {
+			keywords = ""
+			options.KeywordTerms = []string{"storage choices", "release notes"}
+		}
+		results, err := c.HybridSearch(ctx, []float32{1, 0, 0}, keywords, 1, options)
 		if err != nil {
 			return err
 		}

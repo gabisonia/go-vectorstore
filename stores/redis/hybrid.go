@@ -6,11 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"iter"
+	"slices"
 	"sort"
 	"strconv"
-	"strings"
-	"unicode"
-	"unicode/utf8"
 
 	"github.com/gabisonia/go-vectorstore/internal/exactsearch"
 	"github.com/gabisonia/go-vectorstore/internal/iteration"
@@ -31,31 +29,6 @@ type hybridConfig struct {
 	candidates, constant                 int
 }
 
-// Keywords are plain text, never Redis query syntax. Only lexical terms reach
-// bound TEXT operands; operators, quoting and wildcards have no special meaning.
-func hybridKeywords(keywords string) (string, []any, error) {
-	if strings.TrimSpace(keywords) == "" || !utf8.ValidString(keywords) || strings.ContainsRune(keywords, 0) || len(keywords) > 16384 {
-		return "", nil, fmt.Errorf("%w: keywords must be nonblank UTF-8 without NUL, at most 16384 bytes", vectordata.ErrInvalidSearchOptions)
-	}
-	terms := strings.FieldsFunc(keywords, func(r rune) bool {
-		return r != '_' && !unicode.IsLetter(r) && !unicode.IsNumber(r) && !unicode.IsMark(r)
-	})
-	if len(terms) > 128 {
-		return "", nil, fmt.Errorf("%w: at most 128 keyword tokens", vectordata.ErrInvalidSearchOptions)
-	}
-	if len(terms) == 0 {
-		return nativeNone, nil, nil
-	}
-	var query []string
-	var params []any
-	for i, term := range terms {
-		name := "__kw" + strconv.Itoa(i)
-		query = append(query, "$"+name)
-		params = append(params, name, term)
-	}
-	return strings.Join(query, " "), params, nil
-}
-
 func (c *Collection) validateHybrid(ctx context.Context, keywords string, top int, opts vectordata.HybridSearchOptions) (hybridConfig, error) {
 	var cfg hybridConfig
 	if err := ctx.Err(); err != nil {
@@ -64,9 +37,7 @@ func (c *Collection) validateHybrid(ctx context.Context, keywords string, top in
 	if !c.store.nativeIndexes {
 		return cfg, vectordata.ErrUnsupported
 	}
-	if opts.KeywordTerms != nil {
-		return cfg, fmt.Errorf("%w: Redis KeywordTerms lists are not supported", vectordata.ErrUnsupported)
-	}
+	opts.KeywordTerms = slices.Clone(opts.KeywordTerms)
 	p, err := c.validateSearch(top, opts.ModelSearchOptions)
 	if err != nil {
 		return cfg, err
@@ -92,7 +63,7 @@ func (c *Collection) validateHybrid(ctx context.Context, keywords string, top in
 	if cfg.textAlias == "" {
 		return cfg, fmt.Errorf("%w: indexed text property required", vectordata.ErrInvalidSearchOptions)
 	}
-	cfg.keywordQuery, cfg.keywordParams, err = hybridKeywords(keywords)
+	cfg.keywordQuery, cfg.keywordParams, err = hybridKeywords(keywords, opts.KeywordTerms)
 	if err != nil {
 		return cfg, err
 	}

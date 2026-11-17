@@ -178,7 +178,7 @@ type HybridSearchOptions struct {
 	ModelSearchOptions
 	// KeywordTerms optionally replaces the positional keywords string, which must
 	// then be blank. A nil slice uses that string; a non-nil slice must be nonempty.
-	// PostgreSQL matches any term group, with plain-text AND matching within each
+	// PostgreSQL and native Redis match any group, with plain-text AND within each
 	// group. Terms are data, not query syntax. Check HybridKeywordTerms capability.
 	KeywordTerms   []string
 	TextProperty   string
