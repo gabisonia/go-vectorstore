@@ -36,7 +36,7 @@ It is a workflow comparison, not a claim of API or feature equivalence with ever
 | Exact search | Yes | Yes, snapshot scan | Yes, snapshot scan | Yes, Go snapshot scan |
 | Physical vector indexes | HNSW/IVFFlat, supported tuples | No | No | Opt-in HNSW/FLAT, 16 dense tuples |
 | Native data indexes | B-tree/GIN by property type | No | No | Opt-in HASH/JSON scalar TAG / split-integer NUMERIC |
-| Full-text indexing | Yes | No | No | HASH only: opt-in TEXT for strings |
+| Full-text indexing | Yes | No | No | Opt-in HASH/JSON TEXT for strings |
 | Hybrid search | Yes | No | No | No |
 | Migration planning/application | Yes, additive subset | No | No | No |
 | Original Record API | Yes | No | No | No |
@@ -66,13 +66,15 @@ indexes for cosine/L2/squared-L2/inner-product float32/float16 models and accele
 eligible key/scalar filters on HASH and JSON storage. Unsupported cases retain Go exact evaluation. FLAT exhaustively
 remeasures all matching vectors in Go to preserve ordering through float roundoff.
 Writes rebuild the full generation's index; native reads still transfer the token manifest.
-Native HASH mode also honors string full-text hints with Redis TEXT indexes; index
+Native mode also honors string full-text hints with Redis TEXT indexes; index
 metadata versions preserve existing scalar/vector-only generations until rebuild
 or a native write. JSON native mode builds HNSW/FLAT over separate vector arrays
 while canonical payload strings preserve numeric precision. JSON requires RedisJSON
 and uses index metadata version 4 for scalar filtering with full integer precision
 and NULL truth. Version-3 vector-only indexes retain Go filtering until an explicit
-rebuild/native write. JSON full-text indexes remain deferred. Public keyword/hybrid APIs and schema
+rebuild/native write. JSON index metadata version 5 adds TEXT projections when
+full-text hints exist; older version-3/4 schemas keep their fields until explicit
+rebuild/native writes. Public keyword/hybrid APIs and schema
 migrations remain absent. See
 [native support, costs and guarantees](redis.md#native-indexes-and-search).
 

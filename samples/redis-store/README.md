@@ -112,11 +112,28 @@ go run ./samples/redis-store -addr localhost:63799 -namespace redis_json_flat_de
 ```
 
 All four commands print the same three lines. Count and vector Search both push
-the Category filter into Redis using JSON scalar projections. JSON full-text
-indexes remain deferred; `-fulltext` requires HASH storage. Rebuilds and native writes build a
+the Category filter into Redis using JSON scalar projections. Rebuilds and native writes build a
 new index before atomic publication; ordinary JSON readers/writers remain compatible.
 Existing version-3 vector-only generations keep Go filtering until an explicit
 rebuild or the sample's native upsert adds version-4 scalar indexes.
+
+Add JSON TEXT indexing in a dedicated namespace:
+
+```sh
+go run ./samples/redis-store -addr localhost:63799 -namespace redis_json_text_demo -storage json -native -fulltext
+go run ./samples/redis-store -addr localhost:63799 -namespace redis_json_text_demo -storage json -native -fulltext
+```
+
+Both runs print the same three lines. Title gains a version-5 JSON TEXT index
+alongside Category TAG filtering and the vector index. `-fulltext` requires
+`-native` and can also use `-index flat` in another namespace. TEXT uses safe
+internal paths, English stemming, default stopwords and weight 1. NULL omits the
+projection; empty/NUL/Unicode values retain canonical fidelity. Existing version-4
+scalar indexes keep native reads until explicit rebuild/native writes add TEXT.
+Adding a new full-text hint changes model registration, so use a separate namespace
+for this sample. Physical text indexing adds no public keyword/hybrid query API;
+SearchText continues to generate vector embeddings. Plain and older writers remain
+compatible; native writes rebuild the full generation/index.
 
 Records remain in Redis. To clean up only this fixture, call
 `store.DeleteCollection(ctx, "documents")` using its configured namespace/database.

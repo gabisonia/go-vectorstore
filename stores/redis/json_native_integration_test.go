@@ -61,7 +61,7 @@ func TestIntegrationJSONNativePrecisionAndPaths(t *testing.T) {
 	}
 	m, _ := currentJSONManifest(t, c)
 	fields, err := c.nativeFields(m)
-	if err != nil || len(fields) != 7 || fields[len(fields)-1].Name != "$.__vs_vectors.v0" {
+	if err != nil || len(fields) != 8 || fields[len(fields)-1].Name != "$.__vs_vectors.v0" {
 		t.Fatalf("unsafe JSON paths or unexpected scalar/text fields: %+v %v", fields, err)
 	}
 	raw, err := s.client.Do(ctx, "JSON.GET", c.jsonKeys(m)[2]).Text()
@@ -223,6 +223,9 @@ func TestIntegrationJSONNativeVectorOnlyCompatibility(t *testing.T) {
 		if err := s.client.Do(ctx, "JSON.DEL", key, "$.__vs_scalars").Err(); err != nil {
 			t.Fatal(err)
 		}
+		if err := s.client.Do(ctx, "JSON.DEL", key, "$.__vs_text").Err(); err != nil {
+			t.Fatal(err)
+		}
 	}
 	if err := s.client.Do(ctx, "FT.DROPINDEX", m.Index).Err(); err != nil {
 		t.Fatal(err)
@@ -288,7 +291,7 @@ func TestIntegrationJSONNativeVectorOnlyCompatibility(t *testing.T) {
 		t.Fatal(err)
 	}
 	rebuilt, _ := currentJSONManifest(t, c)
-	if rebuilt.IndexVersion != 4 || rebuilt.Definition != m.Definition || rebuilt.Next != m.Next || !reflect.DeepEqual(rebuilt.Tokens, m.Tokens) {
+	if rebuilt.IndexVersion != 5 || rebuilt.Definition != m.Definition || rebuilt.Next != m.Next || !reflect.DeepEqual(rebuilt.Tokens, m.Tokens) {
 		t.Fatalf("scalar rebuild changed model/sequence/tokens: %+v", rebuilt)
 	}
 	for _, op := range []string{"query", "count", "search", "unfiltered"} {

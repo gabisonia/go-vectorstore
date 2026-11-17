@@ -3,7 +3,7 @@
 `stores/redis` implements model collections on standalone Redis. The default
 uses atomic collection snapshots with exact dense search and portable filtering
 in Go. Opt-in `NativeIndexes` adds Redis Search HNSW/FLAT indexes and scalar
-filtering over immutable HASH/JSON generations, plus HASH string full-text indexes.
+filtering and string full-text indexes over immutable HASH/JSON generations.
 Opt-in `StorageJSON` uses immutable RedisJSON documents with Go exact search or
 native vector indexes.
 It is available on master after v0.4.1. The default encoded collection limit is
@@ -42,7 +42,7 @@ standalone address, not Redis Cluster, Sentinel or read-replica routing.
 - Local capability/identity metadata and structured operation errors.
 
 Binary/sparse vector definitions return `ErrUnsupported`. Without `NativeIndexes`,
-index hints are accepted for portability and build no indexes. HASH native mode honors
+index hints are accepted for portability and build no indexes. Native mode honors
 string full-text hints; keyword-query and hybrid APIs are unsupported. Unknown search `ProviderOptions`
 return `ErrUnsupported`. Migration planning and
 application are not advertised. Runtime embedders are never persisted or invoked
@@ -172,8 +172,16 @@ back to Go. Plain JSON writers publish an unindexed generation, while older nati
 writers can publish vector-only version 3; newer readers fall back appropriately.
 Opening existing plain JSON storage also does not build indexes implicitly.
 
-JSON full-text indexes, keyword-query and hybrid APIs remain unsupported. A JSON
-full-text hint stays portable metadata, independent of scalar `IsIndexed` hints.
+JSON full-text hints now build **index metadata version 5** with raw string
+projections under `$.__vs_text.textN`, separate from scalar TAGs and vectors.
+NULL text omits its projection; empty strings and embedded NUL/Unicode values
+retain their original values. Models without full-text hints keep version 4.
+Existing version-3/4 schemas remain readable until an explicit rebuild/native
+write adds TEXT. Scalar version-4 reads stay native, and version-3 filters still
+fall back to Go. Canonical payloads, registrations and storage format 3 are
+unchanged. Plain/older writers remain compatible and can publish earlier index
+versions again. See [full-text indexing](#full-text-indexing) for tokenizer,
+validation and limit details. Public keyword-query and hybrid APIs remain absent.
 
 To convert an existing snapshot or hash collection, use its unchanged registered
 definition and call:
@@ -312,15 +320,16 @@ public model contract.
 
 With `NativeIndexes: true`, mark a string property with `IsFullTextIndexed` or
 `vectordata:"data,fulltext"` to create a Redis `TEXT` field. Native capability
-metadata for HASH reports `FullTextIndexing: true`; snapshot/plain hash/JSON modes keep
-it false. Non-string full-text definitions are rejected by model validation.
+metadata for HASH and JSON reports `FullTextIndexing: true`; plain snapshot/HASH/JSON
+modes keep it false. Non-string full-text definitions are rejected by model validation.
 
 ```go
 definition.Data[0].IsFullTextIndexed = true
 // IsIndexed can also be true for independent exact TAG equality/IN filtering.
 ```
 
-TEXT reuses the raw string hash projection. It has its own internal alias,
+HASH TEXT reuses the raw string projection; JSON stores a separate `__vs_text`
+string map with safe paths such as `$.__vs_text.text0`. TEXT has its own alias,
 separate from hex-encoded scalar TAG fields. NULL omits the projection; an empty
 string is retained but produces no text tokens. String values, including Unicode
 and embedded NUL bytes, remain intact in canonical records. A TEXT-only property
@@ -340,20 +349,25 @@ There are at most 128 TEXT fields on the tested 64-bit Redis 8.2 server, within 
 provider's overall 512-field limit. Native handles reject larger definitions
 locally. These indexes participate in the same immutable generation, readiness,
 publication, retirement and pruning rules as vector/scalar indexes. Every indexed
-hash write also rebuilds the text index; Redis text-index allocator memory is outside
+HASH/JSON write also rebuilds the text index; JSON projection bytes count toward
+the generation budget, while Redis text-index allocator memory is outside
 the encoded byte budget.
 
-Full-text generations use **index metadata version 2**, separate from collection
-storage format 2. Version-1 indexes remain readable with their original scalar/
-vector schema, even when their registration already contains ignored full-text
-hints. `RebuildNativeIndexes` or the next native write adds TEXT fields without
-changing that registration. Collections with no full-text hints keep index
-metadata version 1. Plain hash readers can read either; older native clients that
-do not recognize index version 2 use their full-snapshot fallback. An older writer
-can publish a version-1 index again; a new native write/rebuild restores TEXT.
-Existing snapshot/hash storage upgrades follow the explicit operations above.
-Adding a previously absent full-text hint changes the registered model definition;
-rebuild does not perform that model-schema migration.
+HASH full-text generations use **index metadata version 2**, separate from
+collection storage format 2. Version-1 indexes retain their scalar/vector schema,
+including previously ignored full-text hints. JSON full-text generations use
+**index metadata version 5** with storage format 3; version-3 vector-only and
+version-4 scalar/vector schemas retain their original fields. Reads do not rebuild
+indexes. `RebuildNativeIndexes` or the next native write adds TEXT without changing
+registration, canonical records or generated sequence. Collections with no
+full-text hints keep HASH version 1 or JSON version 4.
+
+Plain readers can read these storage formats, and older native clients that do not
+recognize the new index version use their full-snapshot fallback. Older writers
+can publish earlier index versions again; a current native write/rebuild restores
+TEXT. Existing storage conversions follow the explicit operations above. Adding a
+previously absent full-text hint changes the registered model definition; rebuild
+does not perform that model-schema migration.
 
 This feature creates and validates physical indexes. `SearchText` and `SearchInput`
 still generate embeddings for vector search; no public keyword-query or hybrid
@@ -524,12 +538,14 @@ deadlines, concurrent publication, explicit rebuilds and uncertain-reply cleanup
 TEXT checks cover real tokenization/stemming, Unicode, NULL/empty/NUL values,
 independent TAG equality, updates/deletes, visible schema drift, 128 fields,
 legacy index versions, storage upgrades and generated sequences. Shared HNSW/FLAT
-lifecycle fixtures include TEXT fields on HASH, and scalar/vector indexes on JSON.
+lifecycle fixtures include scalar/vector/TEXT fields on both HASH and JSON.
 JSON-native checks additionally cover internal paths, full-precision canonical
 results, projection byte budgets, unknown versions and publication conflicts.
 Scalar checks additionally cover all key types, exact integer ranges, NULL truth,
 physical path/separator drift, native routing, Count without payload decoding and
-explicit upgrades from version-3 vector-only indexes.
+explicit upgrades from version-3 vector-only indexes. JSON TEXT checks also cover
+version-4 scalar-only compatibility, safe text paths, projection fidelity, storage
+conversion and explicit rebuild without implicit read upgrades.
 `REDIS_REQUIRE_SEARCH=true` requires the native tests and projection proof instead
 of permitting skips on servers without Search. `REDIS_REQUIRE_JSON=true` similarly
 requires the real RedisJSON contracts. JSON tests also check extreme numeric

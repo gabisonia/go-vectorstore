@@ -9,7 +9,13 @@ import (
 )
 
 func TestNativeFullTextSchemaAndCompatibility(t *testing.T) {
-	s, err := New(StoreOptions{NativeIndexes: true})
+	for _, mode := range []StorageMode{StorageHash, StorageJSON} {
+		t.Run(string(mode), func(t *testing.T) { testNativeFullTextSchemaAndCompatibility(t, mode) })
+	}
+}
+
+func testNativeFullTextSchemaAndCompatibility(t *testing.T, mode StorageMode) {
+	s, err := New(StoreOptions{NativeIndexes: true, StorageMode: mode})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -21,11 +27,15 @@ func TestNativeFullTextSchemaAndCompatibility(t *testing.T) {
 		t.Fatal(err)
 	}
 	c := base.(*Collection)
-	if c.nativeIndexVersion() != 2 || !s.Capabilities().FullTextIndexing || s.Capabilities().HybridSearch || s.Capabilities().HybridKeywordTerms {
+	if c.nativeIndexVersion() != 2 || c.nativeJSONIndexVersion() != 5 || !s.Capabilities().FullTextIndexing || s.Capabilities().HybridSearch || s.Capabilities().HybridKeywordTerms {
 		t.Fatal("full-text capability/version mismatch")
 	}
-	for _, version := range []int{1, 2} {
-		fields, err := c.nativeFields(hashManifest{IndexVersion: version})
+	versions, format := []int{1, 2}, 2
+	if mode == StorageJSON {
+		versions, format = []int{3, 4, 5}, 3
+	}
+	for _, version := range versions {
+		fields, err := c.nativeFields(hashManifest{Format: format, IndexVersion: version})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -35,7 +45,12 @@ func TestNativeFullTextSchemaAndCompatibility(t *testing.T) {
 				text[f.Alias] = f.Name
 			}
 		}
-		if version == 1 && len(text) != 0 || version == 2 && (len(text) != 2 || text["text0"] != "d_"+encodeName(name) || text["text1"] != "d_"+encodeName("Body")) {
+		titlePath, bodyPath := "d_"+encodeName(name), "d_"+encodeName("Body")
+		if mode == StorageJSON {
+			titlePath, bodyPath = "$.__vs_text.text0", "$.__vs_text.text1"
+		}
+		hasText := version == 2 || version == 5
+		if !hasText && len(text) != 0 || hasText && (len(text) != 2 || text["text0"] != titlePath || text["text1"] != bodyPath) {
 			t.Fatalf("version %d text schema: %v", version, text)
 		}
 	}

@@ -158,14 +158,15 @@ on both HASH and JSON. The tests also assert that native KNN was executed.
 Separate tests exercise optional vectors, thresholds, paging and duplicate-distance
 tie fallback. This small fixture does not predict production recall.
 
-Native full-text verification runs real TEXT queries through the same atomic
+Native HASH/JSON full-text verification runs real TEXT queries through the same atomic
 manifest/schema/readiness guard. Tests cover English stemming, punctuation,
 Unicode, stopwords, NULL/empty/NUL projection fidelity, independent literal TAG
 filters, updates/deletes, visible schema drift and 128 TEXT fields. Compatibility
-checks retain native reads of version-1 indexes with ignored full-text hints,
-explicitly rebuild TEXT, and round-trip older/newer writers. Snapshot/hash upgrades
-preserve generated sequences and plain-reader compatibility. Shared HNSW/FLAT
-lifecycle fixtures now include TEXT, covering publication conflicts, readiness
+checks retain native reads of HASH version-1 and JSON version-3/4 indexes with
+ignored full-text hints, explicitly rebuild TEXT, and round-trip older/newer writers.
+Snapshot/hash/JSON storage conversions preserve generated sequences and plain-reader
+compatibility. Shared HASH/JSON
+HNSW/FLAT lifecycle fixtures include TEXT, covering publication conflicts, readiness
 failures, uncertain replies and retirement. These checks establish index behavior;
 no keyword/hybrid public API or text-query throughput claim is added. Existing
 read benchmarks below have no full-text-marked properties and do not measure text

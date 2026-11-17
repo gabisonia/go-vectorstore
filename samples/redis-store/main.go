@@ -54,8 +54,8 @@ func run(ctx context.Context, opts redis.StoreOptions, upgrade bool, method vect
 	if method == vectordata.IndexMethodFlat && !opts.NativeIndexes {
 		return fmt.Errorf("-index flat requires -native")
 	}
-	if fullText && (!opts.NativeIndexes || opts.StorageMode == redis.StorageJSON || upgradeJSON) {
-		return fmt.Errorf("-fulltext requires -native with hash storage")
+	if fullText && !opts.NativeIndexes {
+		return fmt.Errorf("-fulltext requires -native")
 	}
 	s, err := redis.New(opts)
 	if err != nil {

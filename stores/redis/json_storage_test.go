@@ -19,7 +19,7 @@ func TestJSONConfigurationAndCanonicalProjection(t *testing.T) {
 	}
 	defer native.Close()
 	capsNative := native.Capabilities()
-	if len(capsNative.VectorIndexCapabilities) != 16 || len(capsNative.IndexedDataTypes) != 4 || capsNative.FullTextIndexing {
+	if len(capsNative.VectorIndexCapabilities) != 16 || len(capsNative.IndexedDataTypes) != 4 || !capsNative.FullTextIndexing {
 		t.Fatalf("JSON vector capabilities: %+v", capsNative)
 	}
 	if s, err := New(StoreOptions{StorageMode: StorageJSON, NativeIndexes: true, DB: 1}); !errors.Is(err, vectordata.ErrUnsupported) {
