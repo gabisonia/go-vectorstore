@@ -109,6 +109,26 @@ verify one WAL snapshot; EXPLAIN checks key lookups and covering-index counts.
 The portable `key-filters` recipe exercises the public workflow on memory,
 SQLite and PostgreSQL.
 
+## Redis snapshot verification
+
+```sh
+go test -race -tags=integration -timeout=5m ./stores/redis
+REDIS_TEST_IMAGE=redis:7.4 go test -count=1 -race -tags=integration -timeout=5m ./stores/redis
+```
+
+The Redis provider transfers a complete collection snapshot even for one-key
+reads and nil-filter Count. Writes also read/serialize/publish complete snapshots;
+explicit CAS conflicts can repeat those transfers. Query, filtered Count and dense
+search materialize the shared memory engine. The default encoded collection limit
+is 16 MiB. These tests establish correctness, not a throughput or latency claim.
+
+Real-server checks run the shared model/embedding/filter-parity suites, concurrent
+generated-key inserts through separate clients, unchanged bytes/sequence after
+failed batches, MaxInt64 allocation/exhaustion, coherent reads during batch writes,
+lost successful replies without replay, deadline cleanup, corruption, namespace
+isolation and size rejection. CI runs Redis 7.4/8.2 with minimum/current Go and the
+persistent sample twice. See [Redis costs](redis.md#costs-and-deployment-settings).
+
 ## SQLite scalar query verification
 
 ```sh

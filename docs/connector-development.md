@@ -7,7 +7,7 @@ before choosing storage and optional capabilities.
 ## 1) Scope and contract
 
 A model provider implements `vectordata.ModelStore` (including CollectionManager)
-and `vectordata.ModelCollection`. PostgreSQL, SQLite and memory share this contract.
+and `vectordata.ModelCollection`. PostgreSQL, SQLite, Redis and memory share this contract.
 Optional interfaces cover binary/sparse search, hybrid search, capabilities and
 migrations. Implement only the optional workflows the backend supports.
 
@@ -100,6 +100,13 @@ Embedded stores can run file-reopen/concurrent-handle tests with normal unit tes
 Server providers should also have tests using `//go:build integration`, disposable
 Testcontainers fixtures and an optional test DSN override. Memory conformance does
 not replace exercising the real database.
+
+The [Redis connector](redis.md) demonstrates a standalone server provider with
+atomic snapshots: one final SET publishes an entire batch and generated sequence.
+Do not assume Lua or MULTI provides rollback after a runtime command error.
+Disable client automatic write retries and retry only conflicts that prove no
+mutation occurred. Redis conformance runs against a real server with an isolated
+namespace, including uncertain replies, concurrency and corruption checks.
 
 ```sh
 go test -race ./...

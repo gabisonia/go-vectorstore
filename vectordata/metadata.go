@@ -4,13 +4,13 @@ package vectordata
 // does not establish existence or health. Empty fields mean unavailable.
 // Returned values are caller-owned snapshots.
 type StoreMetadata struct {
-	// SystemName identifies the database system: memory, sqlite or postgresql
+	// SystemName identifies the database system: memory, sqlite, redis or postgresql
 	// for built-ins. It need not equal ProviderCapabilities.Backend.
 	SystemName string
 	// DatabaseName is the configured PostgreSQL database, absolute SQLite filename,
-	// or :memory: for private SQLite storage. Memory leaves it empty.
+	// :memory: for private SQLite storage, or Redis database number. Memory leaves it empty.
 	DatabaseName string
-	// Namespace is the configured PostgreSQL schema; other built-ins leave it empty.
+	// Namespace is the configured PostgreSQL schema or Redis namespace.
 	Namespace string
 }
 

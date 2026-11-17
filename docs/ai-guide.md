@@ -86,6 +86,7 @@ part of CI. Replace panic with returned/handled errors in application code.
 | --- | --- | --- |
 | Typed CRUD and generated keys | [model-store](../samples/model-store/main.go) | EnsureTypedModelCollection, Upsert, GetMany, Delete |
 | Persistent embedded data | [sqlite-store](../samples/sqlite-store/main.go), [SQLite example](../stores/sqlite/example_test.go) | sqlite.Open, GetTypedModelCollection, Get |
+| Redis collection snapshots | [redis-store](../samples/redis-store/README.md) | redis.New, exact dense search in Go; whole-collection transfers; master after v0.4.1 |
 | Automatic embeddings and filtered retrieval | [typed-search](../samples/typed-search/main.go), [model and adapters](../samples/internal/demo/demo.go) | source tag, Embedder, SearchText, Column |
 | Local agent with model-selected tools | [Docker Compose demo](../samples/local-doc-agent/README.md) | Agent Framework function tools, SQLite, Ollama |
 | Custom/multimodal embedding inputs | [input-embeddings](../samples/input-embeddings/main.go) | InputEmbeddingFunc, vector,input tag, SearchInput; master after v0.4.1 |

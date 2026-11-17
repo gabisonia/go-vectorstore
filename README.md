@@ -9,9 +9,9 @@ A lightweight Go vector-store library inspired by `Microsoft.Extensions.VectorDa
 
 Scope:
 - Go 1.25+
-- PostgreSQL + `pgvector`, embedded SQLite, and in-memory model storage
+- PostgreSQL + `pgvector`, embedded SQLite, standalone Redis snapshots and in-memory model storage
 - Model-driven collections with typed/native keys, named vectors, struct tags, and optional embeddings
-- Shared model contracts and conformance tests across all three providers
+- Shared model contracts and conformance tests across providers
 - Original Record API and custom codecs remain supported
 
 This library can be used to build retrieval systems such as:
@@ -27,6 +27,7 @@ require it. Use current stable Go for up-to-date standard-library security fixes
 - Go 1.25+
 - PostgreSQL provider: PostgreSQL 16+ with `pgvector` extension
 - SQLite provider: a writable database file; no database server or C toolchain required
+- Redis provider: standalone Redis; whole-collection snapshots and Go exact search ([limits](docs/redis.md))
 - Docker (optional, for integration tests and sample compose flows)
 
 ## Project layout
@@ -34,6 +35,7 @@ require it. Use current stable Go for up-to-date standard-library security fixes
 - `vectordata`: backend-agnostic core interfaces, record model, filters, typed wrapper
 - `stores/postgres`: Postgres implementation with `pgxpool`
 - `stores/sqlite`: durable SQLite model collections with exact search
+- `stores/redis`: atomic Redis model snapshots with dense exact search
 - `stores/memory`: transient model collections for development and contract tests
 - `samples`: runnable demos (see `samples/README.md`)
 - `docs`: architecture and implementation notes
@@ -130,13 +132,13 @@ PostgreSQL hybrid search. Models can opt into float16 (`halfvec`) storage with
 metadata for supported keys, data types, metrics, index combinations and hybrid search.
 Optional [store and collection metadata](docs/model-api.md#store-and-collection-metadata)
 reports system, database, namespace and collection identity without database I/O.
-All three providers support Manhattan (`DistanceL1`) search; PostgreSQL supports L1 HNSW
+All providers support dense Manhattan (`DistanceL1`) search; PostgreSQL supports L1 HNSW
 indexes and rejects unsupported L1/IVFFlat combinations before database work.
 Models can also use packed `BinaryVector` fields with `kind=binary`, Hamming
 distance and `SearchBinary`. PostgreSQL provides native `bit(n)` storage,
 HNSW/IVFFlat indexes and binary hybrid search.
 Sparse models use `SparseVector` with zero-based coordinates, `kind=sparse`, and
-`SearchSparse`. All three providers support cosine/L2/squared-L2/inner-product/L1 sparse search;
+`SearchSparse`. Memory, SQLite and PostgreSQL support cosine/L2/squared-L2/inner-product/L1 sparse search;
 PostgreSQL adds `sparsevec(n)` storage, HNSW indexes and sparse hybrid search.
 PostgreSQL offers [model migration planning and explicit additive application](docs/migrations.md)
 with schema drift detection, reviewable SQL and backfill/re-embedding classifications.
@@ -381,6 +383,7 @@ git push origin "v${RELEASE_VERSION}"
 
 - Overview and entry points: [`samples/README.md`](samples/README.md)
 - Local agent with Ollama and SQLite: [`local-doc-agent`](samples/local-doc-agent/README.md) (Docker Compose, separate module)
+- Redis model snapshots and exact retrieval: [`redis-store`](samples/redis-store/README.md)
 - Typed semantic search and RAG: [`typed-search`](samples/typed-search/README.md), [`typed-rag`](samples/typed-rag/README.md)
 - Focused model workflows: [`recipes`](samples/recipes/README.md)
 - Model-driven collections (no API key): [`samples/model-store`](samples/model-store/README.md)
@@ -403,6 +406,7 @@ git push origin "v${RELEASE_VERSION}"
 - Connector development guide: [`docs/connector-development.md`](docs/connector-development.md)
 - Model-driven API: [`docs/model-api.md`](docs/model-api.md)
 - SQLite provider: [`docs/sqlite.md`](docs/sqlite.md)
+- Redis provider: [`docs/redis.md`](docs/redis.md)
 - Provider and .NET parity: [`docs/parity.md`](docs/parity.md)
 - Upgrade guide: [`docs/upgrading.md`](docs/upgrading.md)
 - Model migrations: [`docs/migrations.md`](docs/migrations.md)

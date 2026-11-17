@@ -15,7 +15,7 @@ type Product struct {
     Embedding []float32 `vectordata:"vector,dimensions=3,index"`
 }
 
-store := memory.New() // Or an opened SQLite store or postgres.PostgresVectorStore.
+store := memory.New() // Or a SQLite, Redis or PostgreSQL model store.
 products, err := vectordata.EnsureTypedModelCollection[string, Product](
     ctx, store, "products", nil, vectordata.ModelCollectionOptions{},
 )
@@ -40,6 +40,11 @@ Import `vectordata` and `stores/memory` from this module. See
 program that runs without an API key and can switch to PostgreSQL with `-dsn`.
 Its deterministic three-dimensional embedder illustrates the API; use a real
 embedding model for semantic search.
+
+The [Redis provider](redis.md) supports dense exact search and all portable data
+types using atomic collection snapshots. It transfers the entire collection per
+record operation and has a default 16 MiB encoded limit. Inspect capabilities:
+Redis accepts index hints but creates no native vector/property/full-text indexes.
 
 `GetTypedModelCollection[K,T]` constructs a handle without database access.
 `EnsureTypedModelCollection[K,T]` additionally creates or validates storage.
@@ -190,7 +195,7 @@ types with value text formatting and pointer text decoding.
 `[]time.Time`. Typed fields accept `time.Time` or defined types convertible to it,
 including named slice types. Elements normalize to UTC and truncate sub-microsecond
 precision before storage and filtering, so timezone-equivalent instants compare
-identically in all three providers. UTC years must be 1–9999; strings, infinities and
+identically in all providers. UTC years must be 1–9999; strings, infinities and
 out-of-range instants are rejected. This normalization applies to timestamp arrays;
 scalar `TypeTime` behavior is unchanged.
 
@@ -329,11 +334,11 @@ if provider, ok := store.(vectordata.CapabilityProvider); ok {
 }
 ```
 
-All three providers report string/int64/uint64/UUID keys, generated int64/UUID keys, all twenty
-portable data types, and cosine/L2/squared-L2/inner-product/L1/Hamming metrics.
-`VectorKinds` reports dense, binary and sparse support. Hamming applies only to
-binary vectors; the other metrics apply to dense and sparse vectors.
-`VectorPrecisions` reports `VectorFloat32` and `VectorFloat16` on all three providers;
+All providers report string/int64/uint64/UUID keys, generated int64/UUID keys, all
+twenty portable data types and cosine/L2/squared-L2/inner-product/L1 dense metrics.
+`VectorKinds` reports supported kinds: Redis supports dense; memory, SQLite and
+PostgreSQL also support binary and sparse. Hamming applies only to binary vectors.
+`VectorPrecisions` reports `VectorFloat32` and `VectorFloat16` on all providers;
 PostgreSQL float16 storage requires pgvector 0.7+ and a visible `halfvec` type.
 
 | Feature | Memory | SQLite | PostgreSQL |
@@ -351,7 +356,10 @@ PostgreSQL float16 storage requires pgvector 0.7+ and a visible `halfvec` type.
 | `MigrationPlanning` | False | False | True, plan-only |
 | `MigrationApplication` | False | False | True, additive changes only |
 
-Index fields describe physical acceleration. Memory and SQLite accept index hints
+Redis reports the same booleans/index fields as memory and buffers snapshots/pages.
+Its encoded collection limit defaults to 16 MiB; see [Redis costs](redis.md).
+
+Index fields describe physical acceleration. Memory, SQLite and Redis accept index hints
 for portability without creating physical property or vector indexes. Generic
 JSON indexing remains unsupported; provider-specific indexes are outside this
 metadata. Except for the detailed combination list below,
@@ -438,7 +446,7 @@ example that creates no collection.
 
 ## Lifecycle and retrieval
 
-All three providers implement `ModelStore` and `CollectionManager`. Stores can list
+All providers implement `ModelStore` and `CollectionManager`. Stores can list
 collections, check existence, and delete collections idempotently. PostgreSQL
 listing includes registered models (even models without vectors) and existing
 vector tables in the configured schema. Ordinary unrelated tables are excluded.
@@ -678,7 +686,8 @@ units: a threshold of 5 excludes this vector; a threshold of 25 includes it.
 distance 5 and score `1 / 6` for this example. The two metrics have the same
 mathematical ordering, with different distance and score units.
 
-All three providers support dense float32/float16 and sparse squared L2. Float16
+All providers support dense float32/float16 squared L2; memory, SQLite and PostgreSQL
+also support sparse squared L2. Float16
 rounding happens before distance calculation. Sparse computation visits only
 nonzero coordinates; zero vectors are valid. Binary vectors require Hamming.
 Text/custom-input queries and iterators use the selected property's metric;
@@ -855,7 +864,7 @@ plans. See the runnable [custom-input sample](../samples/input-embeddings/README
 ## Binary vectors
 
 Binary vectors are explicit model properties with packed bytes and an exact bit
-length. They support Hamming distance in all three providers:
+length. Memory, SQLite and PostgreSQL support Hamming distance:
 
 ```go
 type Image struct {
@@ -912,7 +921,7 @@ operator/index availability and exact bit lengths.
 ## Sparse vectors
 
 Sparse vectors store only nonzero coordinates and support cosine, L2, squared L2, inner
-product and L1 distance in all three providers:
+product and L1 distance in memory, SQLite and PostgreSQL:
 
 ```go
 type Document struct {
@@ -985,9 +994,10 @@ Results have `ScoreKind=ScoreRRF`; their score thresholds apply to fusion scores
 not vector similarity. Raw vector distance is still returned. Fusion scores
 should not be compared with ordinary vector similarity scores.
 
-The memory and SQLite providers perform exact vector search and do not implement hybrid
+The memory, SQLite and Redis providers perform exact vector search and do not implement hybrid
 search. Typed calls return `ErrUnsupported` for this optional capability. Index
-hints are accepted for portability but do not create physical indexes in either provider. See [SQLite storage and limits](sqlite.md).
+hints are accepted for portability but do not create physical indexes in these providers.
+See [SQLite storage and limits](sqlite.md) and [Redis limits](redis.md).
 
 ### Keyword lists
 

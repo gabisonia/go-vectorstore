@@ -62,6 +62,37 @@ jobs:
           PGVECTOR_TEST_IMAGE: pgvector/pgvector:pg${{ matrix.postgres }}
         run: go test -race -tags=integration -timeout=5m ./stores/postgres ./samples/recipes
 
+  integration-redis:
+    name: Redis ${{ matrix.redis }} (Go ${{ matrix.go }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        go: ['1.25.x', stable]
+        redis: ['7.4', '8.2']
+    services:
+      redis:
+        image: redis:${{ matrix.redis }}
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 2s --health-timeout 2s --health-retries 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go }}
+          cache: true
+      - name: Run Redis contract and failure tests
+        env:
+          REDIS_TEST_ADDR: localhost:6379
+        run: go test -race -tags=integration -timeout=5m ./stores/redis
+      - name: Run persistent sample twice
+        run: |
+          go run ./samples/redis-store
+          go run ./samples/redis-store
+
   local-doc-agent:
     name: Local doc agent (Go ${{ matrix.go }})
     runs-on: ubuntu-latest
