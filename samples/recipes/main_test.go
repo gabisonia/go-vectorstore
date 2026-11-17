@@ -12,7 +12,7 @@ import (
 )
 
 func TestPortableRecipes(t *testing.T) {
-	expected := map[string]string{"scalar-query": "Scalar count: 3\nScalar page: 3 rank 2", "key-filters": "Matched keys: 2\nPaged key: 2\nExact-key count: 1", "metadata": "Collection: recipe_demo_metadata", "named-vectors": "guide: BodyVector distance 0.000; loaded dimensions 3", "squared-l2": "near: distance 25 score 0.038462\nSquared-distance threshold 5: 1 match", "iterators": "Cancellation observed; count after iterator: 2", "embedded-iterators": "Search: costs\nInput: costs", "capabilities": "Hybrid search: false"}
+	expected := map[string]string{"single-record": "Dynamic found: true\nDeleted: true; repeated delete: false", "scalar-query": "Scalar count: 3\nScalar page: 3 rank 2", "key-filters": "Matched keys: 2\nPaged key: 2\nExact-key count: 1", "metadata": "Collection: recipe_demo_metadata", "named-vectors": "guide: BodyVector distance 0.000; loaded dimensions 3", "squared-l2": "near: distance 25 score 0.038462\nSquared-distance threshold 5: 1 match", "iterators": "Cancellation observed; count after iterator: 2", "embedded-iterators": "Search: costs\nInput: costs", "capabilities": "Hybrid search: false"}
 	for _, backend := range []string{"memory", "sqlite"} {
 		t.Run(backend, func(t *testing.T) {
 			base := []string{}

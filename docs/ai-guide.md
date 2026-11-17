@@ -84,6 +84,7 @@ part of CI. Replace panic with returned/handled errors in application code.
 
 | Task | Working source | Key calls |
 | --- | --- | --- |
+| Single-record CRUD and optional lookup | [recipes](../samples/recipes/main.go) | InsertOne, UpsertOne, TryGet, DeleteOne |
 | Typed CRUD and generated keys | [model-store](../samples/model-store/main.go) | EnsureTypedModelCollection, Upsert, GetMany, Delete |
 | Persistent embedded data | [sqlite-store](../samples/sqlite-store/main.go), [SQLite example](../stores/sqlite/example_test.go) | sqlite.Open, GetTypedModelCollection, Get |
 | Redis collection snapshots | [redis-store](../samples/redis-store/README.md) | redis.New, exact dense search in Go; whole-collection transfers; master after v0.4.1 |
@@ -131,7 +132,9 @@ it is not an importable public helper package.
 - Lower Distance is closer; higher Score is better. DistanceThreshold is an
   upper distance bound; ScoreThreshold is a lower similarity bound. Hybrid
   results use ScoreRRF and cannot be compared directly with similarity scores.
-- Get returns ErrNotFound for a missing key. GetMany omits missing keys and makes
+- Get returns ErrNotFound for a missing key. TryGet returns value/found/error;
+  provider absence is false/nil, while codec and collection errors remain errors.
+  GetMany omits missing keys and makes
   no ordering guarantee. Check errors with errors.Is/errors.As; PostgreSQL and
   SQLite may wrap them in OperationError. See the executable error example.
 - Check each iterator error and check ctx.Err before expensive per-item work:

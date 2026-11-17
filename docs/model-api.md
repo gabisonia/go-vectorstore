@@ -478,11 +478,58 @@ do not validate a collection's schema.
 | Operation | Behavior |
 | --- | --- |
 | `Get` | Returns `ErrNotFound` for a missing key |
+| `TryGet` | Returns a value, found flag and error; a missing record is `false, nil` |
 | `GetMany` | Returns only found records, deduplicates keys, and makes no ordering promise |
 | `Query` / `QueryIter` | Filter without vector search, with `top`, `Skip`, and `OrderBy` |
 | `Insert` / `Upsert` | Return native keys; all records are committed atomically |
+| `InsertOne` / `UpsertOne` | Insert or replace one model and return its native/generated key |
 | `Delete` | Ignores missing keys and returns the number deleted |
+| `DeleteOne` | Returns whether one record was deleted; missing records are `false, nil` |
 | `Count` | Applies the same filter language as retrieval/search |
+
+Single-record operations are methods on `TypedModelCollection[K,T]` and package
+helpers for dynamic models, for example `vectordata.UpsertOne(ctx, collection,
+record)`. They work with existing third-party ModelCollection implementations;
+no optional interface or capability flag is required. They do not create storage.
+Use the batch methods for multiple records and batched embedding generation.
+
+```go
+key, err := collection.UpsertOne(ctx, note)
+if err != nil {
+    return err
+}
+saved, found, err := collection.TryGet(ctx, key, vectordata.RetrievalOptions{})
+if err != nil {
+    return err
+}
+if found {
+    fmt.Println(saved)
+}
+deleted, err := collection.DeleteOne(ctx, key)
+if err != nil {
+    return err
+}
+fmt.Println(deleted)
+```
+
+This covers Microsoft's [single-record CRUD workflows](https://learn.microsoft.com/en-us/dotnet/ai/vector-stores/manage-data)
+using Go's explicit found result. `Get` keeps its existing `ErrNotFound` contract.
+TryGet maps only provider errors matching `ErrNotFound`; missing collections,
+validation/connection errors and codec failures remain errors. In particular,
+a codec error matching `ErrNotFound` is not treated as a missing stored record.
+Always check the error before the found result. On error, TryGet returns a zero
+value and false. Retrieval still omits vectors by default.
+
+Single writes use one underlying batch call and return generated keys without
+modifying the supplied record or pointer model. Typed writes validate returned
+key counts and reject nil keys instead of silently reporting zero keys. Malformed
+successful replies return `ErrInvalidRecord`; provider errors retain their original
+chains. Helpers do not retry writes or deletes, including uncertain responses.
+DeleteOne returns false on error; collection-absence behavior follows the provider.
+Duplicate-key PostgreSQL model writes match `ErrInvalidRecord`, as on the other
+built-in model providers, while `errors.As` still exposes the native PgError
+(including SQLSTATE 23505) and OperationError metadata.
+See the runnable [single-record recipe](../samples/recipes/README.md).
 
 PostgreSQL selects binary vector parameters for requests containing at least
 1,024 vector values, and retains text for smaller writes. Both paths keep atomic

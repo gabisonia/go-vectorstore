@@ -34,6 +34,7 @@ func Run(t *testing.T, factory Factory) {
 	t.Run("capabilities", func(t *testing.T) { runCapabilities(t, factory) })
 	t.Run("array_sets", func(t *testing.T) { runArraySets(t, factory) })
 	t.Run("filter_edges", func(t *testing.T) { runFilterEdges(t, factory) })
+	t.Run("single_record_operations", func(t *testing.T) { runSingleRecordOperations(t, factory) })
 	t.Run("generated_key_collision", func(t *testing.T) { runGeneratedKeyCollision(t, factory) })
 	t.Run("lifecycle_crud_filters_search", func(t *testing.T) {
 		ctx := context.Background()

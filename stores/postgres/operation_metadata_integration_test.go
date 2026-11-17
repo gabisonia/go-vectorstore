@@ -29,7 +29,7 @@ func TestIntegrationOperationMetadataDistinguishesNamespaces(t *testing.T) {
 		_, err = c.Insert(ctx, []vectordata.ModelRecord{{Key: "same_key"}})
 		var operation *vectordata.OperationError
 		var native *pgconn.PgError
-		if !errors.As(err, &operation) || !errors.As(err, &native) || native.Code != "23505" {
+		if !errors.Is(err, vectordata.ErrInvalidRecord) || !errors.As(err, &operation) || !errors.As(err, &native) || native.Code != "23505" {
 			t.Fatalf("native duplicate-key failure: %v", err)
 		}
 		if operation.StoreMetadata != store.StoreMetadata() || operation.DatabaseName != pool.Config().ConnConfig.Database || operation.Namespace != store.opts.Schema || operation.SystemName != "postgresql" || operation.Collection != "same_collection" || operation.Operation != "write" {

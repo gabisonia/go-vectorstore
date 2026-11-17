@@ -657,6 +657,9 @@ func (c *TypedModelCollection[K, T]) encode(values []T) ([]ModelRecord, error) {
 func typedKeys[K comparable](values []any) ([]K, error) {
 	out := make([]K, len(values))
 	for i, value := range values {
+		if isNilValue(value) {
+			return nil, fmt.Errorf("%w: provider returned a nil key at index %d", ErrInvalidRecord, i)
+		}
 		if err := assignModelValue(reflect.ValueOf(&out[i]).Elem(), value); err != nil {
 			return nil, err
 		}
@@ -672,6 +675,9 @@ func (c *TypedModelCollection[K, T]) Insert(ctx context.Context, values []T) ([]
 	if err != nil {
 		return nil, err
 	}
+	if len(keys) != len(records) {
+		return nil, fmt.Errorf("%w: insert returned %d keys for %d records", ErrInvalidRecord, len(keys), len(records))
+	}
 	return typedKeys[K](keys)
 }
 func (c *TypedModelCollection[K, T]) Upsert(ctx context.Context, values []T) ([]K, error) {
@@ -682,6 +688,9 @@ func (c *TypedModelCollection[K, T]) Upsert(ctx context.Context, values []T) ([]
 	keys, err := c.base.Upsert(ctx, records)
 	if err != nil {
 		return nil, err
+	}
+	if len(keys) != len(records) {
+		return nil, fmt.Errorf("%w: upsert returned %d keys for %d records", ErrInvalidRecord, len(keys), len(records))
 	}
 	return typedKeys[K](keys)
 }
