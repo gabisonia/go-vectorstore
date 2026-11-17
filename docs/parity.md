@@ -35,8 +35,8 @@ It is a workflow comparison, not a claim of API or feature equivalence with ever
 | Binary/sparse vectors | Yes | Yes | Yes | No |
 | Exact search | Yes | Yes, snapshot scan | Yes, snapshot scan | Yes, Go snapshot scan |
 | Physical vector indexes | HNSW/IVFFlat, supported tuples | No | No | Opt-in HNSW/FLAT, 16 dense tuples |
-| Native data indexes | B-tree/GIN by property type | No | No | Opt-in scalar TAG / split-integer NUMERIC |
-| Full-text indexing | Yes | No | No | Opt-in TEXT for strings |
+| Native data indexes | B-tree/GIN by property type | No | No | HASH only: opt-in scalar TAG / split-integer NUMERIC |
+| Full-text indexing | Yes | No | No | HASH only: opt-in TEXT for strings |
 | Hybrid search | Yes | No | No | No |
 | Migration planning/application | Yes, additive subset | No | No | No |
 | Original Record API | Yes | No | No | No |
@@ -63,13 +63,15 @@ Explicit storage conversions preserve atomic batches and generated sequences.
 
 Opt-in `NativeIndexes` requires Redis Search and database zero. It builds HNSW/FLAT
 indexes for cosine/L2/squared-L2/inner-product float32/float16 models and accelerates
-eligible key/scalar filters. Unsupported cases retain Go exact evaluation. FLAT exhaustively
+eligible key/scalar filters on HASH storage. Unsupported cases retain Go exact evaluation. FLAT exhaustively
 remeasures all matching vectors in Go to preserve ordering through float roundoff.
 Writes rebuild the full generation's index; native reads still transfer the token manifest.
-Native mode also honors string full-text hints with Redis TEXT indexes; index
+Native HASH mode also honors string full-text hints with Redis TEXT indexes; index
 metadata versions preserve existing scalar/vector-only generations until rebuild
-or a native write. Native indexing currently applies to hash storage; JSON retains
-Go filtering/search and requires RedisJSON. Public keyword/hybrid APIs and schema
+or a native write. JSON native mode builds HNSW/FLAT over separate vector arrays
+while canonical payload strings preserve numeric precision. JSON requires RedisJSON
+and keeps Query, Count and filtered vector search in Go; JSON scalar/full-text
+indexes are deferred. Public keyword/hybrid APIs and schema
 migrations remain absent. See
 [native support, costs and guarantees](redis.md#native-indexes-and-search).
 

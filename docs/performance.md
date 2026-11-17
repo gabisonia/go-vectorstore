@@ -145,15 +145,16 @@ sequence exhaustion. Failure tests exercise partial pipelines, lost stage/commit
 replies, missing staged documents, real errors after PERSIST, active-staging pruning
 and read retirement. Conversion tests preserve old snapshot/hash fixtures under
 concurrent writes and reconcile obsolete hash indexes after uncertain replies.
-JSON still transfers/decodes whole generations and has no native indexes in this
-increment; existing hash/native benchmarks below do not measure JSON performance.
+Plain JSON still transfers/decodes whole generations. JSON native vector
+measurements are reported separately below.
 
-Native mode additionally runs the shared contracts against real Search, compares
+HASH and JSON native modes additionally run shared contracts against real Search; HASH compares
 scalar filters with an independent full-snapshot memory engine, and verifies
 readiness, concurrent publication, uncertain replies, rebuilds and orphan cleanup.
 The HNSW recall fixture has 512 seeded 16-dimensional vectors, six top-10 queries
 and EF_RUNTIME 200 for each of four metrics and two precisions. The minimum
-recall@10 is 0.90; a local Redis 8.2 run achieved 1.00 in all eight combinations.
+recall@10 is 0.90; a local Redis 8.2 run achieved 1.00 in all eight combinations
+on both HASH and JSON. The tests also assert that native KNN was executed.
 Separate tests exercise optional vectors, thresholds, paging and duplicate-distance
 tie fallback. This small fixture does not predict production recall.
 
@@ -243,6 +244,39 @@ filters with NULL/NOT, thresholds and paging. A separate 192-record fixture chec
 duplicate key ties and distinct Go distances that round to equal FLOAT32 Redis
 distances. Hooks require these comparisons to stay on the native path, preventing
 an unnoticed exact fallback from satisfying the test.
+
+### RedisJSON native vector measurements
+
+```sh
+GOTOOLCHAIN=go1.27.4 REDIS_TEST_ADDR=127.0.0.1:63799 go test -tags=integration \
+  -run '^$' -bench '^BenchmarkRedisJSONSearch$' -benchtime=200ms -count=3 ./stores/redis
+```
+
+The fixture uses 100/1,000 JSON records with seeded (45), 16-dimensional L2
+FLOAT32 vectors, no data properties, unfiltered top-5 search and default HNSW
+tuning. Reference operations load the entire canonical JSON generation and build
+a fresh Go engine. Setup, writes and index construction are untimed. HNSW is
+approximate; FLAT fetches every vector-bearing wrapper for exact Go selection.
+The integration suites separately check recall and exact-result equivalence.
+
+Local medians of three 200 ms samples: Redis 8.2/Docker, Apple M3 Pro,
+darwin/arm64, Go 1.27.4. The server was shared with integration verification;
+these short, warm samples include local scheduling/network overhead and are not
+controlled production throughput measurements. B/op counts Go allocations only.
+
+| Records | Method | Native ms/op | Reference ms/op | Native B/op | Reference B/op |
+| --- | --- | ---: | ---: | ---: | ---: |
+| 100 | HNSW | 2.162 | 3.576 | 237,666 | 524,404 |
+| 1,000 | HNSW | 2.451 | 16.281 | 483,114 | 5,412,961 |
+| 100 | FLAT | 2.542 | 3.425 | 349,290 | 525,090 |
+| 1,000 | FLAT | 19.114 | 15.622 | 3,526,427 | 5,412,357 |
+
+JSON FLAT was slower than the reference at 1,000 records in this run. It remains
+exhaustive and adds index/query/wrapper-fetch work. HNSW reduces decoded payloads,
+but still reads the O(N) token manifest. All JSON filtered searches/Query/Count
+use full-generation Go evaluation. Every native write stages a full generation
+and rebuilds its index. Server index memory, overlapping generations, write costs
+and concurrent-writer scalability are outside these measurements.
 
 ## SQLite scalar query verification
 

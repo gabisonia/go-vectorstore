@@ -16,12 +16,16 @@ import (
 )
 
 func TestIntegrationNativeFlatExactReference(t *testing.T) {
+	runNativeStorage(t, testIntegrationNativeFlatExactReferenceStorage)
+}
+
+func testIntegrationNativeFlatExactReferenceStorage(t *testing.T, mode StorageMode) {
 	requireNativeSearch(t)
 	ctx := context.Background()
 	for _, metric := range []vectordata.DistanceMetric{vectordata.DistanceCosine, vectordata.DistanceL2, vectordata.DistanceL2Squared, vectordata.DistanceInnerProduct} {
 		for _, precision := range []vectordata.VectorPrecision{vectordata.VectorFloat32, vectordata.VectorFloat16} {
 			t.Run(string(metric)+"/"+string(precision), func(t *testing.T) {
-				s := integrationStore(t, StoreOptions{NativeIndexes: true})
+				s := integrationStore(t, StoreOptions{NativeIndexes: true, StorageMode: mode})
 				d := vectordata.CollectionDefinition{Key: vectordata.KeyProperty{Name: "ID", Type: vectordata.KeyInt64}, Data: []vectordata.DataProperty{{Name: "Group", Type: vectordata.TypeString, Optional: true, IsIndexed: true}}, Vectors: []vectordata.VectorProperty{{Name: "Vector", Dimensions: 16, Metric: metric, Precision: precision, Optional: true, Index: &vectordata.VectorIndexOptions{Method: vectordata.IndexMethodFlat}}, {Name: "Approx", Dimensions: 2, Optional: true, Index: &vectordata.VectorIndexOptions{Method: vectordata.IndexMethodHNSW}}}}
 				base, err := s.EnsureModelCollection(ctx, "flat", d, vectordata.ModelCollectionOptions{})
 				if err != nil {
@@ -56,7 +60,7 @@ func TestIntegrationNativeFlatExactReference(t *testing.T) {
 				}
 				native, full := 0, 0
 				s.client.AddHook(processHook{run: func(ctx context.Context, cmd goredis.Cmder, next goredis.ProcessHook) error {
-					if scriptIs(cmd, nativeExecute) {
+					if scriptIs(cmd, nativeSearchScript(mode)) {
 						native++
 						// The query and parameters are arguments to the atomic script.
 						for _, arg := range cmd.Args()[2:] {
@@ -65,7 +69,7 @@ func TestIntegrationNativeFlatExactReference(t *testing.T) {
 							}
 						}
 					}
-					if scriptIs(cmd, readHash) {
+					if scriptIs(cmd, nativeReadScript(mode)) {
 						full++
 					}
 					return next(ctx, cmd)
@@ -94,7 +98,11 @@ func TestIntegrationNativeFlatExactReference(t *testing.T) {
 						}
 					}
 				}
-				if native != 21 || full != 0 {
+				expectedNative, expectedFull := 21, 0
+				if mode == StorageJSON {
+					expectedNative, expectedFull = 9, 12
+				}
+				if native != expectedNative || full != expectedFull {
 					t.Fatalf("FLAT queries did not stay native: native=%d full=%d", native, full)
 				}
 			})
@@ -103,9 +111,13 @@ func TestIntegrationNativeFlatExactReference(t *testing.T) {
 }
 
 func TestIntegrationNativeFlatTiesAndRoundoff(t *testing.T) {
+	runNativeStorage(t, testIntegrationNativeFlatTiesAndRoundoffStorage)
+}
+
+func testIntegrationNativeFlatTiesAndRoundoffStorage(t *testing.T, mode StorageMode) {
 	requireNativeSearch(t)
 	ctx := context.Background()
-	s := integrationStore(t, StoreOptions{NativeIndexes: true})
+	s := integrationStore(t, StoreOptions{NativeIndexes: true, StorageMode: mode})
 	c := nativeLifecycleCollection(t, s, vectordata.IndexMethodFlat)
 	rows := make([]vectordata.ModelRecord, 192)
 	for i := range rows {
@@ -113,10 +125,10 @@ func TestIntegrationNativeFlatTiesAndRoundoff(t *testing.T) {
 	}
 	full, native := 0, 0
 	s.client.AddHook(processHook{run: func(ctx context.Context, cmd goredis.Cmder, next goredis.ProcessHook) error {
-		if scriptIs(cmd, readHash) {
+		if scriptIs(cmd, nativeReadScript(mode)) {
 			full++
 		}
-		if scriptIs(cmd, nativeExecute) {
+		if scriptIs(cmd, nativeSearchScript(mode)) {
 			native++
 		}
 		return next(ctx, cmd)
@@ -151,11 +163,15 @@ func TestIntegrationNativeFlatTiesAndRoundoff(t *testing.T) {
 }
 
 func TestIntegrationNativeVectorAlgorithmDrift(t *testing.T) {
+	runNativeStorage(t, testIntegrationNativeVectorAlgorithmDriftStorage)
+}
+
+func testIntegrationNativeVectorAlgorithmDriftStorage(t *testing.T, mode StorageMode) {
 	requireNativeSearch(t)
 	ctx := context.Background()
 	for _, method := range []vectordata.IndexMethod{vectordata.IndexMethodFlat, vectordata.IndexMethodHNSW} {
 		t.Run(string(method), func(t *testing.T) {
-			s := integrationStore(t, StoreOptions{NativeIndexes: true})
+			s := integrationStore(t, StoreOptions{NativeIndexes: true, StorageMode: mode})
 			c := nativeLifecycleCollection(t, s, method)
 			if _, err := c.Insert(ctx, nativeLifecycleRows("kept")); err != nil {
 				t.Fatal(err)
@@ -193,9 +209,13 @@ func TestIntegrationNativeVectorAlgorithmDrift(t *testing.T) {
 }
 
 func TestIntegrationNativeFlatFallbacks(t *testing.T) {
+	runNativeStorage(t, testIntegrationNativeFlatFallbacksStorage)
+}
+
+func testIntegrationNativeFlatFallbacksStorage(t *testing.T, mode StorageMode) {
 	requireNativeSearch(t)
 	ctx := context.Background()
-	s := integrationStore(t, StoreOptions{NativeIndexes: true})
+	s := integrationStore(t, StoreOptions{NativeIndexes: true, StorageMode: mode})
 	c := nativeLifecycleCollection(t, s, vectordata.IndexMethodFlat)
 	if hits, err := c.Search(ctx, []float32{1, 0}, 1, vectordata.ModelSearchOptions{}); err != nil || len(hits) != 0 {
 		t.Fatalf("empty FLAT collection: %+v %v", hits, err)
@@ -211,7 +231,7 @@ func TestIntegrationNativeFlatFallbacks(t *testing.T) {
 	}
 	full := 0
 	s.client.AddHook(processHook{run: func(ctx context.Context, cmd goredis.Cmder, next goredis.ProcessHook) error {
-		if scriptIs(cmd, readHash) {
+		if scriptIs(cmd, nativeReadScript(mode)) {
 			full++
 		}
 		return next(ctx, cmd)

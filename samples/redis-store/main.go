@@ -54,8 +54,8 @@ func run(ctx context.Context, opts redis.StoreOptions, upgrade bool, method vect
 	if method == vectordata.IndexMethodFlat && !opts.NativeIndexes {
 		return fmt.Errorf("-index flat requires -native")
 	}
-	if fullText && !opts.NativeIndexes {
-		return fmt.Errorf("-fulltext requires -native")
+	if fullText && (!opts.NativeIndexes || opts.StorageMode == redis.StorageJSON || upgradeJSON) {
+		return fmt.Errorf("-fulltext requires -native with hash storage")
 	}
 	s, err := redis.New(opts)
 	if err != nil {
@@ -104,7 +104,13 @@ func run(ctx context.Context, opts redis.StoreOptions, upgrade bool, method vect
 		return err
 	}
 	fmt.Printf("Guides: %d\n", n)
-	hits, err := c.Search(ctx, []float32{1, 0, 0}, 1, vectordata.ModelSearchOptions{Filter: filter})
+	searchOpts := vectordata.ModelSearchOptions{Filter: filter}
+	// JSON native mode currently indexes vectors only. Keep Count filtered, and
+	// exercise native KNN with an unfiltered vector search.
+	if opts.NativeIndexes && (opts.StorageMode == redis.StorageJSON || upgradeJSON) {
+		searchOpts.Filter = nil
+	}
+	hits, err := c.Search(ctx, []float32{1, 0, 0}, 1, searchOpts)
 	if err != nil {
 		return err
 	}

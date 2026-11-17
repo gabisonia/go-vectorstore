@@ -49,6 +49,42 @@ func nativeVectorSafe(v []float32) bool {
 	}
 	return true
 }
+
+// Select only projections whose full generation stays in Redis' safe FLOAT32 band.
+func (c *Collection) nativeVectors(records []vectordata.ModelRecord) []string {
+	var names []string
+	for _, p := range c.definition.Vectors {
+		if !nativeVectorProperty(p) {
+			continue
+		}
+		safe := true
+		for _, r := range records {
+			if v := r.Vectors[p.Name]; v != nil && !nativeVectorSafe(v) {
+				safe = false
+				break
+			}
+		}
+		if safe {
+			names = append(names, p.Name)
+		}
+	}
+	return names
+}
+func (s *Store) jsonIndexPrefix(name string) string {
+	return "__vectorstore_redis_json_idx_v1:" + encodeName(s.metadata.Namespace) + ":" + encodeName(name) + ":"
+}
+func (c *Collection) nativeIndexName(format int, revision string) string {
+	if format == 3 {
+		return c.store.jsonIndexPrefix(c.name) + revision
+	}
+	return c.indexName(revision)
+}
+func (c *Collection) nativeGenerationPrefix(m hashManifest) string {
+	if m.Format == 3 {
+		return c.jsonGenerationPrefix(m.Revision)
+	}
+	return c.generationPrefix(m.Revision)
+}
 func nativeData(p vectordata.DataProperty) bool {
 	return p.IsIndexed && (p.Type == vectordata.TypeString || p.Type == vectordata.TypeInt64 || p.Type == vectordata.TypeFloat64 || p.Type == vectordata.TypeBool)
 }
@@ -139,8 +175,14 @@ func (c *Collection) nativeFields(m hashManifest) ([]nativeField, error) {
 	if c.definition.Key.Type == vectordata.KeyInt64 || c.definition.Key.Type == vectordata.KeyUint64 {
 		fields = append(fields, nativeField{Name: "__vs_key_hi", Alias: "kh", Kind: "NUMERIC"}, nativeField{Name: "__vs_key_lo", Alias: "kl", Kind: "NUMERIC"})
 	}
+	if m.Format == 3 {
+		fields = []nativeField{{Name: "$.__vs_revision", Alias: "revision", Kind: "TAG"}}
+	}
 	textFields := 0
 	for i, p := range c.definition.Data {
+		if m.Format == 3 {
+			continue
+		}
 		n := strconv.Itoa(i)
 		if nativeData(p) {
 			fields = append(fields, nativeField{Name: "__vs_has_" + n, Alias: "h" + n, Kind: "TAG"}, nativeField{Name: "__vs_tag_" + n, Alias: "t" + n, Kind: "TAG"})
@@ -175,7 +217,11 @@ func (c *Collection) nativeFields(m hashManifest) ([]nativeField, error) {
 		} else if p.Metric == vectordata.DistanceInnerProduct {
 			metric = "IP"
 		}
-		fields = append(fields, nativeField{Name: "v_" + encodeName(name), Alias: alias, Kind: "VECTOR", Algorithm: strings.ToUpper(string(p.Index.Method)), Metric: metric, Dimensions: p.Dimensions, M: p.Index.HNSW.M, EFConstruction: p.Index.HNSW.EfConstruction})
+		path := "v_" + encodeName(name)
+		if m.Format == 3 {
+			path = "$.__vs_vectors." + alias
+		}
+		fields = append(fields, nativeField{Name: path, Alias: alias, Kind: "VECTOR", Algorithm: strings.ToUpper(string(p.Index.Method)), Metric: metric, Dimensions: p.Dimensions, M: p.Index.HNSW.M, EFConstruction: p.Index.HNSW.EfConstruction})
 	}
 	if len(fields) > 512 {
 		return nil, fmt.Errorf("%w: native Redis schema exceeds 512 fields", vectordata.ErrUnsupported)
@@ -200,7 +246,7 @@ local function flag(t,k)
  for _,v in ipairs(flags) do v=text(v);if type(v)=='string' and string.upper(v)==k then return true end end
  return false
 end
-local function ready(index,prefix,schema,count)
+local function ready(index,prefix,schema,count,keytype)
  local info=redis.pcall('FT.INFO',index)
  if info.err then
    if string.find(string.lower(info.err),'unknown index',1,true) or string.find(string.lower(info.err),'no such index',1,true) then return 2 end
@@ -208,7 +254,7 @@ local function ready(index,prefix,schema,count)
  end
  local definition=val(info,'index_definition')
  local prefixes=val(definition,'prefixes')
- if val(definition,'key_type')~='HASH' or type(prefixes)~='table' or #prefixes~=1 or text(prefixes[1])~=prefix then return -2 end
+ if val(definition,'key_type')~=(keytype or 'HASH') or type(prefixes)~='table' or #prefixes~=1 or text(prefixes[1])~=prefix then return -2 end
  local expected=cjson.decode(schema)
  local attrs=val(info,'attributes')
  if type(attrs)~='table' or #attrs~=#expected then return -2 end
@@ -218,7 +264,7 @@ local function ready(index,prefix,schema,count)
    for _,candidate in ipairs(attrs) do if val(candidate,'attribute')==f.Alias then a=candidate break end end
    if not a or val(a,'identifier')~=f.Name or val(a,'type')~=f.Kind then return -2 end
    if flag(a,'NOINDEX') then return -2 end
-   if f.Kind=='TAG' and (not flag(a,'CASESENSITIVE') or val(a,'SEPARATOR')~=',') then return -2 end
+   if f.Kind=='TAG' and (not flag(a,'CASESENSITIVE') or ((keytype or 'HASH')=='HASH' and val(a,'SEPARATOR')~=',')) then return -2 end
    if f.Kind=='TEXT' and (tonumber(val(a,'WEIGHT'))~=1 or flag(a,'NOSTEM')) then return -2 end
    if f.Kind=='TEXT' then hastext=true end
    if f.Kind=='VECTOR' then
@@ -238,14 +284,18 @@ local function ready(index,prefix,schema,count)
 end
 `
 
-const nativeIndexStatus = nativeReadyLua + `return {ready(KEYS[1],ARGV[1],ARGV[2],ARGV[3])}`
+const nativeIndexStatus = nativeReadyLua + `return {ready(KEYS[1],ARGV[1],ARGV[2],ARGV[3],ARGV[4])}`
 
 func (c *Collection) createNativeIndex(ctx context.Context, m hashManifest) error {
 	fields, err := c.nativeFields(m)
 	if err != nil {
 		return err
 	}
-	args := []any{"FT.CREATE", m.Index, "ON", "HASH", "PREFIX", 1, c.generationPrefix(m.Revision)}
+	keytype := "HASH"
+	if m.Format == 3 {
+		keytype = "JSON"
+	}
+	args := []any{"FT.CREATE", m.Index, "ON", keytype, "PREFIX", 1, c.nativeGenerationPrefix(m)}
 	if m.IndexVersion == 2 {
 		args = append(args, "LANGUAGE", "english")
 	}
@@ -275,7 +325,7 @@ func (c *Collection) createNativeIndex(ctx context.Context, m hashManifest) erro
 	wait, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	for {
-		reply, err := c.store.client.Eval(wait, nativeIndexStatus, []string{m.Index}, c.generationPrefix(m.Revision), string(schema), len(m.Tokens)).Slice()
+		reply, err := c.store.client.Eval(wait, nativeIndexStatus, []string{m.Index}, c.nativeGenerationPrefix(m), string(schema), len(m.Tokens), keytype).Slice()
 		if err != nil {
 			return err
 		}
@@ -315,13 +365,18 @@ func nativeStatusError(status int64) error {
 	return fmt.Errorf("%w: native Redis index/generation is damaged (%d)", vectordata.ErrInvalidRecord, status)
 }
 func (c *Collection) dropNativeIndex(ctx context.Context, name string) {
-	prefix := c.store.indexPrefix(c.name)
-	if c.store.metadata.DatabaseName == "0" && strings.HasPrefix(name, prefix) && validRevision(strings.TrimPrefix(name, prefix)) {
-		_ = c.store.client.Do(ctx, "FT.DROPINDEX", name).Err()
+	if c.store.metadata.DatabaseName != "0" {
+		return
+	}
+	for _, prefix := range []string{c.store.indexPrefix(c.name), c.store.jsonIndexPrefix(c.name)} {
+		if strings.HasPrefix(name, prefix) && validRevision(strings.TrimPrefix(name, prefix)) {
+			_ = c.store.client.Do(ctx, "FT.DROPINDEX", name).Err()
+			return
+		}
 	}
 }
 
-// RebuildNativeIndexes explicitly publishes a fresh indexed hash generation.
+// RebuildNativeIndexes explicitly publishes a fresh indexed hash/JSON generation.
 // The model definition is unchanged; existing format-1 data must be upgraded first.
 func (c *Collection) RebuildNativeIndexes(ctx context.Context) (err error) {
 	defer func() { err = c.operation(ctx, "rebuild_native_indexes", err) }()
@@ -329,8 +384,8 @@ func (c *Collection) RebuildNativeIndexes(ctx context.Context) (err error) {
 		return vectordata.ErrUnsupported
 	}
 	return c.mutate(ctx, func(state *snapshot) error {
-		if state.Format != 2 {
-			return fmt.Errorf("%w: native index rebuild requires hash storage", vectordata.ErrUnsupported)
+		if state.Format != 2 && state.Format != 3 {
+			return fmt.Errorf("%w: native index rebuild requires hash or JSON storage", vectordata.ErrUnsupported)
 		}
 		return nil
 	})
@@ -358,8 +413,11 @@ func (s *Store) PruneNativeIndexes(ctx context.Context, name string) (count int6
 	if err != nil {
 		return 0, err
 	}
-	prefix := s.indexPrefix(name)
 	for _, index := range names {
+		prefix, storagePrefix := s.indexPrefix(name), s.hashPrefix(name)
+		if strings.HasPrefix(index, s.jsonIndexPrefix(name)) {
+			prefix, storagePrefix = s.jsonIndexPrefix(name), s.jsonPrefix(name)
+		}
 		revision := strings.TrimPrefix(index, prefix)
 		if revision == index || !validRevision(revision) {
 			continue
@@ -380,7 +438,7 @@ func (s *Store) PruneNativeIndexes(ctx context.Context, name string) (count int6
 		if current.Revision == revision {
 			continue
 		}
-		lease := s.hashPrefix(name) + revision + ":lease"
+		lease := storagePrefix + revision + ":lease"
 		ok, guardErr := s.client.Eval(ctx, nativePruneGuard, []string{s.key(name), lease}, mode, raw).Int()
 		if guardErr != nil {
 			return count, guardErr

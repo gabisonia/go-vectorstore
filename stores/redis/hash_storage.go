@@ -210,21 +210,7 @@ func (c *Collection) projectHashes(ctx context.Context, state snapshot) (hashMan
 	if c.store.nativeIndexes {
 		m.Index = c.indexName(m.Revision)
 		m.IndexVersion = c.nativeIndexVersion()
-		for _, p := range c.definition.Vectors {
-			if !nativeVectorProperty(p) {
-				continue
-			}
-			safe := true
-			for _, r := range records {
-				if v := r.Vectors[p.Name]; v != nil && !nativeVectorSafe(v) {
-					safe = false
-					break
-				}
-			}
-			if safe {
-				m.IndexVectors = append(m.IndexVectors, p.Name)
-			}
-		}
+		m.IndexVectors = c.nativeVectors(records)
 	}
 	sort.Strings(m.Tokens)
 	raw, err := json.Marshal(m)

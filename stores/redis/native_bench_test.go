@@ -194,3 +194,67 @@ func BenchmarkRedisFlatSearch(b *testing.B) {
 		})
 	}
 }
+
+// BenchmarkRedisJSONSearch measures unfiltered top-5 vector reads from immutable
+// JSON generations. Every reference operation loads a fresh canonical engine;
+// setup, inserts and index construction are outside the timers.
+func BenchmarkRedisJSONSearch(b *testing.B) {
+	ctx := context.Background()
+	for _, method := range []vectordata.IndexMethod{vectordata.IndexMethodHNSW, vectordata.IndexMethodFlat} {
+		for _, size := range []int{100, 1000} {
+			b.Run(fmt.Sprintf("%s/records%d", method, size), func(b *testing.B) {
+				id, err := vectordata.NewUUIDKey()
+				if err != nil {
+					b.Fatal(err)
+				}
+				s, err := New(StoreOptions{Addr: integrationAddr, Namespace: "bench_json_" + id, StorageMode: StorageJSON, NativeIndexes: true})
+				if err != nil {
+					b.Fatal(err)
+				}
+				b.Cleanup(func() { s.DeleteCollection(ctx, "records"); s.Close() })
+				d := vectordata.CollectionDefinition{Key: vectordata.KeyProperty{Name: "ID", Type: vectordata.KeyInt64}, Vectors: []vectordata.VectorProperty{{Name: "Vector", Dimensions: 16, Metric: vectordata.DistanceL2, Index: &vectordata.VectorIndexOptions{Method: method}}}}
+				base, err := s.EnsureModelCollection(ctx, "records", d, vectordata.ModelCollectionOptions{})
+				if err != nil {
+					b.Fatal(err)
+				}
+				c := base.(*Collection)
+				rng := rand.New(rand.NewSource(45))
+				records := make([]vectordata.ModelRecord, size)
+				for i := range records {
+					v := make([]float32, 16)
+					for j := range v {
+						v[j] = rng.Float32()
+					}
+					records[i] = vectordata.ModelRecord{Key: int64(i), Vectors: map[string][]float32{"Vector": v}}
+				}
+				if _, err := c.Insert(ctx, records); err != nil {
+					b.Fatal(err)
+				}
+				query := records[0].Vectors["Vector"]
+				for _, native := range []bool{true, false} {
+					name := "reference"
+					if native {
+						name = "native"
+					}
+					b.Run(name, func(b *testing.B) {
+						b.ReportAllocs()
+						for range b.N {
+							var searcher vectordata.ModelCollection = c
+							if !native {
+								var err error
+								searcher, err = c.engine(ctx)
+								if err != nil {
+									b.Fatal(err)
+								}
+							}
+							hits, err := searcher.Search(ctx, query, 5, vectordata.ModelSearchOptions{})
+							if err != nil || len(hits) != 5 || hits[0].Record.Key != int64(0) {
+								b.Fatalf("search: %+v %v", hits, err)
+							}
+						}
+					})
+				}
+			})
+		}
+	}
+}

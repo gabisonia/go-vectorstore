@@ -22,9 +22,11 @@ func (s *Store) Capabilities() vectordata.ProviderCapabilities {
 		DistanceMetrics: []vectordata.DistanceMetric{vectordata.DistanceCosine, vectordata.DistanceL2, vectordata.DistanceL2Squared, vectordata.DistanceInnerProduct, vectordata.DistanceL1},
 	}
 	if s.nativeIndexes {
-		caps.FullTextIndexing = true
+		caps.FullTextIndexing = s.storageMode != StorageJSON
 		caps.VectorIndexMethods = []vectordata.IndexMethod{vectordata.IndexMethodHNSW, vectordata.IndexMethodFlat}
-		caps.IndexedDataTypes = []vectordata.DataType{vectordata.TypeString, vectordata.TypeInt64, vectordata.TypeFloat64, vectordata.TypeBool}
+		if s.storageMode != StorageJSON {
+			caps.IndexedDataTypes = []vectordata.DataType{vectordata.TypeString, vectordata.TypeInt64, vectordata.TypeFloat64, vectordata.TypeBool}
+		}
 		for _, method := range caps.VectorIndexMethods {
 			for _, metric := range []vectordata.DistanceMetric{vectordata.DistanceCosine, vectordata.DistanceL2, vectordata.DistanceL2Squared, vectordata.DistanceInnerProduct} {
 				for _, precision := range []vectordata.VectorPrecision{vectordata.VectorFloat32, vectordata.VectorFloat16} {

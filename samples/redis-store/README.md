@@ -100,8 +100,22 @@ sequence. Repeating conversion is a read-only no-op before the sample's ordinary
 upsert. Choose one conversion flag per run. Format 3 requires an updated library
 and RedisJSON; older binaries reject it. Reverse conversion is unsupported.
 JSON stores canonical payload strings inside real JSON documents to preserve
-numeric/null precision. Filtering/search remain in Go; JSON-native indexes and
-`-storage json -native` are unsupported in this increment.
+numeric/null precision. Plain JSON filtering/search remain in Go.
+
+With Redis Search and database zero, add native vector indexes in separate namespaces:
+
+```sh
+go run ./samples/redis-store -addr localhost:63799 -namespace redis_json_hnsw_demo -storage json -native
+go run ./samples/redis-store -addr localhost:63799 -namespace redis_json_hnsw_demo -storage json -native
+go run ./samples/redis-store -addr localhost:63799 -namespace redis_json_flat_demo -storage json -native -index flat
+go run ./samples/redis-store -addr localhost:63799 -namespace redis_json_flat_demo -storage json -native -index flat
+```
+
+All four commands print the same three lines. Count still evaluates its category
+filter in Go; the JSON native sample uses unfiltered KNN to exercise the vector
+index. JSON scalar/full-text indexes are deferred, so filtered vector searches
+also use Go. `-fulltext` requires HASH storage. Rebuilds and native writes build a
+new index before atomic publication; ordinary JSON readers/writers remain compatible.
 
 Records remain in Redis. To clean up only this fixture, call
 `store.DeleteCollection(ctx, "documents")` using its configured namespace/database.
