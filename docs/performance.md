@@ -180,7 +180,10 @@ queries (EF_RUNTIME 200, no keyword matches) with exact Go ranking, asserting th
 native KNN path without full-scan fallback. A local run achieved recall@10 1.000
 on both HASH and JSON; this small fixture does not predict production recall.
 Concurrent publication tests verify complete old/new generations and one embedding
-call across retries. Shared contracts exercise typed and lazy input/hybrid reads.
+call across retries. Shared contracts exercise typed and lazy input/hybrid reads,
+including KeywordTerms OR groups, paging/thresholds and callback list ownership.
+HASH/JSON HNSW/FLAT fixtures cover AND within groups, literal operators, Unicode,
+stopwords, punctuation-only/overlapping groups and repeated lazy enumeration.
 These are correctness checks, not hybrid latency/throughput measurements. Hybrid
 reads fetch all keyword matches and may read a complete canonical generation;
 existing ordinary-read benchmarks do not measure these costs.

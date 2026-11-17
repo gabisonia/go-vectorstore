@@ -57,7 +57,7 @@ func TestJSONConfigurationAndCanonicalProjection(t *testing.T) {
 		t.Fatalf("canonical precision: %+v %v", r, err)
 	}
 	caps := s.Capabilities()
-	if len(caps.VectorIndexMethods) != 0 || len(caps.IndexedDataTypes) != 0 || caps.FullTextIndexing || caps.HybridSearch || caps.MigrationPlanning {
+	if len(caps.VectorIndexMethods) != 0 || len(caps.IndexedDataTypes) != 0 || caps.FullTextIndexing || caps.HybridSearch || caps.HybridKeywordTerms || caps.MigrationPlanning {
 		t.Fatalf("JSON foundation advertised indexes/migrations: %+v", caps)
 	}
 	s.maxBytes = len(raw)

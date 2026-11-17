@@ -34,7 +34,7 @@ func TestLocalConfigurationAndCapabilities(t *testing.T) {
 		t.Fatal("TLS config alias")
 	}
 	caps := s.Capabilities()
-	if caps.Backend != "redis" || caps.HybridSearch || caps.FullTextIndexing || len(caps.VectorIndexMethods) > 0 || len(caps.IndexedDataTypes) > 0 || len(caps.VectorKinds) != 1 || caps.VectorKinds[0] != vectordata.VectorDense {
+	if caps.Backend != "redis" || caps.HybridSearch || caps.HybridKeywordTerms || caps.FullTextIndexing || len(caps.VectorIndexMethods) > 0 || len(caps.IndexedDataTypes) > 0 || len(caps.VectorKinds) != 1 || caps.VectorKinds[0] != vectordata.VectorDense {
 		t.Fatalf("unsupported capabilities: %+v", caps)
 	}
 	caps.DataTypes[0] = "changed"

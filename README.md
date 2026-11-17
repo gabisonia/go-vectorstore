@@ -420,7 +420,8 @@ Opt-in native indexing supports HNSW/FLAT vector search on immutable HASH/JSON
 generations, preserving atomic batches. Both layouts accelerate supported scalar
 filters and create TEXT fields from string full-text hints. Native dense hybrid
 fuses plain-text keyword/vector ranks with RRF from one guarded generation.
-Unsupported filters keep exact Go evaluation; KeywordTerms lists remain unsupported.
+Unsupported filters keep exact Go evaluation. KeywordTerms lists OR plain-text
+AND groups; native mode advertises HybridKeywordTerms.
 Native indexing requires Redis Search and database zero; writes rebuild the generation's index.
 See [native support and fallback rules](docs/redis.md#native-indexes-and-search).
 

@@ -48,7 +48,7 @@ func TestHybridValidationBeforeIOAndEmbedding(t *testing.T) {
 		{name: "bad filter", top: 1, change: func(o *vectordata.HybridSearchOptions) { o.Filter = vectordata.Eq(vectordata.Column("missing"), 1) }, want: vectordata.ErrInvalidFilter},
 		{name: "provider options", top: 1, change: func(o *vectordata.HybridSearchOptions) { o.ProviderOptions = struct{}{} }, want: vectordata.ErrUnsupported},
 		{name: "FLAT tuning", top: 1, change: func(o *vectordata.HybridSearchOptions) { o.ProviderOptions = SearchTuning{EFRuntime: 10} }},
-		{name: "keyword list", top: 1, change: func(o *vectordata.HybridSearchOptions) { o.KeywordTerms = []string{"apple"} }, want: vectordata.ErrUnsupported},
+		{name: "conflicting keyword forms", top: 1, change: func(o *vectordata.HybridSearchOptions) { o.KeywordTerms = []string{"apple"} }},
 		{name: "blank keywords", top: 1, keywords: " "}, {name: "NUL keywords", top: 1, keywords: "a\x00b"},
 		{name: "invalid UTF8", top: 1, keywords: string([]byte{255})}, {name: "long keywords", top: 1, keywords: strings.Repeat("a", 16385)},
 		{name: "many tokens", top: 1, keywords: strings.Repeat("word ", 129)},

@@ -27,7 +27,7 @@ func testNativeFullTextSchemaAndCompatibility(t *testing.T, mode StorageMode) {
 		t.Fatal(err)
 	}
 	c := base.(*Collection)
-	if c.nativeIndexVersion() != 2 || c.nativeJSONIndexVersion() != 5 || !s.Capabilities().FullTextIndexing || !s.Capabilities().HybridSearch || s.Capabilities().HybridKeywordTerms {
+	if c.nativeIndexVersion() != 2 || c.nativeJSONIndexVersion() != 5 || !s.Capabilities().FullTextIndexing || !s.Capabilities().HybridSearch || !s.Capabilities().HybridKeywordTerms {
 		t.Fatal("full-text capability/version mismatch")
 	}
 	versions, format := []int{1, 2}, 2

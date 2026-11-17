@@ -158,7 +158,7 @@ Storage choices through RRF, while ordinary vector search still selects System
 architecture. Hybrid scores are RRF, not vector similarity. HASH/JSON and either
 vector method are supported; `-hybrid` requires `-native`. Text-marked models need
 a separate namespace from the basic unmarked model. Missing/legacy TEXT indexes
-require an explicit rebuild/native write. KeywordTerms lists remain unsupported.
+require an explicit rebuild/native write. KeywordTerms lists are supported.
 Both candidate sets and payloads come from one guarded generation; keyword matches
 are all retrieved for deterministic filtering/ties, and exact fallbacks can scan
 the complete generation. These examples make no hybrid throughput claim.
@@ -185,3 +185,17 @@ search. Each native write rebuilds the entire generation's index. The default
 encoded limit is 16 MiB. Persistence follows Redis configuration;
 the local AOF `everysec` setting may lose recent writes on a crash. See
 [Redis behavior and limits](../../docs/redis.md).
+
+Run keyword groups with the same output (`-keyword-terms` implies `-hybrid`):
+
+```sh
+go run ./samples/redis-store -addr localhost:63799 -namespace redis_terms_demo -native -keyword-terms
+go run ./samples/redis-store -addr localhost:63799 -namespace redis_terms_demo -native -keyword-terms
+go run ./samples/redis-store -addr localhost:63799 -namespace redis_json_terms_demo -storage json -native -index flat -keyword-terms
+go run ./samples/redis-store -addr localhost:63799 -namespace redis_json_terms_demo -storage json -native -index flat -keyword-terms
+```
+
+This passes blank positional keywords and `KeywordTerms: []string{"storage choices",
+"release notes"}`: OR between entries and AND within each entry. The guide filter
+excludes release notes before ranking both lists. Native HASH/JSON advertises
+`HybridKeywordTerms`; ordinary snapshot/hash/JSON storage does not.

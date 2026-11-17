@@ -44,7 +44,8 @@ standalone address, not Redis Cluster, Sentinel or read-replica routing.
 Binary/sparse vector definitions return `ErrUnsupported`. Without `NativeIndexes`,
 index hints are accepted for portability and build no indexes. Native mode honors
 string full-text hints and supports dense RRF hybrid search. Standalone keyword
-queries, KeywordTerms lists and binary/sparse hybrid search remain unsupported. Unknown search `ProviderOptions`
+queries and binary/sparse hybrid search remain unsupported. Unknown search
+`ProviderOptions`
 return `ErrUnsupported`. Migration planning and
 application are not advertised. Runtime embedders are never persisted or invoked
 while reconstructing stored vectors.
@@ -183,7 +184,7 @@ fall back to Go. Canonical payloads, registrations and storage format 3 are
 unchanged. Plain/older writers remain compatible and can publish earlier index
 versions again. See [full-text indexing](#full-text-indexing) for tokenizer,
 validation and limit details. Dense hybrid search uses these indexes; standalone
-keyword-query and KeywordTerms-list APIs remain absent.
+keyword queries remain absent; KeywordTerms lists are supported.
 
 To convert an existing snapshot or hash collection, use its unchanged registered
 definition and call:
@@ -373,8 +374,8 @@ does not perform that model-schema migration.
 
 This feature creates and validates physical indexes. `SearchText` and `SearchInput`
 still generate embeddings for vector search; hybrid APIs explicitly combine keyword
-and vector candidates. `HybridSearch` is true only in native mode, while
-`HybridKeywordTerms` stays false. Internal index names/field aliases remain private.
+and vector candidates. `HybridSearch` and `HybridKeywordTerms` are true only in
+native mode. Internal index names/field aliases remain private.
 See the [full-text sample mode](../samples/redis-store/README.md).
 
 ## Hybrid search
@@ -406,6 +407,17 @@ Redis applies its English stemming/default stopwords and the explicit `BM25`
 scorer supported by Redis 8.2. Keyword scores differ from PostgreSQL's text ranking.
 See Redis [scoring](https://redis.io/docs/latest/develop/ai/search-and-query/advanced-concepts/scoring/).
 
+`HybridSearchOptions.KeywordTerms` replaces the positional string when non-nil.
+Pass blank positional keywords and a nonempty list: `[]string{"cloud costs",
+"caching"}` matches `(cloud AND costs) OR caching`. Groups use the same literal
+token rules; punctuation-only groups add no keyword candidates. Blank entries,
+invalid UTF-8, NUL and conflicting positional keywords return
+`ErrInvalidSearchOptions` before I/O/embedding. Lists are limited to 128 groups,
+128 aggregate tokens and 16,384 aggregate bytes. Nil preserves positional AND
+matching; a non-nil empty list is invalid. Every iterator enumeration snapshots
+the current list before callbacks; avoid concurrent mutation during enumeration.
+No schema upgrade is needed for existing ready TEXT generations.
+
 `CandidateLimit` defaults to `max(100, top + Skip)`, must cover the requested page,
 and is capped at 1,000,000. Each candidate list is ranked after filtering and
 excluding records without the selected vector. Vector ties, keyword-score ties
@@ -432,14 +444,14 @@ The keyword side remains native in these cases. Provider tuning follows ordinary
 vector search, including rejection of positive EF_RUNTIME on FLAT.
 
 Hybrid search requires a ready TEXT generation (HASH metadata 2 or JSON metadata
-5). Plain storage, old scalar/vector-only indexes, missing/unready indexes and
-KeywordTerms lists return `ErrUnsupported`; schema drift/damage returns the
+5). Plain storage, old scalar/vector-only indexes and missing/unready indexes
+return `ErrUnsupported`; schema drift/damage returns the
 existing schema/record errors. No read creates or rebuilds indexes implicitly.
 Use an explicit rebuild with the unchanged full-text-marked definition when
 upgrading an old index. Invalid options/filters/keywords are rejected before I/O
 or embedding. Text/custom-input forms verify index availability before embedding,
-snapshot filter/threshold values, release connections before callbacks, and embed
-once even when publication conflicts require read retries.
+snapshot keyword lists and filter/threshold values, release connections before
+callbacks, and embed once even when publication conflicts require read retries.
 
 `HybridSearchText` and `HybridSearchInput` embed query input; their keyword string
 is independent. Iterators buffer a complete page, release Redis resources before
