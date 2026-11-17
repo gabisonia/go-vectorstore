@@ -63,8 +63,8 @@ jobs:
         # Separate go invocations avoid concurrent Testcontainers reaper creation
         # across the two test binaries and give each its own session lifetime.
         run: |
-          go test -race -tags=integration -timeout=5m ./stores/postgres
-          go test -race -tags=integration -timeout=5m ./samples/recipes
+          go test -count=1 -race -tags=integration -timeout=5m ./stores/postgres
+          go test -count=1 -race -tags=integration -timeout=5m ./samples/recipes
 
   integration-redis:
     name: Redis ${{ matrix.redis }} (Go ${{ matrix.go }})
@@ -93,13 +93,13 @@ jobs:
           REDIS_TEST_ADDR: localhost:6379
           REDIS_REQUIRE_SEARCH: ${{ matrix.redis == '8.2' }}
           REDIS_REQUIRE_JSON: ${{ matrix.redis == '8.2' }}
-        run: go test -race -tags=integration -timeout=5m -skip 'TestIntegration(Native|JSONNative)' ./stores/redis
+        run: go test -count=1 -race -tags=integration -timeout=5m -skip 'TestIntegration(Native|JSONNative)' ./stores/redis
       - name: Run Redis native index contracts and failure tests
         env:
           REDIS_TEST_ADDR: localhost:6379
           REDIS_REQUIRE_SEARCH: ${{ matrix.redis == '8.2' }}
           REDIS_REQUIRE_JSON: ${{ matrix.redis == '8.2' }}
-        run: go test -race -tags=integration -timeout=10m -run 'TestIntegration(Native|JSONNative)' ./stores/redis
+        run: go test -count=1 -race -tags=integration -timeout=10m -run 'TestIntegration(Native|JSONNative)' ./stores/redis
       - name: Run persistent sample twice
         run: |
           go run ./samples/redis-store
@@ -140,6 +140,10 @@ jobs:
           go run ./samples/redis-store -namespace redis_terms_demo -native -keyword-terms
           go run ./samples/redis-store -namespace redis_json_terms_demo -storage json -native -index flat -keyword-terms
           go run ./samples/redis-store -namespace redis_json_terms_demo -storage json -native -index flat -keyword-terms
+          go run ./samples/redis-store -namespace redis_nostem_demo -native -no-stem
+          go run ./samples/redis-store -namespace redis_nostem_demo -native -no-stem
+          go run ./samples/redis-store -namespace redis_json_nostem_demo -storage json -native -index flat -no-stem
+          go run ./samples/redis-store -namespace redis_json_nostem_demo -storage json -native -index flat -no-stem
 
   local-doc-agent:
     name: Local doc agent (Go ${{ matrix.go }})

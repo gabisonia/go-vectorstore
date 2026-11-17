@@ -339,8 +339,9 @@ and embedded NUL bytes, remain intact in canonical records. A TEXT-only property
 does not enable scalar filter pushdown: Query/Count equality still compares the
 whole literal through Go fallback unless `IsIndexed` is also true.
 
-Creation selects English language, stemming and weight 1, retaining Redis's
-standard punctuation/case tokenization and default stopwords. No custom language,
+Creation defaults to English language, stemming and weight 1, retaining Redis's
+standard punctuation/case tokenization and default stopwords. The NoStem annotation
+below can disable index stemming. No custom language,
 weights, phonetics or stopword options are exposed. Validation checks field
 identity/type, weight, stemming/index flags, reported index options and custom
 stopword lists before publication and native reads. FT.INFO does not expose every
@@ -377,6 +378,31 @@ still generate embeddings for vector search; hybrid APIs explicitly combine keyw
 and vector candidates. `HybridSearch` and `HybridKeywordTerms` are true only in
 native mode. Internal index names/field aliases remain private.
 See the [full-text sample mode](../samples/redis-store/README.md).
+
+### Provider annotation: NoStem
+
+Use `redis.WithTextIndexOptions(property, redis.TextIndexOptions{NoStem: true})`
+on a string property already marked IsFullTextIndexed. The helper returns a copy
+with the `redis.text.nostem` annotation; default options remove the hint and keep
+the old registration representation. GetTextIndexOptions reads the typed option.
+
+Native HASH/JSON maps this hint to Redis TEXT NOSTEM. Disabling index stemming
+means a query for `run` does not gain matches from indexed `running`; tokenization,
+case folding and default stopwords still apply. This is not phrase matching or
+case-sensitive scalar equality. The option is validated before I/O and is checked
+against FT.INFO in the same manifest/readiness guard as hybrid candidate reads.
+A mismatched physical flag returns ErrSchemaMismatch, without partial results;
+an explicit rebuild repairs the physical index with the unchanged definition.
+
+Plain Redis validates and retains the hint but builds no TEXT indexes. Foreign
+provider annotations are preserved. Unknown `redis.*` keys return ErrUnsupported;
+misplaced NOSTEM, null and non-boolean values return ErrSchemaMismatch. Annotation
+changes are registered schema changes; use a new model/namespace or a supported
+explicit schema migration. Rebuild does not change a registered model. No new
+storage/index metadata version is required; absent options retain the existing
+HASH-2/JSON-5 TEXT schema. Older scalar/vector generations still require explicit
+rebuild/native writes before hybrid search. See the rerunnable
+[NoStem sample](../samples/redis-store/README.md).
 
 ## Hybrid search
 

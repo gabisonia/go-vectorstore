@@ -37,6 +37,11 @@ model writes expose the portable ErrInvalidRecord sentinel and native SQLSTATE
 23505 together. Shared provider contracts cover these workflows; this is workflow compatibility, not identical .NET naming
 or exception/return-value semantics.
 
+Implementation follows the [ordered parity plan](parity-plan.md). Provider
+annotations are the current increment; SQLite vector execution and Qdrant are the
+next provider projects. Embedding output types, typed property references and
+native service access are tracked separately.
+
 ## Provider matrix
 
 | Capability | PostgreSQL | SQLite | Memory | Redis |

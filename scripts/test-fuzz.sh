@@ -9,7 +9,7 @@ if [[ ! "$fuzz_budget" =~ ^[1-9][0-9]*(ms|s|m|x)$ ]]; then
   printf 'Usage: test-fuzz.sh POSITIVE_DURATION_OR_CALL_COUNT (for example 3s, 1m or 50000x)\n' >&2
   exit 2
 fi
-for target in FuzzDecimal FuzzFloat16 FuzzSparseDistance FuzzStructCodec FuzzModelFilter; do
+for target in FuzzProviderAnnotations FuzzDecimal FuzzFloat16 FuzzSparseDistance FuzzStructCodec FuzzModelFilter; do
   go test -run '^$' -fuzz "^${target}$" -fuzztime "$fuzz_budget" -parallel=2 -timeout=5m ./vectordata
 done
 go test -run '^$' -fuzz '^FuzzStoredRecord$' -fuzztime "$fuzz_budget" -parallel=2 -timeout=5m ./stores/sqlite

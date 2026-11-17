@@ -199,3 +199,19 @@ This passes blank positional keywords and `KeywordTerms: []string{"storage choic
 "release notes"}`: OR between entries and AND within each entry. The guide filter
 excludes release notes before ranking both lists. Native HASH/JSON advertises
 `HybridKeywordTerms`; ordinary snapshot/hash/JSON storage does not.
+
+Disable TEXT stemming through provider annotations (a separate registered model):
+
+```sh
+go run ./samples/redis-store -addr localhost:63799 -namespace redis_nostem_demo -native -no-stem
+go run ./samples/redis-store -addr localhost:63799 -namespace redis_nostem_demo -native -no-stem
+go run ./samples/redis-store -addr localhost:63799 -namespace redis_json_nostem_demo -storage json -native -index flat -no-stem
+go run ./samples/redis-store -addr localhost:63799 -namespace redis_json_nostem_demo -storage json -native -index flat -no-stem
+```
+
+`-no-stem` implies `-hybrid` and uses WithTextIndexOptions on Title. Its keyword
+query is `choice`, which does not match indexed `choices` without stemming. Only
+vector ranks contribute, so the hybrid line is `Hybrid: System architecture
+(reciprocal_rank_fusion)`. Other output is unchanged. `-keyword-terms` overrides
+the keyword input with the list described above. The annotation survives reconnects
+and rebuilds; changing it requires a different registered definition/namespace.
