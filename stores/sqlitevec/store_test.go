@@ -7,6 +7,7 @@ import (
 	"errors"
 	"math"
 	"math/rand/v2"
+	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
@@ -225,4 +226,40 @@ func TestOpenLockWaitIsCancelable(t *testing.T) {
 		t.Fatal(err)
 	}
 	open(t, path)
+}
+
+func TestLiteralFilenamePersistence(t *testing.T) {
+	// These characters are valid in both Windows and POSIX filenames. In
+	// particular # and % must not become a URI fragment or escape sequence.
+	path := filepath.Join(t.TempDir(), "literal#%&_pragma=foreign_keys(0) 雪.db")
+	ctx := context.Background()
+	s, err := sqlitevec.Open(ctx, path, sqlitevec.StoreOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := vectordata.CollectionDefinition{Key: vectordata.KeyProperty{Name: "ID"}, Vectors: []vectordata.VectorProperty{{Name: "V", Dimensions: 1, Metric: vectordata.DistanceL1}}}
+	c, err := s.EnsureModelCollection(ctx, "literal", d, vectordata.ModelCollectionOptions{})
+	if err != nil {
+		s.Close()
+		t.Fatal(err)
+	}
+	if _, err := c.Insert(ctx, []vectordata.ModelRecord{{Key: "kept", Vectors: map[string][]float32{"V": {1}}}}); err != nil {
+		s.Close()
+		t.Fatal(err)
+	}
+	if err := s.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("literal filename was not used: %v", err)
+	}
+	reopened := open(t, path)
+	c, err = reopened.GetModelCollection("literal", d, vectordata.ModelCollectionOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	hits, err := c.Search(ctx, []float32{0}, 1, vectordata.ModelSearchOptions{})
+	if err != nil || len(hits) != 1 || hits[0].Record.Key != "kept" || hits[0].Distance != 1 {
+		t.Fatalf("literal file reopen: %+v %v", hits, err)
+	}
 }

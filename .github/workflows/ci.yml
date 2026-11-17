@@ -65,7 +65,7 @@ jobs:
       - name: Verify opt-in extension and unextended writer compatibility
         run: |
           go test -count=1 -v -tags=sqlitevecprobe -timeout=3m ./internal/sqlitevecprobe ./stores/sqlitevec
-          go test -count=1 -v -tags=sqlitevecprobe -run TestNativeVector -timeout=3m ./stores/sqlite
+          go test -count=1 -v -tags=sqlitevecprobe -run 'TestNativeVector|TestFileURI' -timeout=3m ./stores/sqlite
       - name: Vet probe
         run: go vet -tags=sqlitevecprobe ./internal/sqlitevecprobe ./stores/sqlitevec
 

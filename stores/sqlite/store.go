@@ -77,7 +77,7 @@ func Open(ctx context.Context, path string, opts StoreOptions) (*Store, error) {
 		if err != nil {
 			return nil, err
 		}
-		dsn = (&url.URL{Scheme: "file", Path: absolute}).String()
+		dsn = sqliteFileURI(filepath.ToSlash(absolute))
 		databaseName = absolute
 	}
 	q := url.Values{}
@@ -107,6 +107,16 @@ func Open(ctx context.Context, path string, opts StoreOptions) (*Store, error) {
 		return nil, err
 	}
 	return s, nil
+}
+
+// Accept an absolute slash-separated filename. Drive paths need a leading slash
+// so url.URL keeps C: in the path, rather than turning it into URI authority.
+// A UNC path stays in the path too (file:////server/share), with empty authority.
+func sqliteFileURI(path string) string {
+	if !strings.HasPrefix(path, "/") {
+		path = "/" + path
+	}
+	return (&url.URL{Scheme: "file", Path: path}).String()
 }
 func (s *Store) initialize(ctx context.Context) error {
 	tx, err := s.beginTx(ctx)
