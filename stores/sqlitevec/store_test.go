@@ -35,10 +35,12 @@ func TestModelContract(t *testing.T) {
 	})
 }
 
-func packed(vector []float32) []byte {
+// Raw scalar calls consume host-order blobs. Persisted provider projections use
+// little-endian storage; production native execution is gated to little-endian.
+func nativePacked(vector []float32) []byte {
 	result := make([]byte, 4*len(vector))
 	for i, value := range vector {
-		binary.LittleEndian.PutUint32(result[4*i:], math.Float32bits(value))
+		binary.NativeEndian.PutUint32(result[4*i:], math.Float32bits(value))
 	}
 	return result
 }
@@ -68,7 +70,7 @@ func TestL1ScalarMatchesCanonicalBits(t *testing.T) {
 				b[0] = 0
 			}
 			var got float64
-			if err := db.QueryRow(`SELECT vec_distance_L1(?,?)`, packed(a), packed(b)).Scan(&got); err != nil {
+			if err := db.QueryRow(`SELECT vec_distance_L1(?,?)`, nativePacked(a), nativePacked(b)).Scan(&got); err != nil {
 				t.Fatal(err)
 			}
 			want := exactsearch.DenseDistance(a, b, vectordata.DistanceL1)
