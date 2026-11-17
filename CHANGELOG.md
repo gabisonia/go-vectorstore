@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Fix SQLite vector projection cleanup choosing a collection scan per written
+  record. Require its existing collection/key index for insert/upsert/backfill
+  cleanup, avoiding quadratic large-vector reads without changing stored formats.
+  Add an actual query-plan regression check and reproducible workload measurements.
+
 - Add an opt-in pure-Go sqlite-vec adapter over the shared SQLite provider.
   Verified non-SIMD scalar L1 candidates retain complete boundary ties and exact
   Go ranking, thresholds and paging in one WAL snapshot. Gate extension version/

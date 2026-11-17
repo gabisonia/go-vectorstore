@@ -146,6 +146,8 @@ ten-minute timeout, while storage checks retain five minutes.
   Keep rebuild explicit, keyset-batched and atomic. Rank packed vectors and fetch
   the selected payload page in one deferred WAL snapshot; filtered/binary/sparse
   searches retain canonical fallback. Do not infer native vector index support.
+  Require the existing collection/key index for per-record projection cleanup;
+  SQLite can otherwise select a collection-only primary-key scan without ANALYZE.
 - PostgreSQL migrations separate read-only planning from explicit application.
   Preserve review/staleness validation and additive-application limits.
 - ProviderAnnotations are immutable JSON values. Omit empty values and preserve

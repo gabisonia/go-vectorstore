@@ -68,9 +68,15 @@ func packVector(vector []float32) []byte {
 	return packed
 }
 
+// Without a requirement SQLite can prefer a collection-only scan of the
+// WITHOUT ROWID primary key over this point index, especially without ANALYZE
+// statistics. That makes insert/upsert/rebuild cleanup quadratic and repeatedly
+// reads large vector overflow pages even when the requested key is absent.
+const deleteVectorProjectionsSQL = `DELETE FROM __vectorstore_vector_values INDEXED BY __vectorstore_vector_key WHERE collection=? AND key=?`
+
 func (c *Collection) projectVectors(ctx context.Context, tx *sql.Tx, record vectordata.ModelRecord) error {
 	token := keyToken(record.Key)
-	if _, err := tx.ExecContext(ctx, `DELETE FROM __vectorstore_vector_values WHERE collection=? AND key=?`, c.name, token); err != nil {
+	if _, err := tx.ExecContext(ctx, deleteVectorProjectionsSQL, c.name, token); err != nil {
 		return err
 	}
 	for _, property := range c.definition.Vectors {

@@ -55,6 +55,34 @@ func requireProjectionState(t *testing.T, s *Store, registryCount, ready, values
 	}
 }
 
+func TestVectorProjectionCleanupUsesKeyIndex(t *testing.T) {
+	s, c := projectionFixture(t, filepath.Join(t.TempDir(), "point.db"), true)
+	// Check the real DELETE plan without ANALYZE or statistics from a large
+	// fixture. Cleanup must constrain BOTH collection and key, even for inserts
+	// whose key has no old projection, not scan a whole collection per record.
+	rows, err := s.db.Query("EXPLAIN QUERY PLAN "+deleteVectorProjectionsSQL, c.name, keyToken(int64(1)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	var details []string
+	for rows.Next() {
+		var id, parent, aux int
+		var detail string
+		if err := rows.Scan(&id, &parent, &aux, &detail); err != nil {
+			t.Fatal(err)
+		}
+		details = append(details, detail)
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	plan := strings.Join(details, "\n")
+	if !strings.Contains(plan, "__vectorstore_vector_key (collection=? AND key=?)") {
+		t.Fatalf("cleanup is not a point lookup:\n%s", plan)
+	}
+}
+
 func TestVectorProjectionsExplicitBackfillAndMixedWriters(t *testing.T) {
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "mixed.db")
