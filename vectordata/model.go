@@ -327,7 +327,7 @@ func (d CollectionDefinition) Normalize() (CollectionDefinition, error) {
 			return fail("Hamming distance requires a binary vector")
 		}
 		if p.Kind == VectorSparse {
-			if p.Precision != "" && p.Precision != VectorFloat32 || p.SourceProperty != "" || !isNilValue(p.Embedder) || !isNilValue(p.InputEmbedder) || p.Dimensions > MaxSparseDimensions || p.Index != nil && p.Index.Method == IndexMethodIVFFlat {
+			if p.Precision != "" && p.Precision != VectorFloat32 || p.SourceProperty != "" || !isNilValue(p.Embedder) || !isNilValue(p.InputEmbedder) || p.Dimensions > MaxSparseDimensions || p.Index != nil && p.Index.Method != "" && p.Index.Method != IndexMethodHNSW {
 				return fail("sparse vectors require float32, explicit values, at most 1 billion dimensions, and HNSW indexes")
 			}
 		}
@@ -348,7 +348,7 @@ func (d CollectionDefinition) Normalize() (CollectionDefinition, error) {
 			if p.Index.Metric != "" && p.Index.Metric != p.Metric {
 				return fail("vector index metric conflicts with property")
 			}
-			if p.Index.Method != "" && p.Index.Method != IndexMethodHNSW && p.Index.Method != IndexMethodIVFFlat {
+			if p.Index.Method != "" && p.Index.Method != IndexMethodHNSW && p.Index.Method != IndexMethodIVFFlat && p.Index.Method != IndexMethodFlat {
 				return fail("unsupported vector index method")
 			}
 			p.Index.Metric = p.Metric
@@ -365,13 +365,15 @@ func (d CollectionDefinition) Normalize() (CollectionDefinition, error) {
 				if p.Index.HNSW.M < 2 || p.Index.HNSW.EfConstruction < 4 || p.Index.HNSW.M > p.Index.HNSW.EfConstruction/2 {
 					return fail("invalid HNSW construction parameters")
 				}
-			} else {
+			} else if p.Index.Method == IndexMethodIVFFlat {
 				if p.Index.IVFFlat.Lists == 0 {
 					p.Index.IVFFlat.Lists = 100
 				}
 				if p.Index.IVFFlat.Lists < 1 {
 					return fail("invalid IVFFlat lists")
 				}
+			} else if p.Index.HNSW != (HNSWOptions{}) || p.Index.IVFFlat != (IVFFlatOptions{}) {
+				return fail("FLAT indexes do not accept HNSW or IVFFlat construction parameters")
 			}
 
 		}

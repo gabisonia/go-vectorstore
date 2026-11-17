@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add native Redis FLAT indexes with `IndexMethodFlat`, eight additional dense
+  metric/precision tuples and algorithm drift detection. Exhaustively remeasure
+  matching vectors in Go to preserve exact ordering, ties, thresholds and paging;
+  reject HNSW tuning before I/O/embedding. Keep atomic generation publication,
+  fallback and cleanup guarantees. Add exact-reference/lifecycle tests, filtered
+  and unfiltered benchmarks, and a rerunnable FLAT sample with CI coverage.
+
 - Add opt-in Redis Search HNSW and scalar-filter acceleration on immutable hash
   generations. Preserve atomic publication/reads, exact integer and NULL filter
   behavior, Go distance/score units and fallback for unsupported cases/ties.

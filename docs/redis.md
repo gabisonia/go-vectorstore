@@ -2,8 +2,8 @@
 
 `stores/redis` implements model collections on standalone Redis. The default
 uses atomic collection snapshots with exact dense search and portable filtering
-in Go. Opt-in `NativeIndexes` adds Redis Search HNSW and scalar filtering over
-immutable hash generations. It is available on master after v0.4.1. The default
+in Go. Opt-in `NativeIndexes` adds Redis Search HNSW/FLAT indexes and scalar
+filtering over immutable hash generations. It is available on master after v0.4.1. The default
 encoded collection limit is 16 MiB; writes still process the whole collection.
 
 ```go
@@ -122,10 +122,22 @@ conversion. For an existing hash collection with matching index hints, call
 `base.(*redis.Collection).RebuildNativeIndexes(ctx)` explicitly. Repeating the
 storage conversion on format 2 is a no-op, so it does not rebuild indexes.
 
+Select exhaustive native search on a new model with
+`VectorIndexOptions{Method: vectordata.IndexMethodFlat}` or the struct tag
+`vectordata:"vector,dimensions=16,method=flat"`. FLAT and HNSW properties
+may coexist; select one by logical `VectorProperty` name. FLAT accepts no HNSW or
+IVFFlat construction parameters. It is distinct from pgvector's approximate
+IVFFlat index. Memory/SQLite accept FLAT hints and keep exact Go search;
+PostgreSQL rejects them before database access. Definitions containing `flat`
+require a binary that recognizes this new method. Existing HNSW registrations
+and storage formats are unchanged. Rebuild preserves the registered method;
+it does not migrate a collection between HNSW and FLAT.
+
 Capabilities are local configuration metadata, not a module/permission probe:
 
-- HNSW supports dense float32/float16 models with cosine, L2, squared L2 and inner
-  product: eight advertised tuples, up to 4,096 dimensions. Float16 values are
+- HNSW and FLAT support dense float32/float16 models with cosine, L2, squared L2
+  and inner product: eight tuples per method (16 total), up to 4,096 dimensions.
+  Float16 values are
   rounded before FLOAT32 projection. HNSW `M` is at most 512 and
   `EfConstruction` at most 1,000,000. L1, IVFFlat and other unsupported hints keep
   Go exact search.
@@ -153,6 +165,15 @@ unresolved ties/underfill use the full exact snapshot. ANN recall otherwise rema
 approximate. Missing/not-ready indexes fall back; physical schema drift and
 indexing failures return errors. Filters outside the native subset use exact search.
 
+FLAT asks Redis for every matching vector, then performs bounded exact selection
+in Go. This preserves the canonical Go result ordering even when Redis's FLOAT32
+distance arithmetic rounds distinct distances to the same number. Ties, optional
+vectors, underfilled/empty pages and thresholds do not require HNSW's candidate
+expansion or a tie fallback. Selective indexed filters reduce returned payloads;
+unfiltered FLAT transfers all vector-bearing records. It is an exhaustive scan,
+not an ANN latency improvement. Both native paths keep the existing fallback
+for missing indexes, unsupported filters and unsafe vector magnitudes.
+
 ```go
 opts := vectordata.ModelSearchOptions{
     ProviderOptions: redis.SearchTuning{EFRuntime: 200},
@@ -161,9 +182,12 @@ opts := vectordata.ModelSearchOptions{
 opts.ProviderOptions = redis.SearchTuning{Exact: true}
 ```
 
-`EFRuntime` defaults to 128; accepted values are 0 through 10,000. Positive values
-require native mode and cannot be combined with `Exact`. Options are passed by
-value. Distances, score units and thresholds retain the public model contract.
+For HNSW, `EFRuntime` defaults to 128; accepted values are 0 through 10,000.
+Positive values require native mode, are rejected for a selected FLAT property
+before I/O/embedding, and cannot be combined with `Exact`. FLAT sends no HNSW
+runtime parameter. `Exact: true` bypasses native execution for either method.
+Options are passed by value. Distances, score units and thresholds retain the
+public model contract.
 
 ## Atomicity and concurrency
 
@@ -261,8 +285,8 @@ Default and fallback reads transfer O(collection size) bytes; Query, filtered
 Count and search additionally decode a memory collection. The exact selector
 bounds candidates but the snapshot remains materialized. Native reads still
 transfer the O(record count) token manifest; eligible Count avoids record payloads,
-filtered Query transfers matching payloads, and HNSW transfers candidate payloads.
-Unfiltered Query and Get/GetMany retain the whole-snapshot path. See
+filtered Query transfers matching payloads, HNSW transfers candidate payloads,
+and FLAT transfers all matching vector-bearing payloads. Unfiltered Query and Get/GetMany retain the whole-snapshot path. See
 [local read measurements](performance.md#redis-native-read-measurements).
 
 Every hash write stages a full generation; native mode also rebuilds its entire
@@ -315,7 +339,8 @@ conflicts, uncertain replies, deadlines, corruption, size limits and client reop
 Hash checks also cover a native publication error after PERSIST, failed/expiring
 staging, retirement during reads, orphan pruning, explicit fixture upgrades and
 Redis Search projection compatibility. Native suites run the shared contracts,
-scalar differential cases, HNSW recall, tie fallback, schema drift, readiness
+scalar differential cases, HNSW recall, FLAT exact-reference/roundoff cases,
+tie fallback, physical algorithm drift, readiness
 deadlines, concurrent publication, explicit rebuilds and uncertain-reply cleanup.
 `REDIS_REQUIRE_SEARCH=true` requires the native tests and projection proof instead
 of permitting skips on servers without Search.

@@ -184,6 +184,43 @@ and indexes a complete new generation. Graph allocator memory and overlapping
 old/staged/orphan generations are outside these numbers. Measure recall,
 write costs, concurrency and memory on the target deployment before sizing it.
 
+### Redis FLAT exact-search measurements
+
+```sh
+REDIS_TEST_ADDR=127.0.0.1:63799 go test -tags=integration -run '^$' \
+  -bench BenchmarkRedisFlatSearch -benchmem -benchtime=100ms -count=3 ./stores/redis
+```
+
+This fixture uses one indexed string property and 16-dimensional L2 vectors
+(seed 45). Search returns five records, either unfiltered or with an indexed
+filter matching 10% of records. Native FLAT retrieves every matching vector for
+Go remeasurement/selection; the reference rebuilds a full-snapshot memory engine
+per operation. Every iteration checks keys, distances and scores against a
+reference computed before timing. Setup, writes and index builds are untimed.
+
+Local Redis 8.2/Docker results on Apple M3 Pro, darwin/arm64, Go 1.27.4;
+medians of three 100 ms runs, Go allocations only:
+
+| Records | Filter | Native ms/op | Reference ms/op | Native B/op | Reference B/op |
+| --- | --- | ---: | ---: | ---: | ---: |
+| 100 | None | 2.825 | 2.723 | 464,043 | 485,374 |
+| 100 | 10% matches | 1.040 | 2.466 | 79,101 | 488,554 |
+| 1,000 | None | 9.927 | 13.057 | 4,629,818 | 4,877,790 |
+| 1,000 | 10% matches | 2.590 | 11.737 | 714,055 | 4,911,836 |
+
+Selective filters avoid decoding unrelated records. Unfiltered FLAT remains
+exhaustive and can be slower than the reference at small sizes; it still transfers
+all vector-bearing payloads plus the token manifest. Timings are local, warm and
+workload-specific. They exclude server index memory, rebuild costs and concurrent
+writers; they do not establish production throughput or write scalability.
+
+FLAT integration tests compare complete results with the canonical Go engine for
+all eight metric/precision tuples, 512 seeded vectors, optional vectors, indexed
+filters with NULL/NOT, thresholds and paging. A separate 192-record fixture checks
+duplicate key ties and distinct Go distances that round to equal FLOAT32 Redis
+distances. Hooks require these comparisons to stay on the native path, preventing
+an unnoticed exact fallback from satisfying the test.
+
 ## SQLite scalar query verification
 
 ```sh

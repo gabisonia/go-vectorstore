@@ -27,6 +27,7 @@ func main() {
 	tlsEnabled := flag.Bool("tls", false, "Use verified TLS")
 	storage := flag.String("storage", "", "Layout for new collections: snapshot (default) or hash (native default)")
 	native := flag.Bool("native", false, "Enable Redis Search indexes; use a separate namespace for the indexed sample model")
+	index := flag.String("index", "hnsw", "Native vector index: hnsw or flat; use a separate namespace per model")
 	upgrade := flag.Bool("upgrade-hash", false, "Explicitly upgrade the sample collection to hash storage")
 	flag.Parse()
 	var tlsConfig *tls.Config
@@ -36,12 +37,18 @@ func main() {
 	opts := redis.StoreOptions{Addr: *addr, Namespace: *namespace, DB: *db, Username: os.Getenv("REDIS_USERNAME"), Password: os.Getenv("REDIS_PASSWORD"), TLSConfig: tlsConfig, StorageMode: redis.StorageMode(*storage), NativeIndexes: *native}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	if err := run(ctx, opts, *upgrade); err != nil {
+	if err := run(ctx, opts, *upgrade, vectordata.IndexMethod(*index)); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
-func run(ctx context.Context, opts redis.StoreOptions, upgrade bool) error {
+func run(ctx context.Context, opts redis.StoreOptions, upgrade bool, method vectordata.IndexMethod) error {
+	if method != vectordata.IndexMethodHNSW && method != vectordata.IndexMethodFlat {
+		return fmt.Errorf("unknown native index %q: choose hnsw or flat", method)
+	}
+	if method == vectordata.IndexMethodFlat && !opts.NativeIndexes {
+		return fmt.Errorf("-index flat requires -native")
+	}
 	s, err := redis.New(opts)
 	if err != nil {
 		return err
@@ -57,7 +64,7 @@ func run(ctx context.Context, opts redis.StoreOptions, upgrade bool) error {
 				d.Data[i].IsIndexed = true
 			}
 		}
-		d.Vectors[0].Index = &vectordata.VectorIndexOptions{Method: vectordata.IndexMethodHNSW}
+		d.Vectors[0].Index = &vectordata.VectorIndexOptions{Method: method}
 	}
 	if upgrade {
 		base, err := s.EnsureModelCollection(ctx, "documents", d, vectordata.ModelCollectionOptions{})

@@ -28,7 +28,7 @@ func TestNativeConfigurationAndBoundFilters(t *testing.T) {
 		t.Fatal("native mode did not select hash storage")
 	}
 	caps := s.Capabilities()
-	if len(caps.VectorIndexCapabilities) != 8 || len(caps.IndexedDataTypes) != 4 || caps.HybridSearch || caps.FullTextIndexing {
+	if len(caps.VectorIndexCapabilities) != 16 || len(caps.IndexedDataTypes) != 4 || caps.HybridSearch || caps.FullTextIndexing {
 		t.Fatalf("capabilities: %+v", caps)
 	}
 	caps.VectorIndexCapabilities[0].MaxDimensions = 1
@@ -76,5 +76,48 @@ func TestNativeConfigurationAndBoundFilters(t *testing.T) {
 	cancel()
 	if _, err := c.Count(ctx, nil); !errors.Is(err, context.Canceled) {
 		t.Fatalf("cancellation lost: %v", err)
+	}
+}
+
+func TestNativeFlatTuningValidatedBeforeEmbedding(t *testing.T) {
+	s, err := New(StoreOptions{NativeIndexes: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	calls := 0
+	d := vectordata.CollectionDefinition{Key: vectordata.KeyProperty{Name: "ID"}, Vectors: []vectordata.VectorProperty{{Name: "Flat", Dimensions: 2, Index: &vectordata.VectorIndexOptions{Method: vectordata.IndexMethodFlat}}, {Name: "HNSW", Dimensions: 2, Index: &vectordata.VectorIndexOptions{Method: vectordata.IndexMethodHNSW}}}}
+	base, err := s.GetModelCollection("flat", d, vectordata.ModelCollectionOptions{Embedder: vectordata.EmbeddingFunc(func(context.Context, []string) ([][]float32, error) { calls++; return [][]float32{{1, 0}}, nil })})
+	if err != nil {
+		t.Fatal(err)
+	}
+	opts := vectordata.ModelSearchOptions{VectorProperty: "Flat", ProviderOptions: SearchTuning{EFRuntime: 10}}
+	if _, err := base.Search(context.Background(), []float32{1, 0}, 1, opts); !errors.Is(err, vectordata.ErrInvalidSearchOptions) {
+		t.Fatalf("FLAT accepted EF_RUNTIME: %v", err)
+	}
+	if _, err := base.SearchText(context.Background(), "query", 1, opts); !errors.Is(err, vectordata.ErrInvalidSearchOptions) || calls != 0 {
+		t.Fatalf("invalid tuning reached I/O or embedding: %v calls=%d", err, calls)
+	}
+	opts.VectorProperty = "HNSW"
+	if _, err := base.(*Collection).validateSearch(1, opts); err != nil {
+		t.Fatalf("HNSW tuning rejected on mixed model: %v", err)
+	}
+	flatTuples := 0
+	for _, cap := range s.Capabilities().VectorIndexCapabilities {
+		if cap.Method != vectordata.IndexMethodFlat {
+			continue
+		}
+		flatTuples++
+		property := vectordata.VectorProperty{Name: "Vector", Kind: cap.Kind, Dimensions: cap.MaxDimensions, Metric: cap.Metric, Precision: cap.Precision, Index: &vectordata.VectorIndexOptions{Method: cap.Method}}
+		if !nativeVectorProperty(property) {
+			t.Fatalf("advertised FLAT tuple rejected: %+v", cap)
+		}
+		property.Dimensions++
+		if nativeVectorProperty(property) {
+			t.Fatal("native dimension limit ignored")
+		}
+	}
+	if flatTuples != 8 {
+		t.Fatalf("FLAT capability tuples: %d", flatTuples)
 	}
 }

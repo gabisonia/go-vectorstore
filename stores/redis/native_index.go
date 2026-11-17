@@ -20,12 +20,24 @@ const nativeMaxDocuments = 1000000
 const nativeTagLimit = 1024
 
 type nativeField struct {
-	Name, Alias, Kind, Metric     string
-	Dimensions, M, EFConstruction int
+	Name, Alias, Kind, Metric, Algorithm string
+	Dimensions, M, EFConstruction        int
 }
 
 func nativeVectorProperty(p vectordata.VectorProperty) bool {
-	return p.Index != nil && p.Index.Method == vectordata.IndexMethodHNSW && p.Dimensions <= nativeMaxDimensions && p.Index.HNSW.M <= 512 && p.Index.HNSW.EfConstruction <= 1000000 && (p.Metric == vectordata.DistanceCosine || p.Metric == vectordata.DistanceL2 || p.Metric == vectordata.DistanceL2Squared || p.Metric == vectordata.DistanceInnerProduct)
+	if p.Index == nil || p.Dimensions > nativeMaxDimensions {
+		return false
+	}
+	switch p.Index.Method {
+	case vectordata.IndexMethodFlat:
+	case vectordata.IndexMethodHNSW:
+		if p.Index.HNSW.M > 512 || p.Index.HNSW.EfConstruction > 1000000 {
+			return false
+		}
+	default:
+		return false
+	}
+	return p.Metric == vectordata.DistanceCosine || p.Metric == vectordata.DistanceL2 || p.Metric == vectordata.DistanceL2Squared || p.Metric == vectordata.DistanceInnerProduct
 }
 func nativeVectorSafe(v []float32) bool {
 	for _, x := range v {
@@ -141,7 +153,7 @@ func (c *Collection) nativeFields(m hashManifest) ([]nativeField, error) {
 		} else if p.Metric == vectordata.DistanceInnerProduct {
 			metric = "IP"
 		}
-		fields = append(fields, nativeField{Name: "v_" + encodeName(name), Alias: alias, Kind: "VECTOR", Metric: metric, Dimensions: p.Dimensions, M: p.Index.HNSW.M, EFConstruction: p.Index.HNSW.EfConstruction})
+		fields = append(fields, nativeField{Name: "v_" + encodeName(name), Alias: alias, Kind: "VECTOR", Algorithm: strings.ToUpper(string(p.Index.Method)), Metric: metric, Dimensions: p.Dimensions, M: p.Index.HNSW.M, EFConstruction: p.Index.HNSW.EfConstruction})
 	}
 	if len(fields) > 512 {
 		return nil, fmt.Errorf("%w: native Redis schema exceeds 512 fields", vectordata.ErrUnsupported)
@@ -184,7 +196,10 @@ local function ready(index,prefix,schema,count)
    if not a or val(a,'identifier')~=f.Name or val(a,'type')~=f.Kind then return -2 end
    if flag(a,'NOINDEX') then return -2 end
    if f.Kind=='TAG' and (not flag(a,'CASESENSITIVE') or val(a,'SEPARATOR')~=',') then return -2 end
-   if f.Kind=='VECTOR' and (val(a,'algorithm')~='HNSW' or val(a,'data_type')~='FLOAT32' or tonumber(val(a,'dim'))~=f.Dimensions or val(a,'distance_metric')~=f.Metric or tonumber(val(a,'M'))~=f.M or tonumber(val(a,'ef_construction'))~=f.EFConstruction) then return -2 end
+   if f.Kind=='VECTOR' then
+     if val(a,'algorithm')~=f.Algorithm or val(a,'data_type')~='FLOAT32' or tonumber(val(a,'dim'))~=f.Dimensions or val(a,'distance_metric')~=f.Metric then return -2 end
+     if f.Algorithm=='HNSW' and (tonumber(val(a,'M'))~=f.M or tonumber(val(a,'ef_construction'))~=f.EFConstruction) then return -2 end
+   end
  end
  local failures=tonumber(val(info,'hash_indexing_failures'))
  if not failures then failures=tonumber(val(val(info,'Index Errors'),'indexing failures')) end
@@ -207,7 +222,12 @@ func (c *Collection) createNativeIndex(ctx context.Context, m hashManifest) erro
 		if f.Kind == "TAG" {
 			args = append(args, "CASESENSITIVE")
 		} else if f.Kind == "VECTOR" {
-			args = append(args, "HNSW", 10, "TYPE", "FLOAT32", "DIM", f.Dimensions, "DISTANCE_METRIC", f.Metric, "M", f.M, "EF_CONSTRUCTION", f.EFConstruction)
+			attributes := []any{"TYPE", "FLOAT32", "DIM", f.Dimensions, "DISTANCE_METRIC", f.Metric}
+			if f.Algorithm == "HNSW" {
+				attributes = append(attributes, "M", f.M, "EF_CONSTRUCTION", f.EFConstruction)
+			}
+			args = append(args, f.Algorithm, len(attributes))
+			args = append(args, attributes...)
 		}
 	}
 	if err = c.store.client.Do(ctx, args...).Err(); err != nil {

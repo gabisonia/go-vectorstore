@@ -271,5 +271,7 @@ physical schema and readiness with FT.SEARCH in one Lua execution. Literal TAG
 projections preserve NULL/equality semantics; high/low integer NUMERIC projections
 preserve all 64 bits. Matching payloads or HNSW candidates are decoded after the
 connection is released, with exact Go sorting/scoring and unsupported-case fallback.
+FLAT retrieves all matching vector-bearing payloads for exact Go selection,
+including roundoff-sensitive distances and ties; HNSW retains approximate recall.
 Writes rebuild the full index. Index cleanup separately protects current revisions
 and active leases; unknown publication results never drop a possibly current index.
