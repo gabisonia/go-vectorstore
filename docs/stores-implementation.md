@@ -242,7 +242,7 @@ full-text/hybrid search or migrations. See [SQLite storage and limits](sqlite.md
 ## Redis storage boundary
 
 Redis owns a standalone go-redis client with automatic retries disabled. One
-Redis string holds a format-1 envelope with schema, unique revision, next generated
+Redis string holds a default format-1 envelope with schema, unique revision, next generated
 integer key and canonical records. A GET provides one consistent collection read.
 The compare-and-swap script compares opaque old bytes and executes one final SET;
 Lua does not parse numeric keys or make intermediate writes. Only explicit conflict
@@ -255,3 +255,15 @@ all still transfer the entire envelope. The configurable snapshot limit defaults
 to 16 MiB. Redis SCAN listing is deduplicated/sorted but not a namespace snapshot.
 Metadata is local, native indexing/hybrid/migrations are unadvertised, and server
 persistence/eviction policy determines durability. See [Redis limits](redis.md).
+
+`StorageHash` creates new collections with a format-2 manifest and immutable HASH
+records. Existing collections retain their format until `MigrateToHashStorage` is
+explicitly called. A uniquely leased generation stages canonical payloads plus
+scalar fields and packed vectors with TTLs, then the CAS script checks completion,
+persists staged keys and performs the final manifest SET. Only that SET publishes
+logical changes. An interrupted script may leave auxiliary keys but cannot publish
+a partial batch. Reads verify manifest bytes and fetch the entire generation in
+one side-effect-free script; changed manifests retry and missing rows fail closed.
+Retirement and `PruneHashStorage` protect current generations and active staging.
+Byte budgets include hash projection overhead. Native indexing remains a separate
+capability; real Redis Search tests establish that the fields are indexable.

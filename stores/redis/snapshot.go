@@ -13,7 +13,7 @@ import (
 	goredis "github.com/redis/go-redis/v9"
 )
 
-// All records, schema, sequence and revision live in one Redis string. Publishing
+// Format 1 keeps records, schema, sequence and revision in one Redis string. Publishing
 // one SET is the only mutation in CAS: Lua errors cannot leave a partial batch.
 // Lua never parses JSON numbers (notably full-range integer keys and sequences).
 const compareSwap = `
@@ -58,6 +58,16 @@ func (c *Collection) operation(ctx context.Context, op string, err error) error 
 }
 
 func (c *Collection) load(ctx context.Context) (snapshot, []byte, error) {
+	for attempt := 0; attempt < 64; attempt++ {
+		state, raw, err := c.loadOnce(ctx)
+		if errors.Is(err, errManifestChanged) {
+			continue
+		}
+		return state, raw, err
+	}
+	return snapshot{}, nil, fmt.Errorf("%w: Redis read contention exceeded 64 attempts", vectordata.ErrInvalidRecord)
+}
+func (c *Collection) loadOnce(ctx context.Context) (snapshot, []byte, error) {
 	if err := ctx.Err(); err != nil {
 		return snapshot{}, nil, err
 	}
@@ -74,6 +84,9 @@ func (c *Collection) load(ctx context.Context) (snapshot, []byte, error) {
 	}
 	if err = json.Unmarshal(raw, &state); err != nil {
 		return state, nil, fmt.Errorf("%w: malformed Redis collection: %v", vectordata.ErrInvalidRecord, err)
+	}
+	if state.Format == 2 {
+		return c.loadHashes(ctx, raw)
 	}
 	if state.Format != 1 || state.Definition != c.registration {
 		return state, nil, vectordata.ErrSchemaMismatch
@@ -102,6 +115,13 @@ func (c *Collection) cas(ctx context.Context, mode string, old, new []byte) (boo
 	if err := ctx.Err(); err != nil {
 		return false, err
 	}
+	var state snapshot
+	if err := json.Unmarshal(new, &state); err != nil {
+		return false, err
+	}
+	if state.Format == 2 {
+		return c.publishHashes(ctx, mode, old, state)
+	}
 	n, err := c.store.client.Eval(ctx, compareSwap, []string{c.store.key(c.name)}, mode, old, new).Int()
 	return n == 1, err
 }
@@ -114,7 +134,11 @@ func (c *Collection) EnsureExists(ctx context.Context) (err error) {
 	if !errors.Is(err, vectordata.ErrCollectionNotFound) {
 		return err
 	}
-	raw, err := c.encode(snapshot{Format: 1, Definition: c.registration, Next: 1, Records: map[string]json.RawMessage{}})
+	format := 1
+	if c.store.storageMode == StorageHash {
+		format = 2
+	}
+	raw, err := c.encode(snapshot{Format: format, Definition: c.registration, Next: 1, Records: map[string]json.RawMessage{}})
 	if err != nil {
 		return err
 	}
@@ -137,7 +161,9 @@ func (c *Collection) mutate(ctx context.Context, apply func(*snapshot) error) er
 		if err != nil {
 			return err
 		}
-		if err = apply(&state); err != nil {
+		if err = apply(&state); errors.Is(err, errLayoutUnchanged) {
+			return nil
+		} else if err != nil {
 			return err
 		}
 		raw, err := c.encode(state)

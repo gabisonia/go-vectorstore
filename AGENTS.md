@@ -52,6 +52,13 @@ canonical codec with SQLite; preserve its format-1 compatibility. Retry only
 explicit CAS conflicts, never uncertain network/write replies. Snapshot limits
 and full-collection transfer costs must remain documented.
 
+Redis hash storage is opt-in for new collections; existing snapshots require an
+explicit upgrade. Stage immutable generations under leases, publish only by the
+final manifest SET, and keep reads atomic with manifest verification. Cleanup
+must protect current generations and active staging, including uncertain writes.
+Keep the format-1 Redis fixture immutable. Hash fields do not imply native index
+capabilities; CI's Redis 8.2 job requires the real Search projection proof.
+
 ## Invariants and implementation conventions
 
 - Keep public contracts in `vectordata`; provider-specific options belong to the provider.

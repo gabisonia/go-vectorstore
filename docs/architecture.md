@@ -348,7 +348,7 @@ immutable records. Both copy only the returned search page and release resources
 before application iteration. Runtime embedders are cleared during stored reads.
 Native values are decoded by declared type, with a separate SQL NULL marker for JSON properties. See [sqlite.md](sqlite.md) for workload limits.
 
-Redis stores one versioned collection envelope per Redis string. Reads obtain a
+The default Redis layout stores one versioned collection envelope per Redis string. Reads obtain a
 consistent snapshot with one GET. Writes prepare/validate records before publishing
 through a compare-and-swap script with one final SET, covering data and generated
 keys atomically. Explicit conflicts may retry; uncertain results never replay.
@@ -357,3 +357,12 @@ changing SQLite format 1. Redis supports dense float32/float16 and evaluates
 portable filters/exact search through the memory engine after releasing the client
 connection. Full-snapshot transfers, a default 16 MiB encoded limit and Redis's
 configured persistence/eviction policy define its initial scope. See [redis.md](redis.md).
+
+Opt-in Redis format 2 stages immutable per-record HASH generations under a unique
+TTL lease, validates completion, removes staging TTLs and publishes one manifest
+SET. An atomic read checks the manifest and fetches its payloads together. Old
+generations can then be retired without racing a reader; interrupted cleanup is
+reclaimable through manifest-guarded pruning. Existing format-1 collections remain
+readable and require explicit storage conversion. Hash scalar and binary vector
+fields prepare for native indexes, while production queries still use Go exact
+evaluation and advertise no new indexing capabilities.

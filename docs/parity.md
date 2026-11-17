@@ -58,6 +58,11 @@ collection, transfers the whole collection per nonempty record operation and run
 exact dense search/filtering in Go. Its default encoded size limit is 16 MiB;
 accepted index hints build no physical indexes. See [Redis costs and guarantees](redis.md).
 
+Redis also offers opt-in immutable hash generations and explicit upgrades from
+the original snapshot layout. This exposes indexable scalar/vector fields while
+preserving atomic publication; it does not enable ANN or native query execution.
+See [storage layouts](redis.md#storage-layouts-and-explicit-upgrade).
+
 ## Deliberate differences and future extensions
 
 Go uses interfaces, generics, tags, explicit filter nodes, iterators and contexts

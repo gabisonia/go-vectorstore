@@ -87,11 +87,14 @@ jobs:
       - name: Run Redis contract and failure tests
         env:
           REDIS_TEST_ADDR: localhost:6379
+          REDIS_REQUIRE_SEARCH: ${{ matrix.redis == '8.2' }}
         run: go test -race -tags=integration -timeout=5m ./stores/redis
       - name: Run persistent sample twice
         run: |
           go run ./samples/redis-store
           go run ./samples/redis-store
+          go run ./samples/redis-store -namespace redis_hash_demo -storage hash
+          go run ./samples/redis-store -namespace redis_hash_demo -storage hash
 
   local-doc-agent:
     name: Local doc agent (Go ${{ matrix.go }})

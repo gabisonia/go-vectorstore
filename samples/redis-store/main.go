@@ -25,25 +25,40 @@ func main() {
 	namespace := flag.String("namespace", "redis_demo", "Dedicated namespace for retained sample records")
 	db := flag.Int("db", 0, "Redis database number")
 	tlsEnabled := flag.Bool("tls", false, "Use verified TLS")
+	storage := flag.String("storage", string(redis.StorageSnapshot), "Layout for new collections: snapshot or hash")
+	upgrade := flag.Bool("upgrade-hash", false, "Explicitly upgrade the sample collection to hash storage")
 	flag.Parse()
 	var tlsConfig *tls.Config
 	if *tlsEnabled {
 		tlsConfig = &tls.Config{MinVersion: tls.VersionTLS12}
 	}
-	opts := redis.StoreOptions{Addr: *addr, Namespace: *namespace, DB: *db, Username: os.Getenv("REDIS_USERNAME"), Password: os.Getenv("REDIS_PASSWORD"), TLSConfig: tlsConfig}
+	opts := redis.StoreOptions{Addr: *addr, Namespace: *namespace, DB: *db, Username: os.Getenv("REDIS_USERNAME"), Password: os.Getenv("REDIS_PASSWORD"), TLSConfig: tlsConfig, StorageMode: redis.StorageMode(*storage)}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	if err := run(ctx, opts); err != nil {
+	if err := run(ctx, opts, *upgrade); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
-func run(ctx context.Context, opts redis.StoreOptions) error {
+func run(ctx context.Context, opts redis.StoreOptions, upgrade bool) error {
 	s, err := redis.New(opts)
 	if err != nil {
 		return err
 	}
 	defer s.Close()
+	if upgrade {
+		d, err := vectordata.DefinitionFor[Document]()
+		if err != nil {
+			return err
+		}
+		base, err := s.EnsureModelCollection(ctx, "documents", d, vectordata.ModelCollectionOptions{})
+		if err != nil {
+			return err
+		}
+		if err = base.(*redis.Collection).MigrateToHashStorage(ctx); err != nil {
+			return err
+		}
+	}
 	c, err := vectordata.EnsureTypedModelCollection[string, Document](ctx, s, "documents", nil, vectordata.ModelCollectionOptions{})
 	if err != nil {
 		return err
