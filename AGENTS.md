@@ -57,7 +57,11 @@ explicit upgrade. Stage immutable generations under leases, publish only by the
 final manifest SET, and keep reads atomic with manifest verification. Cleanup
 must protect current generations and active staging, including uncertain writes.
 Keep the format-1 Redis fixture immutable. Hash fields do not imply native index
-capabilities; CI's Redis 8.2 job requires the real Search projection proof.
+capabilities; native mode explicitly builds generation-scoped indexes before
+publication. Keep native queries in the same Lua execution as manifest/readiness
+verification. Preserve NULL truth, integer precision, exact score units and tie
+fallback. Unknown publication results must never drop a possibly current index.
+CI's Redis 8.2 job requires native conformance/recall and the real projection proof.
 
 ## Invariants and implementation conventions
 

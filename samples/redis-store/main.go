@@ -1,4 +1,4 @@
-// redis-store demonstrates persistent model snapshots and exact search in Redis.
+// redis-store demonstrates persistent Redis models and optional native indexes.
 package main
 
 import (
@@ -25,14 +25,15 @@ func main() {
 	namespace := flag.String("namespace", "redis_demo", "Dedicated namespace for retained sample records")
 	db := flag.Int("db", 0, "Redis database number")
 	tlsEnabled := flag.Bool("tls", false, "Use verified TLS")
-	storage := flag.String("storage", string(redis.StorageSnapshot), "Layout for new collections: snapshot or hash")
+	storage := flag.String("storage", "", "Layout for new collections: snapshot (default) or hash (native default)")
+	native := flag.Bool("native", false, "Enable Redis Search indexes; use a separate namespace for the indexed sample model")
 	upgrade := flag.Bool("upgrade-hash", false, "Explicitly upgrade the sample collection to hash storage")
 	flag.Parse()
 	var tlsConfig *tls.Config
 	if *tlsEnabled {
 		tlsConfig = &tls.Config{MinVersion: tls.VersionTLS12}
 	}
-	opts := redis.StoreOptions{Addr: *addr, Namespace: *namespace, DB: *db, Username: os.Getenv("REDIS_USERNAME"), Password: os.Getenv("REDIS_PASSWORD"), TLSConfig: tlsConfig, StorageMode: redis.StorageMode(*storage)}
+	opts := redis.StoreOptions{Addr: *addr, Namespace: *namespace, DB: *db, Username: os.Getenv("REDIS_USERNAME"), Password: os.Getenv("REDIS_PASSWORD"), TLSConfig: tlsConfig, StorageMode: redis.StorageMode(*storage), NativeIndexes: *native}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	if err := run(ctx, opts, *upgrade); err != nil {
@@ -46,11 +47,19 @@ func run(ctx context.Context, opts redis.StoreOptions, upgrade bool) error {
 		return err
 	}
 	defer s.Close()
-	if upgrade {
-		d, err := vectordata.DefinitionFor[Document]()
-		if err != nil {
-			return err
+	d, err := vectordata.DefinitionFor[Document]()
+	if err != nil {
+		return err
+	}
+	if opts.NativeIndexes {
+		for i := range d.Data {
+			if d.Data[i].Name == "Category" {
+				d.Data[i].IsIndexed = true
+			}
 		}
+		d.Vectors[0].Index = &vectordata.VectorIndexOptions{Method: vectordata.IndexMethodHNSW}
+	}
+	if upgrade {
 		base, err := s.EnsureModelCollection(ctx, "documents", d, vectordata.ModelCollectionOptions{})
 		if err != nil {
 			return err
@@ -59,7 +68,7 @@ func run(ctx context.Context, opts redis.StoreOptions, upgrade bool) error {
 			return err
 		}
 	}
-	c, err := vectordata.EnsureTypedModelCollection[string, Document](ctx, s, "documents", nil, vectordata.ModelCollectionOptions{})
+	c, err := vectordata.EnsureTypedModelCollection[string, Document](ctx, s, "documents", &d, vectordata.ModelCollectionOptions{})
 	if err != nil {
 		return err
 	}
@@ -87,7 +96,7 @@ func run(ctx context.Context, opts redis.StoreOptions, upgrade bool) error {
 		return err
 	}
 	defer reopened.Close()
-	again, err := vectordata.GetTypedModelCollection[string, Document](reopened, "documents", nil, vectordata.ModelCollectionOptions{})
+	again, err := vectordata.GetTypedModelCollection[string, Document](reopened, "documents", &d, vectordata.ModelCollectionOptions{})
 	if err != nil {
 		return err
 	}

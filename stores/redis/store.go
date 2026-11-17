@@ -1,6 +1,6 @@
 // Package redis provides model collections in standalone Redis with exact Go
-// search and filtering over atomic collection snapshots. It creates no native
-// vector/data/full-text indexes. Snapshot size and transfer costs limit scale.
+// search and filtering over atomic collection snapshots. Opt-in Redis Search
+// indexes accelerate HNSW and scalar reads over immutable hash generations.
 package redis
 
 import (
@@ -36,19 +36,25 @@ type StoreOptions struct {
 	MaxCollectionBytes int
 	// StorageMode selects the layout for newly created collections. Existing
 	// layouts are preserved; use Collection.MigrateToHashStorage for an upgrade.
-	StorageMode        StorageMode
+	StorageMode StorageMode
+	// NativeIndexes enables generation-scoped Redis Search indexes on hash
+	// collections in database zero. An unspecified StorageMode becomes StorageHash.
+	// Discovery is local; creation requires the Search module. Writes rebuild the
+	// entire generation's index; existing hash collections need an explicit rebuild.
+	NativeIndexes      bool
 	Embedder           vectordata.Embedder
 	InputEmbedder      vectordata.InputEmbedder
 	EmbeddingBatchSize int
 }
 
 type Store struct {
-	client      *goredis.Client
-	prefix      string
-	metadata    vectordata.StoreMetadata
-	maxBytes    int
-	options     vectordata.ModelCollectionOptions
-	storageMode StorageMode
+	client        *goredis.Client
+	prefix        string
+	metadata      vectordata.StoreMetadata
+	maxBytes      int
+	options       vectordata.ModelCollectionOptions
+	storageMode   StorageMode
+	nativeIndexes bool
 }
 
 var _ vectordata.ModelStore = (*Store)(nil)
@@ -60,6 +66,15 @@ var _ vectordata.ModelCollection = (*Collection)(nil)
 func New(opts StoreOptions) (*Store, error) {
 	if opts.StorageMode == "" {
 		opts.StorageMode = StorageSnapshot
+		if opts.NativeIndexes {
+			opts.StorageMode = StorageHash
+		}
+	}
+	if opts.NativeIndexes && opts.StorageMode != StorageHash {
+		return nil, fmt.Errorf("%w: native Redis indexes require hash storage", vectordata.ErrUnsupported)
+	}
+	if opts.NativeIndexes && opts.DB != 0 {
+		return nil, fmt.Errorf("%w: Redis Search requires database zero", vectordata.ErrUnsupported)
 	}
 	if opts.StorageMode != StorageSnapshot && opts.StorageMode != StorageHash {
 		return nil, fmt.Errorf("%w: unknown Redis storage mode", vectordata.ErrUnsupported)
@@ -88,7 +103,7 @@ func New(opts StoreOptions) (*Store, error) {
 		tlsConfig = opts.TLSConfig.Clone()
 	}
 	client := goredis.NewClient(&goredis.Options{Addr: opts.Addr, Username: opts.Username, Password: opts.Password, DB: opts.DB, TLSConfig: tlsConfig, MaxRetries: -1, ContextTimeoutEnabled: true, DialTimeout: 5 * time.Second, ReadTimeout: 5 * time.Second, WriteTimeout: 5 * time.Second})
-	return &Store{client: client, prefix: "__vectorstore_redis_v1:" + encodeName(opts.Namespace) + ":", maxBytes: opts.MaxCollectionBytes, options: defaults, storageMode: opts.StorageMode, metadata: vectordata.StoreMetadata{SystemName: "redis", DatabaseName: strconv.Itoa(opts.DB), Namespace: opts.Namespace}}, nil
+	return &Store{client: client, prefix: "__vectorstore_redis_v1:" + encodeName(opts.Namespace) + ":", maxBytes: opts.MaxCollectionBytes, options: defaults, storageMode: opts.StorageMode, nativeIndexes: opts.NativeIndexes, metadata: vectordata.StoreMetadata{SystemName: "redis", DatabaseName: strconv.Itoa(opts.DB), Namespace: opts.Namespace}}, nil
 }
 
 func encodeName(name string) string { return base64.RawURLEncoding.EncodeToString([]byte(name)) }
@@ -154,6 +169,9 @@ func (s *Store) DeleteCollection(ctx context.Context, name string) (err error) {
 	// Publication/deletion succeeded. Cleanup is separate and may safely be
 	// repeated with PruneHashStorage; it never changes the logical result.
 	_, _ = s.PruneHashStorage(ctx, name)
+	if s.nativeIndexes {
+		_, _ = s.PruneNativeIndexes(ctx, name)
+	}
 	return nil
 }
 func (s *Store) GetModelCollection(name string, d vectordata.CollectionDefinition, opts vectordata.ModelCollectionOptions) (vectordata.ModelCollection, error) {
@@ -190,7 +208,19 @@ func (s *Store) GetModelCollection(name string, d vectordata.CollectionDefinitio
 	if err != nil {
 		return nil, err
 	}
-	return &Collection{store: s, name: name, definition: d, registration: string(raw), options: opts}, nil
+	c := &Collection{store: s, name: name, definition: d, registration: string(raw), options: opts}
+	if s.nativeIndexes {
+		m := hashManifest{}
+		for _, p := range d.Vectors {
+			if nativeVectorProperty(p) {
+				m.IndexVectors = append(m.IndexVectors, p.Name)
+			}
+		}
+		if _, err = c.nativeFields(m); err != nil {
+			return nil, err
+		}
+	}
+	return c, nil
 }
 func (s *Store) EnsureModelCollection(ctx context.Context, name string, d vectordata.CollectionDefinition, opts vectordata.ModelCollectionOptions) (vectordata.ModelCollection, error) {
 	c, err := s.GetModelCollection(name, d, opts)

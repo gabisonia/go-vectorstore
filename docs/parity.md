@@ -34,8 +34,8 @@ It is a workflow comparison, not a claim of API or feature equivalence with ever
 | Dense/float16 and optional vectors | Yes | Yes | Yes | Yes |
 | Binary/sparse vectors | Yes | Yes | Yes | No |
 | Exact search | Yes | Yes, snapshot scan | Yes, snapshot scan | Yes, Go snapshot scan |
-| Physical vector indexes | HNSW/IVFFlat, supported tuples | No | No | No |
-| Native data indexes | B-tree/GIN by property type | No | No | No |
+| Physical vector indexes | HNSW/IVFFlat, supported tuples | No | No | Opt-in HNSW, eight dense tuples |
+| Native data indexes | B-tree/GIN by property type | No | No | Opt-in scalar TAG / split-integer NUMERIC |
 | Full-text and hybrid search | Yes | No | No | No |
 | Migration planning/application | Yes, additive subset | No | No | No |
 | Original Record API | Yes | No | No | No |
@@ -53,15 +53,17 @@ combinations retain full-snapshot evaluation. Accepted index hints do not add
 property or ANN indexes. See [query costs](sqlite.md#query-costs-and-provider-limits)
 and [scalar measurements](performance.md#sqlite-scalar-query-verification).
 
-Redis is available on master after v0.4.1. It stores one atomic snapshot per
-collection, transfers the whole collection per nonempty record operation and runs
-exact dense search/filtering in Go. Its default encoded size limit is 16 MiB;
-accepted index hints build no physical indexes. See [Redis costs and guarantees](redis.md).
+Redis is available on master after v0.4.1. Default snapshot storage transfers the
+whole collection and runs exact dense search/filtering in Go. Its encoded size
+limit defaults to 16 MiB. Plain hash storage adds immutable per-record generations
+without changing query execution. Explicit storage upgrades preserve atomic batches.
 
-Redis also offers opt-in immutable hash generations and explicit upgrades from
-the original snapshot layout. This exposes indexable scalar/vector fields while
-preserving atomic publication; it does not enable ANN or native query execution.
-See [storage layouts](redis.md#storage-layouts-and-explicit-upgrade).
+Opt-in `NativeIndexes` requires Redis Search and database zero. It builds HNSW
+indexes for cosine/L2/squared-L2/inner-product float32/float16 models and accelerates
+eligible key/scalar filters. Unsupported cases retain Go exact evaluation. Writes
+rebuild the full generation's index; native reads still transfer the token manifest.
+Full-text/hybrid and schema migration capabilities remain absent. See
+[native support, costs and guarantees](redis.md#native-indexes-and-search).
 
 ## Deliberate differences and future extensions
 

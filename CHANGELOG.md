@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add opt-in Redis Search HNSW and scalar-filter acceleration on immutable hash
+  generations. Preserve atomic publication/reads, exact integer and NULL filter
+  behavior, Go distance/score units and fallback for unsupported cases/ties.
+  Add search tuning, explicit rebuild/index pruning, real Search conformance and
+  recall checks, read benchmarks and a native sample. Requires database zero;
+  every write rebuilds the generation's index. Full-text/hybrid remain unsupported.
+
 - Preserve Redis context deadline causes when a socket timeout arrives before
   the context timer updates; retain native errors and shorter client timeouts.
 - Add opt-in Redis hash generations with atomic manifest publication and explicit
@@ -13,7 +20,7 @@
   key/data precision, generated keys, exact dense float32/float16 search, portable
   filters, embedding defaults, iterators and metadata. Bound snapshot size and
   retry only explicit CAS conflicts; add Docker conformance/CI and a persistent
-  sample. Native property/vector/full-text indexes remain unsupported.
+  sample. Default storage creates no property/vector/full-text indexes.
 - Add an isolated local documentation-agent sample using Microsoft Agent Framework
   Go, go-vectorstore v0.4.1, SQLite and Ollama. Compose initializes local models;
   typed search/read tools and source-ID checks demonstrate agent-driven retrieval

@@ -32,11 +32,14 @@ var errLayoutUnchanged = errors.New("Redis storage layout unchanged")
 // Format 2 keeps an atomic manifest at the existing collection key. Referenced
 // hashes are immutable, generation-qualified, and have no TTL after publication.
 type hashManifest struct {
-	Format     int
-	Definition string
-	Revision   string
-	Next       int64
-	Tokens     []string
+	Format       int
+	Definition   string
+	Revision     string
+	Next         int64
+	Tokens       []string
+	Index        string   `json:",omitempty"`
+	IndexVersion int      `json:",omitempty"`
+	IndexVectors []string `json:",omitempty"`
 }
 
 type hashRecord struct {
@@ -189,8 +192,8 @@ func (c *Collection) loadHashes(ctx context.Context, raw []byte) (snapshot, []by
 }
 
 // projectHashes keeps a canonical payload alongside native scalar/vector fields.
-// int64 projections remain decimal strings; future NUMERIC filters must explicitly
-// handle Redis double precision rather than claim full-range integer ordering.
+// Raw int64 projections remain decimal strings; native indexing adds separate
+// high/low 32-bit NUMERIC fields to preserve full-range integer ordering.
 func (c *Collection) projectHashes(ctx context.Context, state snapshot) (hashManifest, []byte, []hashRecord, error) {
 	m := hashManifest{Format: 2, Definition: state.Definition, Revision: state.Revision, Next: state.Next, Tokens: make([]string, 0, len(state.Records))}
 	records, err := c.decode(ctx, state, nil)
@@ -202,6 +205,25 @@ func (c *Collection) projectHashes(ctx context.Context, state snapshot) (hashMan
 		t := token(r.Key)
 		m.Tokens = append(m.Tokens, t)
 		byToken[t] = r
+	}
+	if c.store.nativeIndexes {
+		m.Index = c.indexName(m.Revision)
+		m.IndexVersion = 1
+		for _, p := range c.definition.Vectors {
+			if !nativeVectorProperty(p) {
+				continue
+			}
+			safe := true
+			for _, r := range records {
+				if v := r.Vectors[p.Name]; v != nil && !nativeVectorSafe(v) {
+					safe = false
+					break
+				}
+			}
+			if safe {
+				m.IndexVectors = append(m.IndexVectors, p.Name)
+			}
+		}
 	}
 	sort.Strings(m.Tokens)
 	raw, err := json.Marshal(m)
@@ -251,6 +273,9 @@ func (c *Collection) projectHashes(ctx context.Context, state snapshot) (hashMan
 				binary.LittleEndian.PutUint32(blob[j*4:], math.Float32bits(v))
 			}
 			fields = append(fields, "v_"+encodeName(p.Name), string(blob))
+		}
+		if c.store.nativeIndexes {
+			fields = append(fields, c.nativeProjection(r)...)
 		}
 		size += len(keys[i+2])
 		for _, field := range fields {
@@ -319,11 +344,19 @@ func (c *Collection) publishHashes(ctx context.Context, mode string, old []byte,
 			return false, err
 		}
 	}
+	if m.Index != "" {
+		if err := c.createNativeIndex(ctx, m); err != nil {
+			c.dropNativeIndex(ctx, m.Index)
+			c.unlinkGeneration(ctx, keys[1:])
+			return false, err
+		}
+	}
 	n, err := c.store.client.Eval(ctx, publishHash, keys, mode, old, raw, m.Revision).Int()
 	if err != nil {
 		return false, err
 	}
 	if n == 0 {
+		c.dropNativeIndex(ctx, m.Index)
 		c.unlinkGeneration(ctx, keys[1:])
 		return false, nil
 	}
@@ -336,14 +369,15 @@ func (c *Collection) publishHashes(ctx context.Context, mode string, old []byte,
 	if json.Unmarshal(old, &previous) == nil && previous.Format == 2 {
 		oldKeys := c.hashKeys(previous)
 		c.unlinkGeneration(ctx, oldKeys[1:])
+		c.dropNativeIndex(ctx, previous.Index)
 	}
 	return true, nil
 }
 
 // MigrateToHashStorage explicitly upgrades an existing collection to format 2.
 // Schema, records and generated sequence publish together. Readers of this
-// provider support both layouts; older binaries reject format 2. No indexes are
-// created and this is separate from model-schema migration capabilities.
+// provider support both layouts; older binaries reject format 2. NativeIndexes
+// also builds indexes during conversion. This is separate from schema migration.
 func (c *Collection) MigrateToHashStorage(ctx context.Context) (err error) {
 	defer func() { err = c.operation(ctx, "migrate_hash_storage", err) }()
 	return c.mutate(ctx, func(state *snapshot) error {

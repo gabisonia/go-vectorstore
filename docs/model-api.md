@@ -41,10 +41,11 @@ program that runs without an API key and can switch to PostgreSQL with `-dsn`.
 Its deterministic three-dimensional embedder illustrates the API; use a real
 embedding model for semantic search.
 
-The [Redis provider](redis.md) supports dense exact search and all portable data
-types using atomic collection snapshots. It transfers the entire collection per
-record operation and has a default 16 MiB encoded limit. Inspect capabilities:
-Redis accepts index hints but creates no native vector/property/full-text indexes.
+The [Redis provider](redis.md) supports dense search and all portable data types
+using atomic snapshots or immutable hash generations. Default reads transfer the
+whole collection; opt-in native HNSW/scalar indexes accelerate eligible reads.
+The encoded limit defaults to 16 MiB. Native mode requires Redis Search/database
+zero and rebuilds its entire index on writes; inspect capabilities and limits.
 
 `GetTypedModelCollection[K,T]` constructs a handle without database access.
 `EnsureTypedModelCollection[K,T]` additionally creates or validates storage.
@@ -356,11 +357,14 @@ PostgreSQL float16 storage requires pgvector 0.7+ and a visible `halfvec` type.
 | `MigrationPlanning` | False | False | True, plan-only |
 | `MigrationApplication` | False | False | True, additive changes only |
 
-Redis reports the same booleans/index fields as memory and buffers snapshots/pages.
-Its encoded collection limit defaults to 16 MiB; see [Redis costs](redis.md).
+Default Redis reports the same booleans/index fields as memory and buffers
+snapshots/pages. With `NativeIndexes`, it additionally advertises HNSW for four
+dense metrics and two precisions (eight tuples, up to 4,096 dimensions) and indexed
+string/int64/float64/bool data. Full-text/hybrid/migrations remain false. This is
+local discovery; see [Redis runtime limits and costs](redis.md).
 
-Index fields describe physical acceleration. Memory, SQLite and Redis accept index hints
-for portability without creating physical property or vector indexes. Generic
+Index fields describe physical acceleration. Memory, SQLite and default Redis
+accept index hints for portability without creating property or vector indexes. Generic
 JSON indexing remains unsupported; provider-specific indexes are outside this
 metadata. Except for the detailed combination list below,
 empty slices mean no support for that feature.
@@ -994,9 +998,10 @@ Results have `ScoreKind=ScoreRRF`; their score thresholds apply to fusion scores
 not vector similarity. Raw vector distance is still returned. Fusion scores
 should not be compared with ordinary vector similarity scores.
 
-The memory, SQLite and Redis providers perform exact vector search and do not implement hybrid
-search. Typed calls return `ErrUnsupported` for this optional capability. Index
-hints are accepted for portability but do not create physical indexes in these providers.
+The memory, SQLite and Redis providers do not implement hybrid search. Typed
+calls return `ErrUnsupported` for this optional capability. Memory/SQLite use
+exact vector search; Redis optionally uses HNSW with exact fallback. Only native
+Redis mode creates physical indexes from supported hints.
 See [SQLite storage and limits](sqlite.md) and [Redis limits](redis.md).
 
 ### Keyword lists

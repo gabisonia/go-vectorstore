@@ -25,7 +25,7 @@ indexes or hybrid support. Deterministic sample embeddings are instructional.
 - [Model API](https://raw.githubusercontent.com/gabisonia/go-vectorstore/master/docs/model-api.md): Tags, schemas, filters, embeddings, search, vectors, native values and iterators.
 - [Provider matrix](https://raw.githubusercontent.com/gabisonia/go-vectorstore/master/docs/parity.md): Backend capabilities and .NET workflow comparison.
 - [SQLite](https://raw.githubusercontent.com/gabisonia/go-vectorstore/master/docs/sqlite.md): Durability, concurrency and exact-scan costs.
-- [Redis](https://raw.githubusercontent.com/gabisonia/go-vectorstore/master/docs/redis.md): Standalone atomic collection snapshots, dense Go exact search and size/transfer limits; master after v0.4.1.
+- [Redis](https://raw.githubusercontent.com/gabisonia/go-vectorstore/master/docs/redis.md): Standalone atomic snapshots/hash generations, optional HNSW/scalar indexes, exact fallback and size/write limits; master after v0.4.1.
 - [Migrations](https://raw.githubusercontent.com/gabisonia/go-vectorstore/master/docs/migrations.md): PostgreSQL planning, explicit additive application and limitations.
 - [Performance](https://raw.githubusercontent.com/gabisonia/go-vectorstore/master/docs/performance.md): Reproducible benchmarks and verification commands.
 
@@ -34,6 +34,6 @@ indexes or hybrid support. Deterministic sample embeddings are instructional.
 - [Executable model examples](https://raw.githubusercontent.com/gabisonia/go-vectorstore/master/vectordata/example_test.go): Typed CRUD/search, automatic embeddings, named vectors and errors.
 - [Typed semantic search](https://raw.githubusercontent.com/gabisonia/go-vectorstore/master/samples/typed-search/main.go): Filtered SearchText with selectable providers.
 - [Typed RAG](https://raw.githubusercontent.com/gabisonia/go-vectorstore/master/samples/typed-rag/main.go): Retrieved sources and opt-in generation.
-- [Redis sample](https://raw.githubusercontent.com/gabisonia/go-vectorstore/master/samples/redis-store/main.go): Persistent typed snapshots, filtered exact search and client reconnect.
+- [Redis sample](https://raw.githubusercontent.com/gabisonia/go-vectorstore/master/samples/redis-store/main.go): Persistent typed collections, optional native indexes, filtered search and client reconnect.
 - [Focused recipes](https://raw.githubusercontent.com/gabisonia/go-vectorstore/master/samples/recipes/main.go): Named vectors, cancellation, capability discovery, hybrid search and migration preview.
 - [Repository agent instructions](https://raw.githubusercontent.com/gabisonia/go-vectorstore/master/AGENTS.md): Contributor setup, checks and invariants.
