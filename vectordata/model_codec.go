@@ -78,7 +78,7 @@ func uuidFieldType(typ reflect.Type) bool {
 // DefinitionFor reads vectordata tags. Roles are key, data, or vector. Options:
 // name=<storage name>, type=<type>, generated, optional, index, fulltext,
 // dimensions=<n>, kind=dense|binary|sparse, precision=float32|float16, metric=<metric>,
-// source=<data field>, method=hnsw|ivfflat, input (transient embedding input).
+// source=<data field>, method=hnsw|ivfflat|flat, input (transient embedding input).
 func DefinitionFor[T any]() (CollectionDefinition, error) {
 	t, _, err := modelType[T]()
 	if err != nil {

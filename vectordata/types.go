@@ -92,6 +92,9 @@ type IndexMethod string
 const (
 	IndexMethodHNSW    IndexMethod = "hnsw"
 	IndexMethodIVFFlat IndexMethod = "ivfflat"
+	// IndexMethodFlat selects exhaustive vector indexing, currently supported by
+	// native Redis. It is distinct from pgvector's approximate IVFFlat method.
+	IndexMethodFlat IndexMethod = "flat"
 )
 
 // HNSWOptions configures HNSW index tuning.

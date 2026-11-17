@@ -43,7 +43,7 @@ embedding model for semantic search.
 
 The [Redis provider](redis.md) supports dense search and all portable data types
 using atomic snapshots or immutable hash generations. Default reads transfer the
-whole collection; opt-in native HNSW/scalar indexes accelerate eligible reads.
+whole collection; opt-in native HNSW/FLAT and scalar indexes accelerate eligible reads.
 The encoded limit defaults to 16 MiB. Native mode requires Redis Search/database
 zero and rebuilds its entire index on writes; inspect capabilities and limits.
 
@@ -68,7 +68,7 @@ names, names over 63 bytes, and the reserved `__vs_` prefix are rejected.
 | --- | --- |
 | `key` | `name=<storage name>`, `type=string\|int64\|uint64\|uuid`, `generated` |
 | `data` | `name=<storage name>`, `type=<data type>`, `optional`, `index`, `fulltext` |
-| `vector` | `name=<storage name>`, `dimensions=<n>`, `kind=dense\|binary\|sparse`, `precision=float32\|float16`, `metric=cosine\|l2\|l2_squared\|inner_product\|l1\|hamming`, `index`, `method=hnsw\|ivfflat`, `source=<data field>`, `optional`, `input` |
+| `vector` | `name=<storage name>`, `dimensions=<n>`, `kind=dense\|binary\|sparse`, `precision=float32\|float16`, `metric=cosine\|l2\|l2_squared\|inner_product\|l1\|hamming`, `index`, `method=hnsw\|ivfflat\|flat`, `source=<data field>`, `optional`, `input` |
 | `-` | Ignore the field |
 
 Untagged fields are ignored when inferring a definition. Exported fields and
@@ -358,10 +358,13 @@ PostgreSQL float16 storage requires pgvector 0.7+ and a visible `halfvec` type.
 | `MigrationApplication` | False | False | True, additive changes only |
 
 Default Redis reports the same booleans/index fields as memory and buffers
-snapshots/pages. With `NativeIndexes`, it additionally advertises HNSW for four
-dense metrics and two precisions (eight tuples, up to 4,096 dimensions) and indexed
+snapshots/pages. With `NativeIndexes`, it additionally advertises HNSW and FLAT
+for four dense metrics and two precisions (16 tuples, up to 4,096 dimensions) and indexed
 string/int64/float64/bool data. Full-text/hybrid/migrations remain false. This is
 local discovery; see [Redis runtime limits and costs](redis.md).
+`IndexMethodFlat` is exhaustive and distinct from approximate `IndexMethodIVFFlat`.
+It accepts no HNSW/IVFFlat construction parameters. Memory/SQLite treat it as a
+portable hint; PostgreSQL rejects physical FLAT index definitions locally.
 
 Index fields describe physical acceleration. Memory, SQLite and default Redis
 accept index hints for portability without creating property or vector indexes. Generic
@@ -640,6 +643,12 @@ snapshot of immutable stored records and copies only the returned page. SQLite
 streams decoded records from one read snapshot. Both still examine the whole
 collection; large offsets increase retained candidate memory. See the
 [selection benchmarks](performance.md#exact-search-selection-and-copying).
+
+Native Redis FLAT retrieves all matching vector-bearing payloads and remeasures
+in Go before exact selection, preserving roundoff-sensitive ordering and native
+key ties. It avoids unrelated records with eligible indexed filters but remains
+an exhaustive scan. `redis.SearchTuning{EFRuntime: ...}` applies only to HNSW;
+`Exact: true` uses the full-snapshot Go reference for either index method.
 
 Vector search returns raw `Distance` plus a higher-is-better `Score`, tagged
 `ScoreSimilarity`. `DistanceThreshold` is an upper bound on raw distance;
@@ -1000,7 +1009,7 @@ should not be compared with ordinary vector similarity scores.
 
 The memory, SQLite and Redis providers do not implement hybrid search. Typed
 calls return `ErrUnsupported` for this optional capability. Memory/SQLite use
-exact vector search; Redis optionally uses HNSW with exact fallback. Only native
+exact vector search; Redis optionally uses native HNSW/FLAT with exact fallback. Only native
 Redis mode creates physical indexes from supported hints.
 See [SQLite storage and limits](sqlite.md) and [Redis limits](redis.md).
 

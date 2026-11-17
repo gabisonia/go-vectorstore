@@ -50,6 +50,18 @@ HNSW vector. Its definition differs from the ordinary sample, so reusing the old
 namespace returns a schema mismatch. Existing hash collections with matching
 hints can be indexed explicitly with `Collection.RebuildNativeIndexes`.
 
+Use `-index flat` with another namespace for exhaustive native vector search:
+
+```sh
+go run ./samples/redis-store -addr localhost:63799 -namespace redis_flat_demo -native -index flat
+go run ./samples/redis-store -addr localhost:63799 -namespace redis_flat_demo -native -index flat
+```
+
+Both runs print the same three lines above. `-index` defaults to `hnsw`; `flat`
+requires `-native`. Each method is part of the registered model definition, so
+changing it within an existing namespace returns a schema mismatch. Rebuilds
+retain the registered method.
+
 Records remain in Redis. To clean up only this fixture, call
 `store.DeleteCollection(ctx, "documents")` using its configured namespace/database.
 `docker compose stop redis` stops the local server; its volume retains data.
@@ -62,7 +74,9 @@ generations. Its result counts indexes rather than Redis keys.
 
 Default reads transfer whole snapshots and use Go exact search/filters. Native
 mode uses Redis scalar filtering and HNSW candidates with Go scoring and exact
-fallback. Each native write rebuilds the entire generation's index. The default
+fallback. FLAT retrieves all matching vectors for exact Go selection, including
+roundoff-sensitive distances and ties. It remains a full scan for unfiltered
+search. Each native write rebuilds the entire generation's index. The default
 encoded limit is 16 MiB. Persistence follows Redis configuration;
 the local AOF `everysec` setting may lose recent writes on a crash. See
 [Redis behavior and limits](../../docs/redis.md).

@@ -17,8 +17,9 @@ import (
 	goredis "github.com/redis/go-redis/v9"
 )
 
-// SearchTuning controls Redis HNSW candidate selection. Distances/scores are
-// remeasured in Go. Exact bypasses native search for comparison/reproducibility.
+// SearchTuning controls Redis search. EFRuntime applies only to HNSW; positive
+// values on FLAT are rejected. Distances/scores are remeasured in Go. Exact
+// bypasses native search for comparison/reproducibility, including FLAT indexes.
 type SearchTuning struct {
 	EFRuntime int
 	Exact     bool
@@ -37,6 +38,15 @@ func (c *Collection) searchTuning(opts vectordata.ModelSearchOptions) (SearchTun
 	}
 	if t.EFRuntime > 0 && !c.store.nativeIndexes {
 		return t, vectordata.ErrUnsupported
+	}
+	if t.EFRuntime > 0 {
+		p, err := c.definition.Vector(opts.VectorProperty)
+		if err != nil {
+			return t, err
+		}
+		if p.Index != nil && p.Index.Method == vectordata.IndexMethodFlat {
+			return t, vectordata.ErrInvalidSearchOptions
+		}
 	}
 	return t, nil
 }
@@ -104,8 +114,13 @@ func (c *Collection) nativeReply(ctx context.Context, m hashManifest, raw []byte
 	params := append([]any(nil), plan.params...)
 	query := plan.query
 	if knn != "" {
-		query = "(" + query + ")=>[KNN $__k @" + knn + " $__q EF_RUNTIME $__ef AS __vs_distance]"
-		params = append(params, "__k", strconv.Itoa(limit), "__q", string(blob), "__ef", strconv.Itoa(ef))
+		query = "(" + query + ")=>[KNN $__k @" + knn + " $__q"
+		params = append(params, "__k", strconv.Itoa(limit), "__q", string(blob))
+		if ef > 0 {
+			query += " EF_RUNTIME $__ef"
+			params = append(params, "__ef", strconv.Itoa(ef))
+		}
+		query += " AS __vs_distance]"
 	}
 	args := []any{raw, m.Revision, c.generationPrefix(m.Revision), string(schema), len(m.Tokens), query}
 	if len(params) > 0 {
@@ -274,9 +289,13 @@ func (c *Collection) nativeSearch(ctx context.Context, vector []float32, p vecto
 			alias = "v" + strconv.Itoa(i)
 		}
 	}
-	ef := tuning.EFRuntime
-	if ef == 0 {
-		ef = 128
+	flat := p.Index.Method == vectordata.IndexMethodFlat
+	ef := 0
+	if !flat {
+		ef = tuning.EFRuntime
+		if ef == 0 {
+			ef = 128
+		}
 	}
 	for attempt := 0; attempt < 64; attempt++ {
 		m, raw, indexed, err := c.nativeManifest(ctx)
@@ -305,6 +324,12 @@ func (c *Collection) nativeSearch(ctx context.Context, vector []float32, p vecto
 		}
 		if k < 64 {
 			k = min(64, n)
+		}
+		if flat {
+			// Redis scores FLOAT32 vectors with different arithmetic from Go.
+			// Retrieve every matching vector so roundoff cannot discard a nearer
+			// canonical record or a native-key tie before exact Go selection.
+			k = n
 		}
 		if k == 0 {
 			_, _, used, err := c.nativeQuery(ctx, nil, 1, vectordata.QueryOptions{}, true)
@@ -335,6 +360,9 @@ func (c *Collection) nativeSearch(ctx context.Context, vector []float32, p vecto
 			})
 			if err != nil {
 				return nil, true, err
+			}
+			if flat {
+				return results, true, nil
 			}
 			expand := len(results) < top
 			if len(results) > 0 && len(rows) > 0 {

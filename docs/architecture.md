@@ -368,4 +368,7 @@ fields support optional generation-scoped Redis Search indexes. Native mode buil
 the index and verifies readiness before publishing; reads verify manifest/schema
 and query the index atomically. Scalar filters and HNSW candidates reduce payload
 transfer, with Go sorting/remeasurement and whole-snapshot fallback. Each write
-still rebuilds a full generation and graph. Full-text/hybrid are unsupported.
+still rebuilds a full generation and index. FLAT exhaustively retrieves matching
+vectors for Go scoring/selection, preserving ordering through FLOAT32 roundoff;
+it reduces payload transfer only when filters or optional vectors exclude rows.
+Full-text/hybrid are unsupported.

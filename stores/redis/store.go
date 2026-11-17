@@ -1,6 +1,6 @@
 // Package redis provides model collections in standalone Redis with exact Go
 // search and filtering over atomic collection snapshots. Opt-in Redis Search
-// indexes accelerate HNSW and scalar reads over immutable hash generations.
+// indexes support HNSW/FLAT vector search and scalar reads over immutable hashes.
 package redis
 
 import (
