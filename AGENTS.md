@@ -35,13 +35,16 @@ marked complete AI-guide program; other snippets may be partial recipes.
 PostgreSQL and sample recipe integration tests need Docker:
 
 ```sh
-go test -race -tags=integration -timeout=5m ./stores/postgres ./samples/recipes
+go test -race -tags=integration -timeout=5m ./stores/postgres
+go test -race -tags=integration -timeout=5m ./samples/recipes
 go test -race -tags=integration -timeout=5m ./stores/redis
 ```
 
 Set `PGVECTOR_TEST_IMAGE=pgvector/pgvector:pg18` for PostgreSQL 18; the default is
 pg16. `PGVECTOR_TEST_DSN` can use an existing disposable database instead. Tests
-create/drop isolated schemas. See `.github/workflows/ci.yml` for the full Go and
+create/drop isolated schemas. Keep the two PostgreSQL package runs in separate
+`go test` invocations to avoid concurrent Testcontainers reaper creation in one
+shared session. See `.github/workflows/ci.yml` for the full Go and
 PostgreSQL matrix and vulnerability scan. Live OpenAI calls are opt-in sample
 behavior; normal tests use deterministic embedders and local HTTP stand-ins.
 

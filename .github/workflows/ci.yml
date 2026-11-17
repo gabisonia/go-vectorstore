@@ -60,7 +60,11 @@ jobs:
       - name: Run Postgres integration tests with race detection
         env:
           PGVECTOR_TEST_IMAGE: pgvector/pgvector:pg${{ matrix.postgres }}
-        run: go test -race -tags=integration -timeout=5m ./stores/postgres ./samples/recipes
+        # Separate go invocations avoid concurrent Testcontainers reaper creation
+        # across the two test binaries and give each its own session lifetime.
+        run: |
+          go test -race -tags=integration -timeout=5m ./stores/postgres
+          go test -race -tags=integration -timeout=5m ./samples/recipes
 
   integration-redis:
     name: Redis ${{ matrix.redis }} (Go ${{ matrix.go }})
