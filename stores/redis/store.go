@@ -184,6 +184,9 @@ func (s *Store) GetModelCollection(name string, d vectordata.CollectionDefinitio
 	if err != nil {
 		return nil, err
 	}
+	if err := validateRedisAnnotations(d); err != nil {
+		return nil, err
+	}
 	for _, p := range d.Vectors {
 		if p.Kind != "" && p.Kind != vectordata.VectorDense {
 			return nil, fmt.Errorf("%w: Redis snapshot provider supports dense vectors", vectordata.ErrUnsupported)

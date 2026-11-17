@@ -878,8 +878,8 @@ reads and the second batch of a 501-record write. They verify native errors,
 rollback and subsequent reads/writes/searches on a replacement connection. These
 are controlled failure cases, not a complete failover/ambiguous-commit simulation.
 
-Seven fuzz targets exercise decimal exactness, float16 rounding against an
-independent finite-value oracle, sparse versus dense distances, canonical struct
+Eight fuzz targets exercise provider-annotation JSON canonicalization, decimal
+exactness, float16 rounding against an independent finite-value oracle, sparse versus dense distances, canonical struct
 codec and SQLite payload round trips, null/precision filter truth and SQL operand
 binding. CI runs a 50,000-call budget per target with two workers on each supported
 Go lane and a five-minute per-target timeout. Count budgets avoid the
@@ -890,3 +890,10 @@ local campaigns; the scheduled stable-Go hardening workflow retains sixty second
 per target weekly. Failures are not retried or filtered out.
 Fuzzing is bounded exploration, not an exhaustive input proof. Failing generated
 corpora are retained as workflow artifacts for reproduction and regression tests.
+
+Provider annotation checks exercise immutable definition ownership, exact JSON
+numbers and JSONB normalization, unchanged unannotated registrations, foreign
+hints and Redis HASH/JSON NoStem matching/rebuild/schema-drift behavior. CI runs
+backend integration tests with `-count=1` so a cached result cannot substitute for
+a different server image or state. Annotation and option tests are correctness
+checks; they add no new throughput claim.

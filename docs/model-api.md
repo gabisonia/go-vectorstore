@@ -1051,6 +1051,57 @@ oversized rows add a manual backfill step. Application rechecks data under its
 existing locking/review rules and rejects a stale review if new data makes the
 index incompatible. See [migrations](migrations.md).
 
+## Provider annotations
+
+KeyProperty, DataProperty and VectorProperty have optional `ProviderAnnotations`
+for provider-owned schema hints, matching the purpose of Microsoft's
+[ProviderAnnotations](https://learn.microsoft.com/en-us/dotnet/api/microsoft.extensions.vectordata.vectorstoreproperty.providerannotations?view=net-10.0-pp).
+They are persisted JSON values, not runtime services or credentials. A provider
+may preserve foreign hints without applying them; consult its documentation.
+
+```go
+annotations, err := vectordata.WithProviderAnnotation(
+    vectordata.ProviderAnnotations(""), "vendor.limit", 100)
+if err != nil {
+    return err
+}
+property := vectordata.DataProperty{
+    Name: "Body", Type: vectordata.TypeString,
+    ProviderAnnotations: annotations,
+}
+limit, found, err := vectordata.GetProviderAnnotation[int](property.ProviderAnnotations, "vendor.limit")
+```
+
+`NewProviderAnnotations(map[string]any)` snapshots a JSON-compatible object.
+WithProviderAnnotation/WithoutProviderAnnotation return new values. Typed getters
+return independent decoded values; missing names are zero/false/nil, wrong types
+are ErrSchemaMismatch. JSON null follows encoding/json rules; pointer types can
+distinguish it from primitive zero values. Provider-specific typed helpers avoid
+raw keys and validate the options they own.
+
+ProviderAnnotations is an immutable canonical JSON value with a string backing,
+so property structs remain comparable and definition copies cannot alias mutable
+annotation data. MarshalJSON writes a JSON object, not a quoted string. Parsing
+sorts object keys and canonicalizes numeric spellings exactly without float64
+conversion, including JSONB round trips. Provider JSON/numeric storage limits
+still apply. Names must be nonblank UTF-8 without NUL; invalid JSON, unsupported
+Go values and incompatible typed reads are schema errors. Definition.Normalize
+also validates direct conversions to ProviderAnnotations.
+
+The zero value, null and empty objects normalize to absence. Empty fields are
+omitted, retaining existing registration bytes and storage formats. Nonempty
+annotations are part of the registered definition: adding/changing one requires
+a new compatible collection or explicit supported schema migration. Rebuild
+methods do not change registered definitions. The current PostgreSQL additive
+migration executor rejects changes to existing annotations. Existing old-format fixtures remain
+covered by provider tests.
+
+Redis's WithTextIndexOptions/GetTextIndexOptions configure `NoStem` on full-text
+string fields. Native HASH/JSON applies and checks the option; plain Redis only
+preserves it as a hint. Other built-in providers preserve the foreign hint.
+See [Redis full-text indexing](redis.md#full-text-indexing) for matching and
+readiness limits and [the delivery plan](parity-plan.md) for upcoming increments.
+
 ## Hybrid search
 
 PostgreSQL implements optional `HybridSearcher`. Declare a string data property

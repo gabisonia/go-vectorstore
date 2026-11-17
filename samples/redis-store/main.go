@@ -30,6 +30,7 @@ func main() {
 	index := flag.String("index", "hnsw", "Native vector index: hnsw or flat; use a separate namespace per model")
 	fullText := flag.Bool("fulltext", false, "Index Title as Redis TEXT; requires -native and a separate namespace")
 	hybrid := flag.Bool("hybrid", false, "Run keyword/vector RRF search; implies -fulltext and requires -native")
+	noStem := flag.Bool("no-stem", false, "Disable native TEXT stemming; implies -hybrid and requires a separate namespace")
 	keywordTerms := flag.Bool("keyword-terms", false, "Run OR groups of plain keyword terms; implies -hybrid")
 	upgrade := flag.Bool("upgrade-hash", false, "Explicitly upgrade the sample collection to hash storage")
 	upgradeJSON := flag.Bool("upgrade-json", false, "Explicitly convert the sample collection to RedisJSON storage")
@@ -41,13 +42,13 @@ func main() {
 	opts := redis.StoreOptions{Addr: *addr, Namespace: *namespace, DB: *db, Username: os.Getenv("REDIS_USERNAME"), Password: os.Getenv("REDIS_PASSWORD"), TLSConfig: tlsConfig, StorageMode: redis.StorageMode(*storage), NativeIndexes: *native}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	if err := run(ctx, opts, *upgrade, vectordata.IndexMethod(*index), *fullText, *upgradeJSON, *hybrid, *keywordTerms); err != nil {
+	if err := run(ctx, opts, *upgrade, vectordata.IndexMethod(*index), *fullText, *upgradeJSON, *hybrid, *keywordTerms, *noStem); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
-func run(ctx context.Context, opts redis.StoreOptions, upgrade bool, method vectordata.IndexMethod, fullText, upgradeJSON, hybrid, keywordTerms bool) error {
-	if keywordTerms {
+func run(ctx context.Context, opts redis.StoreOptions, upgrade bool, method vectordata.IndexMethod, fullText, upgradeJSON, hybrid, keywordTerms, noStem bool) error {
+	if keywordTerms || noStem {
 		hybrid = true
 	}
 	if hybrid {
@@ -81,6 +82,12 @@ func run(ctx context.Context, opts redis.StoreOptions, upgrade bool, method vect
 		for i := range d.Data {
 			if d.Data[i].Name == "Title" {
 				d.Data[i].IsFullTextIndexed = fullText
+				if noStem {
+					d.Data[i], err = redis.WithTextIndexOptions(d.Data[i], redis.TextIndexOptions{NoStem: true})
+					if err != nil {
+						return err
+					}
+				}
 			}
 			if d.Data[i].Name == "Category" {
 				d.Data[i].IsIndexed = true
@@ -124,6 +131,9 @@ func run(ctx context.Context, opts redis.StoreOptions, upgrade bool, method vect
 	}
 	if hybrid {
 		keywords := "storage"
+		if noStem {
+			keywords = "choice"
+		} // No longer matches the indexed word "choices".
 		options := vectordata.HybridSearchOptions{ModelSearchOptions: vectordata.ModelSearchOptions{Filter: filter}}
 		if keywordTerms {
 			keywords = ""

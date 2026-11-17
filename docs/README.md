@@ -1,7 +1,7 @@
 # Documentation
 
 `go-vectorstore` provides model collections across PostgreSQL, embedded SQLite,
-and memory, plus the original PostgreSQL Record API.
+Redis and memory, plus the original PostgreSQL Record API.
 
 ## Using the library
 
@@ -14,6 +14,7 @@ and memory, plus the original PostgreSQL Record API.
 
 - [Model API](model-api.md): schemas, typed/native keys and data, optional named vectors, filters, embeddings, search and iterators
 - [SQLite provider](sqlite.md): setup, persistence, concurrency and snapshot-scan limits
+- [Parity implementation plan](parity-plan.md): ordered increments, acceptance checks and delivery status
 - [Provider and .NET parity](parity.md): implemented workflows, provider capabilities and deliberate differences
 - [Upgrade guide](upgrading.md): installation, compatibility changes and adoption steps
 - [Model migrations](migrations.md): PostgreSQL planning, explicit additive application, drift, backfills and registry finalization

@@ -23,6 +23,7 @@ const nativeMaxTextFields = 128
 type nativeField struct {
 	Name, Alias, Kind, Metric, Algorithm string
 	Separator                            string `json:",omitempty"`
+	NoStem                               bool   `json:",omitempty"`
 	Dimensions, M, EFConstruction        int
 }
 
@@ -225,7 +226,11 @@ func (c *Collection) nativeFields(m hashManifest) ([]nativeField, error) {
 		}
 		if (m.IndexVersion == 2 || m.IndexVersion == 5) && nativeText(p) {
 			textFields++
-			fields = append(fields, nativeField{Name: "d_" + encodeName(p.Name), Alias: "text" + n, Kind: "TEXT"})
+			options, err := GetTextIndexOptions(p)
+			if err != nil {
+				return nil, err
+			}
+			fields = append(fields, nativeField{Name: "d_" + encodeName(p.Name), Alias: "text" + n, Kind: "TEXT", NoStem: options.NoStem})
 		}
 	}
 	if textFields > nativeMaxTextFields {
@@ -319,7 +324,7 @@ local function ready(index,prefix,schema,count,keytype)
    if flag(a,'NOINDEX') then return -2 end
    if f.Kind=='TAG' and (not flag(a,'CASESENSITIVE') or ((keytype or 'HASH')=='HASH' and val(a,'SEPARATOR')~=',')) then return -2 end
    if f.Kind=='TAG' and f.Separator and f.Separator~='' and val(a,'SEPARATOR')~=f.Separator then return -2 end
-   if f.Kind=='TEXT' and (tonumber(val(a,'WEIGHT'))~=1 or flag(a,'NOSTEM')) then return -2 end
+   if f.Kind=='TEXT' and (tonumber(val(a,'WEIGHT'))~=1 or flag(a,'NOSTEM')~=(f.NoStem==true)) then return -2 end
    if f.Kind=='TEXT' then hastext=true end
    if f.Kind=='VECTOR' then
      if val(a,'algorithm')~=f.Algorithm or val(a,'data_type')~='FLOAT32' or tonumber(val(a,'dim'))~=f.Dimensions or val(a,'distance_metric')~=f.Metric then return -2 end
@@ -363,6 +368,9 @@ func (c *Collection) createNativeIndex(ctx context.Context, m hashManifest) erro
 			}
 		} else if f.Kind == "TEXT" {
 			args = append(args, "WEIGHT", 1)
+			if f.NoStem {
+				args = append(args, "NOSTEM")
+			}
 		} else if f.Kind == "VECTOR" {
 			attributes := []any{"TYPE", "FLOAT32", "DIM", f.Dimensions, "DISTANCE_METRIC", f.Metric}
 			if f.Algorithm == "HNSW" {
