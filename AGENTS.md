@@ -61,7 +61,13 @@ capabilities; native mode explicitly builds generation-scoped indexes before
 publication. Keep native queries in the same Lua execution as manifest/readiness
 verification. Preserve NULL truth, integer precision, exact score units and tie
 fallback. Unknown publication results must never drop a possibly current index.
-CI's Redis 8.2 job requires native conformance/recall and the real projection proof.
+RedisJSON format 3 uses immutable JSON wrapper documents with canonical payload
+strings; never parse canonical numeric values through RedisJSON or Lua cjson.
+Preserve leases, final-SET publication and atomic wrapper reads. Conversion from
+snapshots/hashes is explicit; prune only obsolete non-expiring keys with current
+manifest protection. Keep JSON-native index capabilities unadvertised until built.
+CI's Redis 8.2 job requires real JSON contracts, native conformance/recall and the
+projection proof; Redis 7.4 covers missing-module behavior.
 
 ## Invariants and implementation conventions
 

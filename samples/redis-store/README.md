@@ -79,6 +79,30 @@ stemming, default Redis stopwords and weight 1. Existing definitions with the
 same full-text hint can gain TEXT via `RebuildNativeIndexes`; adding the hint to
 an existing unmarked definition is a separate model-schema change.
 
+On standalone Redis 8.2 with RedisJSON, create format-3 storage in its own namespace:
+
+```sh
+go run ./samples/redis-store -addr localhost:63799 -namespace redis_json_demo -storage json
+go run ./samples/redis-store -addr localhost:63799 -namespace redis_json_demo -storage json
+```
+
+Explicitly convert the existing hash fixture (or the ordinary snapshot fixture)
+without changing its registered model:
+
+```sh
+go run ./samples/redis-store -addr localhost:63799 -namespace redis_hash_demo -upgrade-json
+go run ./samples/redis-store -addr localhost:63799 -namespace redis_hash_demo -upgrade-json
+```
+
+All commands print the same three lines. `-storage json` affects new collections;
+`-upgrade-json` explicitly converts snapshots/hashes, preserving records and
+sequence. Repeating conversion is a read-only no-op before the sample's ordinary
+upsert. Choose one conversion flag per run. Format 3 requires an updated library
+and RedisJSON; older binaries reject it. Reverse conversion is unsupported.
+JSON stores canonical payload strings inside real JSON documents to preserve
+numeric/null precision. Filtering/search remain in Go; JSON-native indexes and
+`-storage json -native` are unsupported in this increment.
+
 Records remain in Redis. To clean up only this fixture, call
 `store.DeleteCollection(ctx, "documents")` using its configured namespace/database.
 `docker compose stop redis` stops the local server; its volume retains data.
@@ -87,7 +111,11 @@ to reclaim obsolete non-expiring hashes if cleanup was interrupted; active stagi
 is protected and expires within one hour.
 Native mode also attempts index cleanup. `store.PruneNativeIndexes(ctx, "documents")`
 reclaims obsolete indexes without deleting records and protects current/active
-generations. Its result counts indexes rather than Redis keys.
+generations. Its result counts indexes rather than Redis keys. JSON uses
+`store.PruneJSONStorage(ctx, "documents")` for obsolete non-expiring documents/
+leases; deletion attempts JSON cleanup too. Current generations and active TTL
+staging are protected. After an uncertain hash-to-JSON conversion, hash/index
+pruning can reclaim the former layout's auxiliary data.
 
 Default reads transfer whole snapshots and use Go exact search/filters. Native
 mode uses Redis scalar filtering and HNSW candidates with Go scoring and exact

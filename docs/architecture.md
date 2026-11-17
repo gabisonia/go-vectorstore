@@ -375,3 +375,12 @@ Native full-text hints add TEXT fields over existing raw string projections.
 Index metadata version 2 preserves version-1 scalar/vector-only reads until a
 rebuild or native write; the storage format and registrations are unchanged.
 Public keyword-query/hybrid APIs remain unsupported.
+
+Redis format 3 applies the same leased generation/final-SET publication model to
+RedisJSON objects. Each wrapper holds revision/token/canonical-payload strings;
+RedisJSON/Lua never parse canonical numeric values. Reads fetch and validate
+wrappers atomically with the manifest, then use the Go exact engine. JSON has its
+own scoped key prefix and guarded pruning. Conversion from snapshots/hashes is
+explicit, preserves schema/sequence and retires old hash data/indexes only after
+acknowledged publication. Existing layouts remain the defaults; JSON-native
+indexes are outside this storage increment.

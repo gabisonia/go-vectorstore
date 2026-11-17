@@ -57,7 +57,9 @@ and [scalar measurements](performance.md#sqlite-scalar-query-verification).
 Redis is available on master after v0.4.1. Default snapshot storage transfers the
 whole collection and runs exact dense search/filtering in Go. Its encoded size
 limit defaults to 16 MiB. Plain hash storage adds immutable per-record generations
-without changing query execution. Explicit storage upgrades preserve atomic batches.
+without changing query execution. Opt-in RedisJSON uses format-3 documents with
+opaque canonical payloads, preserving numeric precision through RedisJSON/Lua.
+Explicit storage conversions preserve atomic batches and generated sequences.
 
 Opt-in `NativeIndexes` requires Redis Search and database zero. It builds HNSW/FLAT
 indexes for cosine/L2/squared-L2/inner-product float32/float16 models and accelerates
@@ -66,7 +68,9 @@ remeasures all matching vectors in Go to preserve ordering through float roundof
 Writes rebuild the full generation's index; native reads still transfer the token manifest.
 Native mode also honors string full-text hints with Redis TEXT indexes; index
 metadata versions preserve existing scalar/vector-only generations until rebuild
-or a native write. Public keyword/hybrid APIs and schema migrations remain absent. See
+or a native write. Native indexing currently applies to hash storage; JSON retains
+Go filtering/search and requires RedisJSON. Public keyword/hybrid APIs and schema
+migrations remain absent. See
 [native support, costs and guarantees](redis.md#native-indexes-and-search).
 
 ## Deliberate differences and future extensions

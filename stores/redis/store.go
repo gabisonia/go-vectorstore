@@ -29,13 +29,14 @@ type StoreOptions struct {
 	TLSConfig                *tls.Config
 	// Namespace isolates collections; the default is "vectorstore".
 	Namespace string
-	// MaxCollectionBytes bounds canonical snapshots and hash publication bytes
-	// (manifest, keys, field names/values); default 16 MiB. Redis allocator and
+	// MaxCollectionBytes bounds canonical snapshots and hash/JSON publication
+	// bytes (manifest, keys, fields/documents); default 16 MiB. Redis allocator and
 	// peak staging/retirement overhead are outside this encoded byte budget.
 	// Larger collections are rejected, never silently truncated.
 	MaxCollectionBytes int
 	// StorageMode selects the layout for newly created collections. Existing
-	// layouts are preserved; use Collection.MigrateToHashStorage for an upgrade.
+	// layouts are preserved; explicit MigrateToHashStorage/MigrateToJSONStorage
+	// operations convert supported existing layouts.
 	StorageMode StorageMode
 	// NativeIndexes enables generation-scoped Redis Search indexes on hash
 	// collections in database zero. An unspecified StorageMode becomes StorageHash.
@@ -76,7 +77,7 @@ func New(opts StoreOptions) (*Store, error) {
 	if opts.NativeIndexes && opts.DB != 0 {
 		return nil, fmt.Errorf("%w: Redis Search requires database zero", vectordata.ErrUnsupported)
 	}
-	if opts.StorageMode != StorageSnapshot && opts.StorageMode != StorageHash {
+	if opts.StorageMode != StorageSnapshot && opts.StorageMode != StorageHash && opts.StorageMode != StorageJSON {
 		return nil, fmt.Errorf("%w: unknown Redis storage mode", vectordata.ErrUnsupported)
 	}
 	if opts.Addr == "" {
@@ -169,6 +170,7 @@ func (s *Store) DeleteCollection(ctx context.Context, name string) (err error) {
 	// Publication/deletion succeeded. Cleanup is separate and may safely be
 	// repeated with PruneHashStorage; it never changes the logical result.
 	_, _ = s.PruneHashStorage(ctx, name)
+	_, _ = s.PruneJSONStorage(ctx, name)
 	if s.nativeIndexes {
 		_, _ = s.PruneNativeIndexes(ctx, name)
 	}

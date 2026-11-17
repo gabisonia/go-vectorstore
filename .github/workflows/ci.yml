@@ -88,6 +88,7 @@ jobs:
         env:
           REDIS_TEST_ADDR: localhost:6379
           REDIS_REQUIRE_SEARCH: ${{ matrix.redis == '8.2' }}
+          REDIS_REQUIRE_JSON: ${{ matrix.redis == '8.2' }}
         run: go test -race -tags=integration -timeout=5m ./stores/redis
       - name: Run persistent sample twice
         run: |
@@ -104,6 +105,13 @@ jobs:
           go run ./samples/redis-store -namespace redis_flat_demo -native -index flat
           go run ./samples/redis-store -namespace redis_text_demo -native -fulltext
           go run ./samples/redis-store -namespace redis_text_demo -native -fulltext
+      - name: Run RedisJSON sample and explicit conversion twice
+        if: matrix.redis == '8.2'
+        run: |
+          go run ./samples/redis-store -namespace redis_json_demo -storage json
+          go run ./samples/redis-store -namespace redis_json_demo -storage json
+          go run ./samples/redis-store -namespace redis_hash_demo -upgrade-json
+          go run ./samples/redis-store -namespace redis_hash_demo -upgrade-json
 
   local-doc-agent:
     name: Local doc agent (Go ${{ matrix.go }})

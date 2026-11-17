@@ -88,6 +88,9 @@ func (c *Collection) loadOnce(ctx context.Context) (snapshot, []byte, error) {
 	if state.Format == 2 {
 		return c.loadHashes(ctx, raw)
 	}
+	if state.Format == 3 {
+		return c.loadJSON(ctx, raw)
+	}
 	if state.Format != 1 || state.Definition != c.registration {
 		return state, nil, vectordata.ErrSchemaMismatch
 	}
@@ -122,6 +125,9 @@ func (c *Collection) cas(ctx context.Context, mode string, old, new []byte) (boo
 	if state.Format == 2 {
 		return c.publishHashes(ctx, mode, old, state)
 	}
+	if state.Format == 3 {
+		return c.publishJSON(ctx, mode, old, state)
+	}
 	n, err := c.store.client.Eval(ctx, compareSwap, []string{c.store.key(c.name)}, mode, old, new).Int()
 	return n == 1, err
 }
@@ -137,6 +143,8 @@ func (c *Collection) EnsureExists(ctx context.Context) (err error) {
 	format := 1
 	if c.store.storageMode == StorageHash {
 		format = 2
+	} else if c.store.storageMode == StorageJSON {
+		format = 3
 	}
 	raw, err := c.encode(snapshot{Format: format, Definition: c.registration, Next: 1, Records: map[string]json.RawMessage{}})
 	if err != nil {

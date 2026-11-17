@@ -279,3 +279,14 @@ ignored hints; explicit rebuild/native writes add TEXT. Validate observable TEXT
 options along with scalar/vector fields. Keyword-query/hybrid APIs remain absent.
 Writes rebuild the full index. Index cleanup separately protects current revisions
 and active leases; unknown publication results never drop a possibly current index.
+
+`StorageJSON` stages real RedisJSON wrapper documents in format 3. Canonical
+payloads and key tokens are strings, preserving all numeric/null semantics without
+RedisJSON/Lua numeric conversion. A JSON.TYPE availability probe precedes staging,
+including empty creates. JSON.SET/TTL staging and JSON.GET validation precede one
+final manifest SET; only explicit conflicts retry. Reads verify manifest/lease and
+all wrapper identities in one script. `MigrateToJSONStorage` converts snapshots or
+hashes explicitly; acknowledged conversion retires prior hashes/native indexes.
+Shared pruning validates known manifest formats and protects the current layout's
+generation and active staging. JSON queries/searches retain the Go engine and do
+not advertise physical JSON indexes.

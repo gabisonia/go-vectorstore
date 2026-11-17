@@ -22,6 +22,7 @@ type StorageMode string
 const (
 	StorageSnapshot StorageMode = "snapshot"
 	StorageHash     StorageMode = "hash"
+	StorageJSON     StorageMode = "json"
 	stagingTTL                  = time.Hour
 	hashBatchSize               = 128
 )
@@ -374,7 +375,7 @@ func (c *Collection) publishHashes(ctx context.Context, mode string, old []byte,
 	return true, nil
 }
 
-// MigrateToHashStorage explicitly upgrades an existing collection to format 2.
+// MigrateToHashStorage explicitly upgrades a snapshot collection to format 2.
 // Schema, records and generated sequence publish together. Readers of this
 // provider support both layouts; older binaries reject format 2. NativeIndexes
 // also builds indexes during conversion. This is separate from schema migration.
@@ -383,6 +384,9 @@ func (c *Collection) MigrateToHashStorage(ctx context.Context) (err error) {
 	return c.mutate(ctx, func(state *snapshot) error {
 		if state.Format == 2 {
 			return errLayoutUnchanged
+		}
+		if state.Format != 1 {
+			return fmt.Errorf("%w: only snapshot-to-hash conversion is supported", vectordata.ErrUnsupported)
 		}
 		state.Format = 2
 		return nil
@@ -395,10 +399,13 @@ func (c *Collection) MigrateToHashStorage(ctx context.Context) (err error) {
 // for a later pass. Logical collection data is never changed by pruning.
 func (s *Store) PruneHashStorage(ctx context.Context, name string) (count int64, err error) {
 	defer func() { err = s.operation(name, "prune_hash_storage", resolveContext(ctx, err)) }()
+	return s.pruneStorage(ctx, name, s.hashPrefix(name), 2)
+}
+
+func (s *Store) pruneStorage(ctx context.Context, name, prefix string, format int) (count int64, err error) {
 	if !validName(name) {
 		return 0, vectordata.ErrSchemaMismatch
 	}
-	prefix := s.hashPrefix(name)
 	var cursor uint64
 	for {
 		if err = ctx.Err(); err != nil {
@@ -419,14 +426,14 @@ func (s *Store) PruneHashStorage(ctx context.Context, name string) (count int64,
 				mode = "missing"
 			} else if getErr != nil {
 				return count, getErr
-			} else if json.Unmarshal(raw, &current) != nil || (current.Format != 1 && current.Format != 2) || !validRevision(current.Revision) {
+			} else if json.Unmarshal(raw, &current) != nil || (current.Format != 1 && current.Format != 2 && current.Format != 3) || !validRevision(current.Revision) {
 				return count, fmt.Errorf("%w: cannot prune with unknown Redis manifest", vectordata.ErrInvalidRecord)
 			}
 			candidates := []string{s.key(name)}
 			for _, key := range keys[start:min(start+hashBatchSize, len(keys))] {
 				suffix := strings.TrimPrefix(key, prefix)
 				revision, _, ok := strings.Cut(suffix, ":")
-				if ok && validRevision(revision) && revision != current.Revision {
+				if ok && validRevision(revision) && (current.Format != format || revision != current.Revision) {
 					candidates = append(candidates, key)
 				}
 			}

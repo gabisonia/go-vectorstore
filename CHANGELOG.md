@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add opt-in RedisJSON storage with immutable format-3 document generations,
+  atomic manifest publication/reads and explicit snapshot/hash conversion.
+  Preserve canonical key/data/JSON precision through opaque payload strings,
+  generated sequences, cancellation and uncertain-reply guarantees. Add guarded
+  JSON pruning, cross-layout cleanup, real RedisJSON contracts/failure tests,
+  a persistent sample and Redis 8.2 CI coverage. JSON-native indexes remain
+  unsupported; default snapshot and existing hash formats stay compatible.
+
 - Honor string `IsFullTextIndexed` hints with Redis TEXT indexes in native mode,
   independent of scalar TAG filtering. Add observable schema validation and
   full-text capability discovery while keeping keyword/hybrid APIs unsupported.

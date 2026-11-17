@@ -330,7 +330,7 @@ func (c *Collection) RebuildNativeIndexes(ctx context.Context) (err error) {
 	}
 	return c.mutate(ctx, func(state *snapshot) error {
 		if state.Format != 2 {
-			return fmt.Errorf("%w: upgrade to hash storage first", vectordata.ErrUnsupported)
+			return fmt.Errorf("%w: native index rebuild requires hash storage", vectordata.ErrUnsupported)
 		}
 		return nil
 	})
@@ -374,7 +374,7 @@ func (s *Store) PruneNativeIndexes(ctx context.Context, name string) (count int6
 			mode = "missing"
 		} else if getErr != nil {
 			return count, getErr
-		} else if json.Unmarshal(raw, &current) != nil || (current.Format != 1 && current.Format != 2) || !validRevision(current.Revision) {
+		} else if json.Unmarshal(raw, &current) != nil || (current.Format != 1 && current.Format != 2 && current.Format != 3) || !validRevision(current.Revision) {
 			return count, vectordata.ErrInvalidRecord
 		}
 		if current.Revision == revision {
