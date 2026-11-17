@@ -18,6 +18,7 @@ import (
 const nativeMaxDimensions = 4096
 const nativeMaxDocuments = 1000000
 const nativeTagLimit = 1024
+const nativeMaxTextFields = 128
 
 type nativeField struct {
 	Name, Alias, Kind, Metric, Algorithm string
@@ -50,6 +51,20 @@ func nativeVectorSafe(v []float32) bool {
 }
 func nativeData(p vectordata.DataProperty) bool {
 	return p.IsIndexed && (p.Type == vectordata.TypeString || p.Type == vectordata.TypeInt64 || p.Type == vectordata.TypeFloat64 || p.Type == vectordata.TypeBool)
+}
+func nativeText(p vectordata.DataProperty) bool {
+	return p.IsFullTextIndexed && p.Type == vectordata.TypeString
+}
+
+// Version 1 accepted full-text hints but built scalar/vector fields only. Keep
+// its physical schema readable until an explicit rebuild or a native write.
+func (c *Collection) nativeIndexVersion() int {
+	for _, p := range c.definition.Data {
+		if nativeText(p) {
+			return 2
+		}
+	}
+	return 1
 }
 func nativeTag(v any) (string, bool) {
 	var text string
@@ -124,15 +139,22 @@ func (c *Collection) nativeFields(m hashManifest) ([]nativeField, error) {
 	if c.definition.Key.Type == vectordata.KeyInt64 || c.definition.Key.Type == vectordata.KeyUint64 {
 		fields = append(fields, nativeField{Name: "__vs_key_hi", Alias: "kh", Kind: "NUMERIC"}, nativeField{Name: "__vs_key_lo", Alias: "kl", Kind: "NUMERIC"})
 	}
+	textFields := 0
 	for i, p := range c.definition.Data {
-		if !nativeData(p) {
-			continue
-		}
 		n := strconv.Itoa(i)
-		fields = append(fields, nativeField{Name: "__vs_has_" + n, Alias: "h" + n, Kind: "TAG"}, nativeField{Name: "__vs_tag_" + n, Alias: "t" + n, Kind: "TAG"})
-		if p.Type == vectordata.TypeInt64 {
-			fields = append(fields, nativeField{Name: "__vs_hi_" + n, Alias: "hi" + n, Kind: "NUMERIC"}, nativeField{Name: "__vs_lo_" + n, Alias: "lo" + n, Kind: "NUMERIC"})
+		if nativeData(p) {
+			fields = append(fields, nativeField{Name: "__vs_has_" + n, Alias: "h" + n, Kind: "TAG"}, nativeField{Name: "__vs_tag_" + n, Alias: "t" + n, Kind: "TAG"})
+			if p.Type == vectordata.TypeInt64 {
+				fields = append(fields, nativeField{Name: "__vs_hi_" + n, Alias: "hi" + n, Kind: "NUMERIC"}, nativeField{Name: "__vs_lo_" + n, Alias: "lo" + n, Kind: "NUMERIC"})
+			}
 		}
+		if m.IndexVersion == 2 && nativeText(p) {
+			textFields++
+			fields = append(fields, nativeField{Name: "d_" + encodeName(p.Name), Alias: "text" + n, Kind: "TEXT"})
+		}
+	}
+	if textFields > nativeMaxTextFields {
+		return nil, fmt.Errorf("%w: native Redis schema exceeds 128 TEXT fields", vectordata.ErrUnsupported)
 	}
 	seen := map[string]bool{}
 	for _, name := range m.IndexVectors {
@@ -190,16 +212,23 @@ local function ready(index,prefix,schema,count)
  local expected=cjson.decode(schema)
  local attrs=val(info,'attributes')
  if type(attrs)~='table' or #attrs~=#expected then return -2 end
+ local hastext=false
  for _,f in ipairs(expected) do
    local a=nil
    for _,candidate in ipairs(attrs) do if val(candidate,'attribute')==f.Alias then a=candidate break end end
    if not a or val(a,'identifier')~=f.Name or val(a,'type')~=f.Kind then return -2 end
    if flag(a,'NOINDEX') then return -2 end
    if f.Kind=='TAG' and (not flag(a,'CASESENSITIVE') or val(a,'SEPARATOR')~=',') then return -2 end
+   if f.Kind=='TEXT' and (tonumber(val(a,'WEIGHT'))~=1 or flag(a,'NOSTEM')) then return -2 end
+   if f.Kind=='TEXT' then hastext=true end
    if f.Kind=='VECTOR' then
      if val(a,'algorithm')~=f.Algorithm or val(a,'data_type')~='FLOAT32' or tonumber(val(a,'dim'))~=f.Dimensions or val(a,'distance_metric')~=f.Metric then return -2 end
      if f.Algorithm=='HNSW' and (tonumber(val(a,'M'))~=f.M or tonumber(val(a,'ef_construction'))~=f.EFConstruction) then return -2 end
    end
+ end
+ if hastext then
+   local options=val(info,'index_options') or {}
+   if flag(options,'NOFIELDS') or flag(options,'NOOFFSETS') or flag(options,'NOFREQS') or val(info,'stopwords_list')~=nil then return -2 end
  end
  local failures=tonumber(val(info,'hash_indexing_failures'))
  if not failures then failures=tonumber(val(val(info,'Index Errors'),'indexing failures')) end
@@ -216,11 +245,17 @@ func (c *Collection) createNativeIndex(ctx context.Context, m hashManifest) erro
 	if err != nil {
 		return err
 	}
-	args := []any{"FT.CREATE", m.Index, "ON", "HASH", "PREFIX", 1, c.generationPrefix(m.Revision), "SCHEMA"}
+	args := []any{"FT.CREATE", m.Index, "ON", "HASH", "PREFIX", 1, c.generationPrefix(m.Revision)}
+	if m.IndexVersion == 2 {
+		args = append(args, "LANGUAGE", "english")
+	}
+	args = append(args, "SCHEMA")
 	for _, f := range fields {
 		args = append(args, f.Name, "AS", f.Alias, f.Kind)
 		if f.Kind == "TAG" {
 			args = append(args, "CASESENSITIVE")
+		} else if f.Kind == "TEXT" {
+			args = append(args, "WEIGHT", 1)
 		} else if f.Kind == "VECTOR" {
 			attributes := []any{"TYPE", "FLOAT32", "DIM", f.Dimensions, "DISTANCE_METRIC", f.Metric}
 			if f.Algorithm == "HNSW" {

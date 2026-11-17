@@ -3,7 +3,8 @@
 `stores/redis` implements model collections on standalone Redis. The default
 uses atomic collection snapshots with exact dense search and portable filtering
 in Go. Opt-in `NativeIndexes` adds Redis Search HNSW/FLAT indexes and scalar
-filtering over immutable hash generations. It is available on master after v0.4.1. The default
+filtering over immutable hash generations, plus optional string full-text indexes.
+It is available on master after v0.4.1. The default
 encoded collection limit is 16 MiB; writes still process the whole collection.
 
 ```go
@@ -39,8 +40,8 @@ standalone address, not Redis Cluster, Sentinel or read-replica routing.
 - Local capability/identity metadata and structured operation errors.
 
 Binary/sparse vector definitions return `ErrUnsupported`. Without `NativeIndexes`,
-index hints are accepted for portability and build no indexes. Full-text and
-hybrid search are unsupported in either mode. Unknown search `ProviderOptions`
+index hints are accepted for portability and build no indexes. Native mode honors
+string full-text hints; keyword-query and hybrid APIs are unsupported. Unknown search `ProviderOptions`
 return `ErrUnsupported`. Migration planning and
 application are not advertised. Runtime embedders are never persisted or invoked
 while reconstructing stored vectors.
@@ -189,6 +190,59 @@ runtime parameter. `Exact: true` bypasses native execution for either method.
 Options are passed by value. Distances, score units and thresholds retain the
 public model contract.
 
+## Full-text indexing
+
+With `NativeIndexes: true`, mark a string property with `IsFullTextIndexed` or
+`vectordata:"data,fulltext"` to create a Redis `TEXT` field. Native capability
+metadata reports `FullTextIndexing: true`; default snapshot/plain hash modes keep
+it false. Non-string full-text definitions are rejected by model validation.
+
+```go
+definition.Data[0].IsFullTextIndexed = true
+// IsIndexed can also be true for independent exact TAG equality/IN filtering.
+```
+
+TEXT reuses the raw string hash projection. It has its own internal alias,
+separate from hex-encoded scalar TAG fields. NULL omits the projection; an empty
+string is retained but produces no text tokens. String values, including Unicode
+and embedded NUL bytes, remain intact in canonical records. A TEXT-only property
+does not enable scalar filter pushdown: Query/Count equality still compares the
+whole literal through Go fallback unless `IsIndexed` is also true.
+
+Creation selects English language, stemming and weight 1, retaining Redis's
+standard punctuation/case tokenization and default stopwords. No custom language,
+weights, phonetics or stopword options are exposed. Validation checks field
+identity/type, weight, stemming/index flags, reported index options and custom
+stopword lists before publication and native reads. FT.INFO does not expose every
+text setting (including language/phonetics on Redis 8.2); external index edits are
+unsupported. See Redis [tokenization](https://redis.io/docs/latest/develop/ai/search-and-query/advanced-concepts/escaping/)
+and [index options](https://redis.io/docs/latest/commands/ft.create/).
+
+There are at most 128 TEXT fields on the tested 64-bit Redis 8.2 server, within the
+provider's overall 512-field limit. Native handles reject larger definitions
+locally. These indexes participate in the same immutable generation, readiness,
+publication, retirement and pruning rules as vector/scalar indexes. Every indexed
+hash write also rebuilds the text index; Redis text-index allocator memory is outside
+the encoded byte budget.
+
+Full-text generations use **index metadata version 2**, separate from collection
+storage format 2. Version-1 indexes remain readable with their original scalar/
+vector schema, even when their registration already contains ignored full-text
+hints. `RebuildNativeIndexes` or the next native write adds TEXT fields without
+changing that registration. Collections with no full-text hints keep index
+metadata version 1. Plain hash readers can read either; older native clients that
+do not recognize index version 2 use their full-snapshot fallback. An older writer
+can publish a version-1 index again; a new native write/rebuild restores TEXT.
+Existing snapshot/hash storage upgrades follow the explicit operations above.
+Adding a previously absent full-text hint changes the registered model definition;
+rebuild does not perform that model-schema migration.
+
+This feature creates and validates physical indexes. `SearchText` and `SearchInput`
+still generate embeddings for vector search; no public keyword-query or hybrid
+search API is added. `HybridSearch` and `HybridKeywordTerms` capabilities stay
+false. Internal index names/field aliases remain private implementation details.
+See the [full-text sample mode](../samples/redis-store/README.md).
+
 ## Atomicity and concurrency
 
 Each collection has a Redis string at an internal key containing an encoded
@@ -332,7 +386,7 @@ Normal tests need no server. Integration tests start a disposable `redis:8.2`
 container by default; `REDIS_TEST_IMAGE` selects another image and `REDIS_TEST_ADDR`
 can point to an existing disposable standalone server. Each factory uses its own
 namespace and deletes only its collections. CI exercises Redis 7.4/8.2 on minimum
-and current Go and runs the sample twice per layout, plus native mode on 8.2. Tests cover both layouts with
+and current Go and runs the sample twice per layout, plus HNSW/FLAT/full-text modes on 8.2. Tests cover both layouts with
 the shared model, embedding
 and filter-parity contracts plus concurrent writes, integer sequence limits,
 conflicts, uncertain replies, deadlines, corruption, size limits and client reopen.
@@ -342,5 +396,9 @@ Redis Search projection compatibility. Native suites run the shared contracts,
 scalar differential cases, HNSW recall, FLAT exact-reference/roundoff cases,
 tie fallback, physical algorithm drift, readiness
 deadlines, concurrent publication, explicit rebuilds and uncertain-reply cleanup.
+TEXT checks cover real tokenization/stemming, Unicode, NULL/empty/NUL values,
+independent TAG equality, updates/deletes, visible schema drift, 128 fields,
+legacy index versions, storage upgrades and generated sequences. Shared HNSW/FLAT
+lifecycle fixtures include TEXT fields.
 `REDIS_REQUIRE_SEARCH=true` requires the native tests and projection proof instead
 of permitting skips on servers without Search.

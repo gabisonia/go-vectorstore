@@ -36,7 +36,8 @@ It is a workflow comparison, not a claim of API or feature equivalence with ever
 | Exact search | Yes | Yes, snapshot scan | Yes, snapshot scan | Yes, Go snapshot scan |
 | Physical vector indexes | HNSW/IVFFlat, supported tuples | No | No | Opt-in HNSW/FLAT, 16 dense tuples |
 | Native data indexes | B-tree/GIN by property type | No | No | Opt-in scalar TAG / split-integer NUMERIC |
-| Full-text and hybrid search | Yes | No | No | No |
+| Full-text indexing | Yes | No | No | Opt-in TEXT for strings |
+| Hybrid search | Yes | No | No | No |
 | Migration planning/application | Yes, additive subset | No | No | No |
 | Original Record API | Yes | No | No | No |
 
@@ -63,7 +64,9 @@ indexes for cosine/L2/squared-L2/inner-product float32/float16 models and accele
 eligible key/scalar filters. Unsupported cases retain Go exact evaluation. FLAT exhaustively
 remeasures all matching vectors in Go to preserve ordering through float roundoff.
 Writes rebuild the full generation's index; native reads still transfer the token manifest.
-Full-text/hybrid and schema migration capabilities remain absent. See
+Native mode also honors string full-text hints with Redis TEXT indexes; index
+metadata versions preserve existing scalar/vector-only generations until rebuild
+or a native write. Public keyword/hybrid APIs and schema migrations remain absent. See
 [native support, costs and guarantees](redis.md#native-indexes-and-search).
 
 ## Deliberate differences and future extensions

@@ -208,7 +208,7 @@ func (c *Collection) projectHashes(ctx context.Context, state snapshot) (hashMan
 	}
 	if c.store.nativeIndexes {
 		m.Index = c.indexName(m.Revision)
-		m.IndexVersion = 1
+		m.IndexVersion = c.nativeIndexVersion()
 		for _, p := range c.definition.Vectors {
 			if !nativeVectorProperty(p) {
 				continue

@@ -253,7 +253,7 @@ Queries and dense search materialize a memory collection, clearing runtime
 embedders before inserting stored records. Get/GetMany decode selected records;
 all still transfer the entire envelope. The configurable snapshot limit defaults
 to 16 MiB. Redis SCAN listing is deduplicated/sorted but not a namespace snapshot.
-Metadata is local; full-text/hybrid/migrations are unadvertised, and server
+Metadata is local; hybrid/migrations are unadvertised, and server
 persistence/eviction policy determines durability. See [Redis limits](redis.md).
 
 `StorageHash` creates new collections with a format-2 manifest and immutable HASH
@@ -273,5 +273,9 @@ preserve all 64 bits. Matching payloads or HNSW candidates are decoded after the
 connection is released, with exact Go sorting/scoring and unsupported-case fallback.
 FLAT retrieves all matching vector-bearing payloads for exact Go selection,
 including roundoff-sensitive distances and ties; HNSW retains approximate recall.
+Full-text string hints add TEXT aliases over raw projections in index metadata
+version 2. Version 1 retains its original physical schema, including previously
+ignored hints; explicit rebuild/native writes add TEXT. Validate observable TEXT
+options along with scalar/vector fields. Keyword-query/hybrid APIs remain absent.
 Writes rebuild the full index. Index cleanup separately protects current revisions
 and active leases; unknown publication results never drop a possibly current index.

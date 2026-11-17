@@ -371,4 +371,7 @@ transfer, with Go sorting/remeasurement and whole-snapshot fallback. Each write
 still rebuilds a full generation and index. FLAT exhaustively retrieves matching
 vectors for Go scoring/selection, preserving ordering through FLOAT32 roundoff;
 it reduces payload transfer only when filters or optional vectors exclude rows.
-Full-text/hybrid are unsupported.
+Native full-text hints add TEXT fields over existing raw string projections.
+Index metadata version 2 preserves version-1 scalar/vector-only reads until a
+rebuild or native write; the storage format and registrations are unchanged.
+Public keyword-query/hybrid APIs remain unsupported.
