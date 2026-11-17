@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math"
 	"testing"
 
@@ -18,7 +19,7 @@ func TestJSONConfigurationAndCanonicalProjection(t *testing.T) {
 	}
 	defer native.Close()
 	capsNative := native.Capabilities()
-	if len(capsNative.VectorIndexCapabilities) != 16 || len(capsNative.IndexedDataTypes) != 0 || capsNative.FullTextIndexing {
+	if len(capsNative.VectorIndexCapabilities) != 16 || len(capsNative.IndexedDataTypes) != 4 || capsNative.FullTextIndexing {
 		t.Fatalf("JSON vector capabilities: %+v", capsNative)
 	}
 	if s, err := New(StoreOptions{StorageMode: StorageJSON, NativeIndexes: true, DB: 1}); !errors.Is(err, vectordata.ErrUnsupported) {
@@ -67,5 +68,20 @@ func TestJSONConfigurationAndCanonicalProjection(t *testing.T) {
 	cancel()
 	if _, err := c.Count(ctx, nil); !errors.Is(err, context.Canceled) {
 		t.Fatalf("JSON cancellation lost: %v", err)
+	}
+}
+
+func TestJSONNativeScalarSchemaLimit(t *testing.T) {
+	s, err := New(StoreOptions{StorageMode: StorageJSON, NativeIndexes: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	d := vectordata.CollectionDefinition{Key: vectordata.KeyProperty{Name: "ID"}}
+	for i := range 128 {
+		d.Data = append(d.Data, vectordata.DataProperty{Name: fmt.Sprintf("Int%d", i), Type: vectordata.TypeInt64, IsIndexed: true})
+	}
+	if _, err := s.GetModelCollection("too_many", d, vectordata.ModelCollectionOptions{}); !errors.Is(err, vectordata.ErrUnsupported) {
+		t.Fatalf("JSON scalar schema limit ignored: %v", err)
 	}
 }

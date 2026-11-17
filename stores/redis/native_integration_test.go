@@ -69,11 +69,14 @@ func testIntegrationNativeFilterParityStorage(t *testing.T, mode StorageMode) {
 }
 
 func TestIntegrationNativeScalarPrecisionAndNulls(t *testing.T) {
+	runNativeStorage(t, testIntegrationNativeScalarPrecisionAndNullsStorage)
+}
+func testIntegrationNativeScalarPrecisionAndNullsStorage(t *testing.T, mode StorageMode) {
 	requireNativeSearch(t)
 	ctx := context.Background()
 	for _, kind := range []vectordata.KeyType{vectordata.KeyString, vectordata.KeyInt64, vectordata.KeyUint64, vectordata.KeyUUID} {
 		t.Run(string(kind), func(t *testing.T) {
-			s := integrationStore(t, StoreOptions{NativeIndexes: true})
+			s := integrationStore(t, StoreOptions{NativeIndexes: true, StorageMode: mode})
 			d := vectordata.CollectionDefinition{Key: vectordata.KeyProperty{Name: "ID", Type: kind}, Data: []vectordata.DataProperty{{Name: `text."雪`, Type: vectordata.TypeString, Optional: true, IsIndexed: true}, {Name: "Int", Type: vectordata.TypeInt64, Optional: true, IsIndexed: true}, {Name: "Float", Type: vectordata.TypeFloat64, Optional: true, IsIndexed: true}, {Name: "Bool", Type: vectordata.TypeBool, Optional: true, IsIndexed: true}, {Name: "JSON", Type: vectordata.TypeJSON, Optional: true}, {Name: "Decimal", Type: vectordata.TypeDecimal, Optional: true}}}
 			keys := []any{"a", "comma, space", "zero\x00byte", "雪", "\ufffd", "z", "quote'", "last"}
 			if kind == vectordata.KeyInt64 {
@@ -120,17 +123,40 @@ func TestIntegrationNativeScalarPrecisionAndNulls(t *testing.T) {
 			if kind == vectordata.KeyString {
 				filters = append(filters, vectordata.Eq(vectordata.Column("ID"), string([]byte{0xff})), vectordata.Not(vectordata.Eq(vectordata.Column("ID"), string([]byte{0xff}))))
 			}
+			nativeCalls, fullReads := 0, 0
+			s.client.AddHook(processHook{run: func(ctx context.Context, cmd goredis.Cmder, next goredis.ProcessHook) error {
+				if scriptIs(cmd, nativeSearchScript(mode)) {
+					nativeCalls++
+				}
+				if scriptIs(cmd, nativeReadScript(mode)) {
+					fullReads++
+				}
+				return next(ctx, cmd)
+			}})
 			for i, filter := range filters {
+				_, eligible, planErr := c.compileNativeFilter(filter)
+				if planErr != nil {
+					t.Fatal(planErr)
+				}
+				nativeCalls, fullReads = 0, 0
+
 				got, err := c.Count(ctx, filter)
 				want, wantErr := reference.Count(ctx, filter)
 				if err != nil || wantErr != nil || got != want {
 					t.Fatalf("count %d %T: %d/%v want %d/%v", i, filter, got, err, want, wantErr)
 				}
+				if eligible && (nativeCalls != 1 || fullReads != 0) {
+					t.Fatalf("count %d bypassed native filtering: native=%d full=%d", i, nativeCalls, fullReads)
+				}
 				for _, opts := range []vectordata.QueryOptions{{}, {OrderBy: []vectordata.SortField{{Property: "Int", Descending: true}, {Property: d.Data[0].Name}}, Skip: 1}, {OrderBy: []vectordata.SortField{{Property: "Float"}}}, {OrderBy: []vectordata.SortField{{Property: "ID", Descending: true}}, Skip: 2}} {
+					nativeCalls, fullReads = 0, 0
 					got, err := c.Query(ctx, filter, 3, opts)
 					want, wantErr := reference.Query(ctx, filter, 3, opts)
 					if err != nil || wantErr != nil || !reflect.DeepEqual(got, want) {
 						t.Fatalf("query %d %T: %+v/%v want %+v/%v", i, filter, got, err, want, wantErr)
+					}
+					if eligible && filter != nil && (nativeCalls != 1 || fullReads != 0) {
+						t.Fatalf("query %d bypassed native filtering: native=%d full=%d", i, nativeCalls, fullReads)
 					}
 				}
 			}
@@ -352,9 +378,6 @@ func testNativeReadsRemainOnOneGeneration(t *testing.T, method vectordata.IndexM
 					t.Fatal(err)
 				}
 				readScript := nativeSearchScript(mode)
-				if mode == StorageJSON && operation != "search" {
-					readScript = readJSON
-				}
 				changed := false
 				s.client.AddHook(hashFailureHook{process: func(ctx context.Context, cmd goredis.Cmder, next goredis.ProcessHook) error {
 					if !scriptIs(cmd, readScript) || changed {
@@ -394,12 +417,7 @@ func testNativeReadsRemainOnOneGeneration(t *testing.T, method vectordata.IndexM
 						t.Fatalf("mixed query: %+v %v", rows, err)
 					}
 				case "search":
-					hits, err := c.Search(ctx, []float32{1, 0}, 1, vectordata.ModelSearchOptions{Filter: func() vectordata.Filter {
-						if mode == StorageJSON {
-							return nil
-						}
-						return filter
-					}()})
+					hits, err := c.Search(ctx, []float32{1, 0}, 1, vectordata.ModelSearchOptions{Filter: filter})
 					if err != nil || len(hits) != 1 || hits[0].Record.Data["Value"] != want {
 						t.Fatalf("mixed search: %+v %v", hits, err)
 					}
@@ -413,9 +431,12 @@ func testNativeReadsRemainOnOneGeneration(t *testing.T, method vectordata.IndexM
 }
 
 func TestIntegrationNativeIndexDriftAndReadiness(t *testing.T) {
+	runNativeStorage(t, testIntegrationNativeIndexDriftAndReadinessStorage)
+}
+func testIntegrationNativeIndexDriftAndReadinessStorage(t *testing.T, mode StorageMode) {
 	requireNativeSearch(t)
 	ctx := context.Background()
-	s := integrationStore(t, StoreOptions{NativeIndexes: true})
+	s := integrationStore(t, StoreOptions{NativeIndexes: true, StorageMode: mode})
 	c := nativeLifecycleCollection(t, s)
 	if _, err := c.Insert(ctx, nativeLifecycleRows("kept")); err != nil {
 		t.Fatal(err)
@@ -436,8 +457,13 @@ func TestIntegrationNativeIndexDriftAndReadiness(t *testing.T) {
 	// An unexpected indexed document makes the index incomplete with respect to
 	// the manifest. Native reads must fall back to canonical manifest records.
 	m, _ = currentManifest(t, c)
-	foreign := c.generationPrefix(m.Revision) + "r:unexpected"
-	if err := s.client.HSet(ctx, foreign, "__vs_revision", m.Revision).Err(); err != nil {
+	foreign := c.nativeGenerationPrefix(m) + "r:unexpected"
+	if mode == StorageJSON {
+		raw, _ := json.Marshal(jsonDocument{Revision: m.Revision})
+		if err := s.client.Do(ctx, "JSON.SET", foreign, "$", string(raw)).Err(); err != nil {
+			t.Fatal(err)
+		}
+	} else if err := s.client.HSet(ctx, foreign, "__vs_revision", m.Revision).Err(); err != nil {
 		t.Fatal(err)
 	}
 	fields, err := c.nativeFields(m)
@@ -448,7 +474,11 @@ func TestIntegrationNativeIndexDriftAndReadiness(t *testing.T) {
 	wait, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	for {
-		reply, err := s.client.Eval(wait, nativeIndexStatus, []string{m.Index}, c.generationPrefix(m.Revision), string(schema), 3).Slice()
+		keytype := "HASH"
+		if mode == StorageJSON {
+			keytype = "JSON"
+		}
+		reply, err := s.client.Eval(wait, nativeIndexStatus, []string{m.Index}, c.nativeGenerationPrefix(m), string(schema), 3, keytype).Slice()
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -467,7 +497,7 @@ func TestIntegrationNativeIndexDriftAndReadiness(t *testing.T) {
 	}
 	full := 0
 	s.client.AddHook(processHook{run: func(ctx context.Context, cmd goredis.Cmder, next goredis.ProcessHook) error {
-		if scriptIs(cmd, readHash) {
+		if scriptIs(cmd, nativeReadScript(mode)) {
 			full++
 		}
 		return next(ctx, cmd)

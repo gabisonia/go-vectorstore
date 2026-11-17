@@ -99,9 +99,6 @@ func testIntegrationNativeFlatExactReferenceStorage(t *testing.T, mode StorageMo
 					}
 				}
 				expectedNative, expectedFull := 21, 0
-				if mode == StorageJSON {
-					expectedNative, expectedFull = 9, 12
-				}
 				if native != expectedNative || full != expectedFull {
 					t.Fatalf("FLAT queries did not stay native: native=%d full=%d", native, full)
 				}

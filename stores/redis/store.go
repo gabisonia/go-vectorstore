@@ -214,7 +214,7 @@ func (s *Store) GetModelCollection(name string, d vectordata.CollectionDefinitio
 	if s.nativeIndexes {
 		m := hashManifest{IndexVersion: c.nativeIndexVersion()}
 		if s.storageMode == StorageJSON {
-			m.Format, m.IndexVersion = 3, 3
+			m.Format, m.IndexVersion = 3, 4
 		}
 		for _, p := range d.Vectors {
 			if nativeVectorProperty(p) {

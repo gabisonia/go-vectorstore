@@ -68,10 +68,12 @@ RedisJSON format 3 uses immutable JSON wrapper documents with canonical payload
 strings; never parse canonical numeric values through RedisJSON or Lua cjson.
 Preserve leases, final-SET publication and atomic wrapper reads. Conversion from
 snapshots/hashes is explicit; prune only obsolete non-expiring keys with current
-manifest protection. JSON native mode advertises vector indexes only; filtered searches/Query/Count
-retain Go evaluation until scalar indexes exist. Keep vector projections separate
-from canonical payloads, and native KNN/wrapper reads in the manifest/readiness Lua
-guard. Scope index pruning to each layout's lease and namespace.
+manifest protection. JSON native mode advertises scalar/vector indexes; full-text
+stays unadvertised. Keep canonical payloads opaque, literal tags encoded and integer
+NUMERIC components limited to exact 32-bit halves. Preserve version-3 vector-only
+schemas/Go filter fallback until an explicit rebuild or native write publishes
+version 4. Keep filtering/KNN/wrapper reads in the manifest/readiness Lua guard.
+Scope index pruning to each layout's lease and namespace.
 CI's Redis 8.2 job requires real JSON contracts, native conformance/recall and the
 projection proof; Redis 7.4 covers missing-module behavior. CI separates storage
 and native index suites to bound their runtime; the expanded native matrix has a

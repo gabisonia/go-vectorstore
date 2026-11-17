@@ -3,7 +3,7 @@
 `stores/redis` implements model collections on standalone Redis. The default
 uses atomic collection snapshots with exact dense search and portable filtering
 in Go. Opt-in `NativeIndexes` adds Redis Search HNSW/FLAT indexes and scalar
-filtering over immutable hash generations, plus optional string full-text indexes.
+filtering over immutable HASH/JSON generations, plus HASH string full-text indexes.
 Opt-in `StorageJSON` uses immutable RedisJSON documents with Go exact search or
 native vector indexes.
 It is available on master after v0.4.1. The default encoded collection limit is
@@ -133,26 +133,47 @@ eligible vector index hints as shown below. Each wrapper then adds
 `__vs_vectors`, containing bounded FLOAT32 arrays under internal aliases (`v0`,
 `v1`, ...). Float16 models are rounded before projection; the opaque canonical
 payload remains authoritative for returned data and exact distance/score units.
-Index metadata version 3 uses a separate JSON index prefix and `ON JSON` schema,
-with paths `$.__vs_revision` and `$.__vs_vectors.vN`. Internal aliases keep logical
-property names out of JSONPath syntax. Earlier format-3 readers ignore these
-additional fields; unknown index versions fall back to the canonical Go path.
+JSON indexes use a separate scoped prefix and `ON JSON` schema. Revision and
+vector paths are `$.__vs_revision` and `$.__vs_vectors.vN`. Internal aliases keep
+logical property names out of JSONPath syntax. Earlier format-3 readers ignore
+additional wrapper fields; unknown index versions use the canonical Go path.
 
-JSON native mode advertises the same 16 vector tuples as HASH native mode, with
-no scalar or full-text index capabilities. Query, Count and **all filtered vector
-searches** still use full-collection Go evaluation. Unfiltered HNSW uses native
-candidates; FLAT fetches every vector-bearing wrapper and remeasures in Go for
-exact ordering, including ties and float roundoff. Missing/unready indexes,
-unsupported or unsafe vectors, and `SearchTuning{Exact: true}` use canonical Go
-search. Native KNN, readiness/physical-schema checks and `JSON.GET` for selected
-wrappers run in one Lua execution. Only wrapper metadata is parsed by Lua; the
-payload string's canonical numbers never enter Redis/Lua numeric parsing.
+JSON native mode advertises the same 16 vector tuples and indexed
+string/int64/float64/bool types as HASH native mode. Index metadata **version 4**
+adds `__vs_scalars` projections: literal hex-encoded TAG values, explicit presence
+markers and high/low 32-bit NUMERIC components for int64 data and integer keys.
+Full 64-bit values and float64 equality values never enter RedisJSON/Lua numeric
+parsing. Split components fit exactly in their numeric representation. Scalar
+paths use internal names such as `$.__vs_scalars.__vs_tag_0`, separate from vectors
+and canonical payloads. TAG fields explicitly use comma separators and case
+sensitivity; hex tags contain no commas. Physical readiness checks validate paths,
+types, separators and other observable index settings. See Redis's
+[TAG defaults](https://redis.io/docs/latest/develop/ai/search-and-query/advanced-concepts/tags/).
 
-Opening existing plain JSON storage does not build indexes. Use
-`Collection.RebuildNativeIndexes` with matching hints, or perform a native write.
-Plain JSON writers remain compatible and publish an unindexed generation; native
-readers then fall back to Go until an explicit rebuild/native write. JSON scalar
-and full-text indexes, keyword-query and hybrid APIs remain unsupported.
+Eligible filtered Query, Count and HNSW/FLAT searches use the existing native
+filter compiler, including SQL NULL/UNKNOWN logic, exact equality and integer
+ranges. Count returns an index count without fetching/decoding canonical payloads;
+Query downloads all matching payloads and sorts/pages in Go. HNSW selects native
+candidates; FLAT fetches every matching vector-bearing wrapper and remeasures in
+Go for exact ordering, including ties and float roundoff. Missing/unready indexes,
+unsupported filters or unsafe vectors, and `SearchTuning{Exact: true}` retain the
+canonical Go fallback. Unfiltered Query and Get/GetMany still load the complete
+generation. Native filtering/KNN, readiness/physical-schema checks and selected
+`JSON.GET` wrapper reads share one Lua execution. Only outer wrappers are parsed;
+canonical payload strings remain opaque.
+
+Existing **version-3 vector-only indexes** retain their original schema and native
+unfiltered vector search. Their Query, Count and filtered searches continue through
+Go until an explicit `Collection.RebuildNativeIndexes` or native write publishes
+version 4. Reads never rebuild indexes. Rebuild preserves the registered model,
+records and generated sequence; adding a previously absent index hint still changes
+the model definition. Older native clients that do not recognize version 4 fall
+back to Go. Plain JSON writers publish an unindexed generation, while older native
+writers can publish vector-only version 3; newer readers fall back appropriately.
+Opening existing plain JSON storage also does not build indexes implicitly.
+
+JSON full-text indexes, keyword-query and hybrid APIs remain unsupported. A JSON
+full-text hint stays portable metadata, independent of scalar `IsIndexed` hints.
 
 To convert an existing snapshot or hash collection, use its unchanged registered
 definition and call:
@@ -243,7 +264,7 @@ Capabilities are local configuration metadata, not a module/permission probe:
   native path. Any unsafe stored vector omits that vector field from the entire
   generation's index; an unsafe query also uses Go exact search. The canonical
   values remain intact.
-- On HASH storage, keys support equality, `In`, existence and int64/uint64 ranges. Indexed string,
+- On HASH and JSON storage, keys support equality, `In`, existence and int64/uint64 ranges. Indexed string,
   int64, float64 and bool data properties support equality, `In` and existence;
   indexed int64 also supports ranges. Integer ranges retain all 64 bits through
   split fields. Literal TAG values use hex encoding, including punctuation and
@@ -254,7 +275,7 @@ Capabilities are local configuration metadata, not a module/permission probe:
   tokenization), `In` lists over 256, deep/large trees and excessive parameters
   also use Go evaluation. Native schemas allow at most 512 physical fields.
 
-On HASH storage, native filtered Query downloads matching canonical records, validates them and
+Native filtered Query on HASH/JSON downloads matching canonical records, validates them and
 sorts/pages in Go. Native Count returns the index count without decoding record
 payloads or validating their vectors. HNSW selects an enlarged candidate set,
 then recomputes distances/scores and applies thresholds, stable key ordering and
@@ -503,9 +524,12 @@ deadlines, concurrent publication, explicit rebuilds and uncertain-reply cleanup
 TEXT checks cover real tokenization/stemming, Unicode, NULL/empty/NUL values,
 independent TAG equality, updates/deletes, visible schema drift, 128 fields,
 legacy index versions, storage upgrades and generated sequences. Shared HNSW/FLAT
-lifecycle fixtures include TEXT fields on HASH, and vector-only indexes on JSON.
+lifecycle fixtures include TEXT fields on HASH, and scalar/vector indexes on JSON.
 JSON-native checks additionally cover internal paths, full-precision canonical
 results, projection byte budgets, unknown versions and publication conflicts.
+Scalar checks additionally cover all key types, exact integer ranges, NULL truth,
+physical path/separator drift, native routing, Count without payload decoding and
+explicit upgrades from version-3 vector-only indexes.
 `REDIS_REQUIRE_SEARCH=true` requires the native tests and projection proof instead
 of permitting skips on servers without Search. `REDIS_REQUIRE_JSON=true` similarly
 requires the real RedisJSON contracts. JSON tests also check extreme numeric

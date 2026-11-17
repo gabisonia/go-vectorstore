@@ -2,11 +2,19 @@
 
 ## Unreleased
 
+- Add native RedisJSON scalar filtering for indexed strings, int64, float64 and
+  bool values plus keys, accelerating filtered Query/Count and HNSW/FLAT search.
+  Preserve full integer precision and SQL NULL truth with separate literal TAGs,
+  presence markers and split integer projections. Index metadata version 4 retains
+  vector-only version-3 reads until explicit rebuild/native writes. Cover native
+  routing, precision, drift, compatibility and atomic lifecycle behavior; update
+  samples, capability discovery and measured benchmarks. JSON full-text remains
+  deferred.
+
 - Add opt-in RedisJSON native HNSW/FLAT vector indexes with canonical precision,
   prepublication readiness, atomic KNN/wrapper reads, explicit rebuild and safe
   index pruning. Cover both native layouts with contracts, recall/exact-reference
-  and failure tests; add rerunnable JSON native samples and CI. JSON scalar and
-  full-text indexes remain deferred.
+  and failure tests; add rerunnable JSON native samples and CI.
 
 - Add opt-in RedisJSON storage with immutable format-3 document generations,
   atomic manifest publication/reads and explicit snapshot/hash conversion.
