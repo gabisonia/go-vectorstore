@@ -21,6 +21,7 @@ go run ./samples/sqlite-store -db "$sample_tmp/documents.db" -native -rebuild-ve
 go run ./samples/sqlitevec-store -db "$sample_tmp/sqlitevec.db"
 go run ./samples/sqlitevec-store -db "$sample_tmp/sqlitevec.db"
 go run ./samples/sqlitevec-store -db "$sample_tmp/sqlitevec.db" -rebuild-vectors
+go run ./samples/sqlite-workload -records 200 -dimensions 8 -tops 3,7 -samples 1 -payload-bytes 64 -quiet -output "$sample_tmp/workload.jsonl"
 go run ./samples/typed-search -category architecture
 go run ./samples/typed-rag -sqlite "$sample_tmp/rag.db"
 for recipe in single-record named-vectors scalar-query key-filters squared-l2 iterators embedded-iterators metadata capabilities; do

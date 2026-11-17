@@ -29,7 +29,7 @@ Acceptance: unchanged models reopen unchanged files; annotations survive every
 provider; Redis NoStem changes keyword matching and mismatched indexes fail
 closed. Unknown Redis-owned options are rejected rather than silently ignored.
 
-## 2. SQLite vector execution — scalar L1 adapter implemented; awaiting merge
+## 2. SQLite vector execution — workload measurements in progress
 
 First investigate sqlite-vec integration and its platform/driver requirements.
 Keep the current pure-Go, extension-free provider available. Propose a separate
@@ -56,16 +56,22 @@ canonical retrieval. Shared conformance, numerical/full-sort parity, released
 fixtures, cancellation and WAL snapshot tests cover the foundation. This does not
 add extension ranking or advertise vector index capabilities.
 
-The [opt-in sqlite-vec adapter](sqlitevec.md) now uses the reviewed scalar L1 double
+The [opt-in sqlite-vec adapter](sqlitevec.md) merged in
+[PR #58](https://github.com/gabisonia/go-vectorstore/pull/58) after all 17 CI jobs
+passed, including the shared Windows drive-path URI correction. It uses the reviewed scalar L1 double
 kernel to select complete distance-boundary candidates, then retains exact Go
 ranking and page retrieval in the same WAL snapshot. Version/build flags are
 verified before schema creation. Other metrics, filters and dirty projections
 retain their existing paths. Conformance, bit-level numerical checks, boundary
 ties, native-key precision, concurrency, cancellation and three-OS CGo-free CI
 cover this increment. A reproducible 1k/10k L1 benchmark compares all three paths.
-Next after merge: broader workload/write/rebuild measurement; native L2/cosine
-remain gated by their separate numerical proofs. Do not expand native metric
-claims solely from extension availability.
+The current [workload harness](../samples/sqlite-workload/README.md) adds independent
+page verification, random/tied profiles, 1%/10% eligibility, top 10/100, warm/reopened
+queries, durable batch writes, explicit rebuild and storage observations. Full
+10k/100k by 128/768 measurements run outside CI; small correctness/cleanup profiles
+run on all three OSes. Publish raw artifacts and conditions before recommendations.
+Native L2/cosine remain gated by separate numerical proofs; extension availability
+alone must not expand native metric claims. Qdrant follows this measurement increment.
 
 ## 3. Connector breadth: Qdrant — queued
 

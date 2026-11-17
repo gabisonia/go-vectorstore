@@ -392,6 +392,7 @@ git push origin "v${RELEASE_VERSION}"
 - Model-driven collections (no API key): [`samples/model-store`](samples/model-store/README.md)
 - Persistent SQLite and optional vectors (no API key): [`samples/sqlite-store`](samples/sqlite-store/README.md)
 - Optional SQLite scalar L1 execution: [`samples/sqlitevec-store`](samples/sqlitevec-store/README.md)
+- Reproducible SQLite workload measurements: [`samples/sqlite-workload`](samples/sqlite-workload/README.md) (small default, explicit larger matrix)
 - Semantic search sample app: `samples/semantic-search`
 - RAG sample app (`RAGrimosa`): `samples/ragrimosa`
 

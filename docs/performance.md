@@ -68,6 +68,11 @@ rebuild and exact projected search. The immutable release fixture is checked in 
 
 ## SQLite-vec L1 verification
 
+The [workload harness](../samples/sqlite-workload/README.md) extends this microbenchmark
+with filtered eligibility, top 100, larger dimensions/collections, reopened
+connections, writes/rebuilds and storage observations. Its independent page checks
+run in normal and CGo-free three-OS CI; full measurements are opt-in and sequential.
+
 ```sh
 go test -race ./stores/sqlitevec ./internal/exactsearch
 go test -race -tags=sqlitevecprobe -run TestNativeVector ./stores/sqlite
