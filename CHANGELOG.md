@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Preserve Redis context deadline causes when a socket timeout arrives before
+  the context timer updates; retain native errors and shorter client timeouts.
 - Add opt-in Redis hash generations with atomic manifest publication and explicit
   format-1 upgrades. Preserve schema, key sequences and consistent reads; expose
   scalar/vector hash fields without creating indexes. Add safe orphan pruning,

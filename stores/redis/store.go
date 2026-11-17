@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"sort"
 	"strconv"
 	"strings"
@@ -204,8 +205,18 @@ func (s *Store) EnsureModelCollection(ctx context.Context, name string, d vector
 
 // resolveContext preserves cancellation even when a socket error races its expiry.
 func resolveContext(ctx context.Context, err error) error {
-	if err != nil && ctx.Err() != nil {
-		return errors.Join(ctx.Err(), err)
+	if err == nil {
+		return nil
+	}
+	if cause := ctx.Err(); cause != nil {
+		return errors.Join(cause, err)
+	}
+	// The netpoller can observe an expired socket deadline before the context
+	// timer updates Err. Infer that cause only for a timeout at/after the caller's
+	// deadline; shorter client timeouts and unrelated Redis errors stay intact.
+	var timeout net.Error
+	if deadline, ok := ctx.Deadline(); ok && !time.Now().Before(deadline) && errors.As(err, &timeout) && timeout.Timeout() {
+		return errors.Join(context.DeadlineExceeded, err)
 	}
 	return err
 }
