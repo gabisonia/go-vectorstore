@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Investigate SQLite vector execution using the pinned driver's pure-Go
+  sqlite-vec package. Record the opt-in design, precision and mixed-writer gates,
+  and add an isolated compatibility probe with CGo-free Linux/macOS/Windows CI.
+  Production provider behavior and capabilities remain unchanged.
+
 - Add immutable JSON-backed provider annotations on key/data/vector definitions,
   typed accessors, exact numeric canonicalization and backward-compatible empty
   registrations. Implement Redis TEXT NoStem with typed options, local validation
