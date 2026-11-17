@@ -29,7 +29,7 @@ Acceptance: unchanged models reopen unchanged files; annotations survive every
 provider; Redis NoStem changes keyword matching and mismatched indexes fail
 closed. Unknown Redis-owned options are rejected rather than silently ignored.
 
-## 2. SQLite vector execution — workload evidence and write fix implemented; awaiting merge
+## 2. SQLite vector execution — initial execution and workload evidence merged
 
 First investigate sqlite-vec integration and its platform/driver requirements.
 Keep the current pure-Go, extension-free provider available. Propose a separate
@@ -77,15 +77,34 @@ tests check actual plans without timing thresholds. The interrupted diagnostic i
 labeled separately and excluded from final matrix results. Reopened samples do
 not claim cold-disk behavior, and outliers/tied/filtered limits are retained.
 Native L2/cosine remain gated by separate numerical proofs; extension availability
-alone must not expand native metric claims. Qdrant follows after this increment merges.
+alone must not expand native metric claims. The workload increment in
+[PR #59](https://github.com/gabisonia/go-vectorstore/pull/59) merged after all 17 CI
+jobs passed. Its existing-index cleanup fix, full raw evidence and reproducible
+summaries are on master. Controlled cold I/O, concurrency measurements and other
+native metrics remain future optimizations rather than prerequisites for Qdrant.
 
-## 3. Connector breadth: Qdrant — queued
+## 3. Connector breadth: Qdrant — compatibility probe/design implemented; awaiting merge
 
 Add one connector at a time, starting with Qdrant. Begin with collection lifecycle,
 typed/dynamic CRUD, dense vectors, filtering, metadata and shared conformance on a
 real disposable server. Advertise only verified capabilities. Add sparse/hybrid
 support in subsequent PRs as the backend contract permits. Reuse existing codecs
 and embedding resolution instead of creating a parallel API.
+
+The [Qdrant design and real-server probe](qdrant-design.md) establish the first
+increment on pinned Qdrant 1.20.2. Native IDs, metadata, canonical envelopes and
+named-vector/filter primitives work. Duplicate rejection, multi-page snapshots,
+missing-value negation and native score precision need explicit adaptation.
+`insert_only` silently skips duplicates; atomic aliases do not compare the prior
+target. Conditional updates are a candidate for a revision-guarded manifest, but
+matching/skipped writes both return completed. This increment adds no public
+provider or advertised capabilities. Linux minimum/current-Go CI verifies the
+probe without changing default test/server requirements.
+
+Next prove immutable generation publication, conflict/unknown-outcome handling,
+reader retention, topology and resource limits in a focused PR. Only then expose
+the provider foundation and run shared conformance on a real server. Native
+candidate acceleration and sparse/hybrid remain later increments.
 
 ## 4. Embedding output flexibility — queued
 

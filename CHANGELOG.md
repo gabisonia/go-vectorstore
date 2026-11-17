@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add an opt-in real Qdrant 1.20.2 compatibility probe and connector design.
+  Verify canonical payloads, IDs, metadata and named vectors; preserve measured
+  duplicate-insert, conditional-publication, snapshot, filter-truth and distance
+  gates before exposing a public provider. Add minimum/current-Go server CI.
+
 - Fix SQLite vector projection cleanup choosing a collection scan per written
   record. Require its existing collection/key index for insert/upsert/backfill
   cleanup, avoiding quadratic large-vector reads without changing stored formats.
