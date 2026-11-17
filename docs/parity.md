@@ -38,8 +38,8 @@ model writes expose the portable ErrInvalidRecord sentinel and native SQLSTATE
 or exception/return-value semantics.
 
 Implementation follows the [ordered parity plan](parity-plan.md). Provider
-annotations are the current increment; SQLite vector execution and Qdrant are the
-next provider projects. Embedding output types, typed property references and
+annotations have merged; SQLite vector projections are the current increment,
+with opt-in extension execution and Qdrant following. Embedding output types, typed property references and
 native service access are tracked separately.
 
 ## Provider matrix
@@ -50,7 +50,7 @@ native service access are tracked separately.
 | Model keys, all portable data types | Yes | Yes | Yes | Yes, canonical JSON |
 | Dense/float16 and optional vectors | Yes | Yes | Yes | Yes |
 | Binary/sparse vectors | Yes | Yes | Yes | No |
-| Exact search | Yes | Yes, snapshot scan | Yes, snapshot scan | Yes, Go snapshot scan |
+| Exact search | Yes | Yes, canonical/optional packed scan | Yes, snapshot scan | Yes, Go snapshot scan |
 | Physical vector indexes | HNSW/IVFFlat, supported tuples | No | No | Opt-in HNSW/FLAT, 16 dense tuples |
 | Native data indexes | B-tree/GIN by property type | Opt-in scalar B-tree | No | Opt-in HASH/JSON scalar TAG / split-integer NUMERIC |
 | Full-text indexing | Yes | No | No | Opt-in HASH/JSON TEXT for strings |
@@ -71,6 +71,10 @@ combinations retain full-snapshot evaluation. Opt-in `NativeIndexes` adds scalar
 B-tree projections for indexed string/int64/float64/bool fields. New collections
 build transactionally; existing collections require explicit `RebuildScalarIndexes`.
 Triggers preserve compatibility with older writers. Vector indexes remain absent.
+Optional `VectorProjections` adds packed dense storage for unfiltered exact Go
+ranking and page-only canonical retrieval. Existing/dirty collections require
+explicit `RebuildVectorProjections`; ordinary triggers invalidate readiness for
+unaware writers. Filtered/binary/sparse searches keep their canonical scan.
 See [query costs](sqlite.md#query-costs-and-provider-limits),
 [scalar measurements](performance.md#sqlite-scalar-query-verification) and
 [index verification](performance.md#sqlite-scalar-index-verification).

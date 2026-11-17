@@ -14,6 +14,14 @@ import (
 )
 
 func TestReleasedFormat1Compatibility(t *testing.T) {
+	for _, projections := range []bool{false, true} {
+		t.Run(fmt.Sprintf("projections_%t", projections), func(t *testing.T) {
+			testReleasedFormat1Compatibility(t, StoreOptions{VectorProjections: projections})
+		})
+	}
+}
+
+func testReleasedFormat1Compatibility(t *testing.T, options StoreOptions) {
 	read := func(name string) []byte {
 		t.Helper()
 		data, err := os.ReadFile(filepath.Join("testdata", "v0.4.0", name))
@@ -46,7 +54,7 @@ func TestReleasedFormat1Compatibility(t *testing.T) {
 		t.Fatal(err)
 	}
 	ctx := context.Background()
-	store, err := Open(ctx, path, StoreOptions{})
+	store, err := Open(ctx, path, options)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,6 +64,11 @@ func TestReleasedFormat1Compatibility(t *testing.T) {
 			c, err := store.EnsureModelCollection(ctx, name, d, vectordata.ModelCollectionOptions{})
 			if err != nil {
 				t.Fatal(err)
+			}
+			if options.VectorProjections {
+				if err := c.(*Collection).RebuildVectorProjections(ctx); err != nil {
+					t.Fatal(err)
+				}
 			}
 			rows, err := c.Query(ctx, nil, 10, vectordata.QueryOptions{IncludeVectors: true})
 			if err != nil {

@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add opt-in SQLite packed dense vector projections with explicit bounded-memory
+  backfill, transactional readiness and unaware-writer invalidation. Preserve
+  canonical format 1 and exact Go distances/native-key ties; unfiltered dense
+  searches scan selected vectors and retrieve only the canonical result page in
+  one WAL snapshot. Keep canonical fallback for dirty/absent projections and
+  filtered/binary/sparse searches. Cover shared conformance, full-sort parity,
+  atomicity, cancellation, released fixtures, concurrency and rerunnable samples.
+
 - Investigate SQLite vector execution using the pinned driver's pure-Go
   sqlite-vec package. Record the opt-in design, precision and mixed-writer gates,
   and add an isolated compatibility probe with CGo-free Linux/macOS/Windows CI.

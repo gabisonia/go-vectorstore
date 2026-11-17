@@ -14,6 +14,10 @@ go run ./samples/sqlite-store -db "$sample_tmp/documents.db"
 go run ./samples/sqlite-store -db "$sample_tmp/documents.db" -native
 go run ./samples/sqlite-store -db "$sample_tmp/documents.db" -native
 go run ./samples/sqlite-store -db "$sample_tmp/documents.db" -rebuild-indexes
+go run ./samples/sqlite-store -db "$sample_tmp/documents.db" -vector-projections
+go run ./samples/sqlite-store -db "$sample_tmp/documents.db" -rebuild-vectors
+go run ./samples/sqlite-store -db "$sample_tmp/documents.db" -rebuild-vectors
+go run ./samples/sqlite-store -db "$sample_tmp/documents.db" -native -rebuild-vectors
 go run ./samples/typed-search -category architecture
 go run ./samples/typed-rag -sqlite "$sample_tmp/rag.db"
 for recipe in single-record named-vectors scalar-query key-filters squared-l2 iterators embedded-iterators metadata capabilities; do

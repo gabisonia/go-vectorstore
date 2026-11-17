@@ -351,6 +351,11 @@ snapshot through the shared `internal/exactsearch` top-K selector, retaining onl
 `top + Skip` candidates. Memory uses that selector over a shallow snapshot of
 immutable records. Both copy only the returned search page and release resources
 before application iteration. Runtime embedders are cleared during stored reads.
+Optional dense `VectorProjections` scan packed vectors for unfiltered searches,
+use the same Go ranking and fetch only the selected canonical page in that read
+snapshot. Ordinary triggers invalidate readiness; aware writers maintain affected
+rows and restore readiness atomically only from a previously ready state. Dirty
+or absent projections require explicit rebuild and otherwise use canonical scans.
 Native values are decoded by declared type, with a separate SQL NULL marker for JSON properties. See [sqlite.md](sqlite.md) for workload limits.
 
 The default Redis layout stores one versioned collection envelope per Redis string. Reads obtain a

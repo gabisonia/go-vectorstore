@@ -1,7 +1,8 @@
 // Package sqlite provides durable embedded model collections with exact search.
 // Reads use indexed key lookups or native scalar SQL where supported, with
 // snapshot evaluation for other predicates. Exact search uses bounded ranking.
-// Opt-in scalar indexes accelerate eligible filters. No native ANN, full-text
+// Opt-in scalar indexes accelerate eligible filters; dense vector projections
+// avoid full-payload decoding for unfiltered exact searches. No native ANN, full-text
 // indexes, hybrid search, or automatic schema migrations are provided.
 package sqlite
 
@@ -27,17 +28,21 @@ import (
 type StoreOptions struct {
 	// NativeIndexes builds scalar projections for supported IsIndexed fields in new
 	// collections. Existing collections require RebuildScalarIndexes.
-	NativeIndexes      bool
+	NativeIndexes bool
+	// VectorProjections builds packed dense vectors for new collections. Existing
+	// collections require RebuildVectorProjections. Ranking remains exact in Go.
+	VectorProjections  bool
 	Embedder           vectordata.Embedder
 	InputEmbedder      vectordata.InputEmbedder
 	EmbeddingBatchSize int
 }
 
 type Store struct {
-	db            *sql.DB
-	options       vectordata.ModelCollectionOptions
-	databaseName  string
-	nativeIndexes bool
+	db                *sql.DB
+	options           vectordata.ModelCollectionOptions
+	databaseName      string
+	nativeIndexes     bool
+	vectorProjections bool
 }
 
 var _ vectordata.ModelStore = (*Store)(nil)
@@ -80,7 +85,7 @@ func Open(ctx context.Context, path string, opts StoreOptions) (*Store, error) {
 	}
 	db.SetMaxOpenConns(1)
 	db.SetMaxIdleConns(1)
-	s := &Store{db: db, options: defaults, databaseName: databaseName, nativeIndexes: opts.NativeIndexes}
+	s := &Store{db: db, options: defaults, databaseName: databaseName, nativeIndexes: opts.NativeIndexes, vectorProjections: opts.VectorProjections}
 	if err := s.initialize(ctx); err != nil {
 		db.Close()
 		return nil, err
@@ -103,6 +108,11 @@ func (s *Store) initialize(ctx context.Context) error {
 	}
 	if s.nativeIndexes {
 		if err := initializeScalarIndexes(ctx, tx); err != nil {
+			return err
+		}
+	}
+	if s.vectorProjections {
+		if err := initializeVectorProjections(ctx, tx); err != nil {
 			return err
 		}
 	}
@@ -267,6 +277,11 @@ func (c *Collection) EnsureExists(ctx context.Context) (err error) {
 			return err
 		}
 	}
+	if created != 0 && c.store.vectorProjections {
+		if err := c.rebuildVectorProjections(ctx, tx); err != nil {
+			return err
+		}
+	}
 	return tx.Commit()
 }
 func (c *Collection) Insert(ctx context.Context, records []vectordata.ModelRecord) ([]any, error) {
@@ -291,6 +306,10 @@ func (c *Collection) write(ctx context.Context, records []vectordata.ModelRecord
 	}
 	defer tx.Rollback()
 	next, err := c.metadata(ctx, tx)
+	if err != nil {
+		return nil, err
+	}
+	project, err := c.vectorProjectionsReady(ctx, tx)
 	if err != nil {
 		return nil, err
 	}
@@ -324,10 +343,20 @@ func (c *Collection) write(ctx context.Context, records []vectordata.ModelRecord
 		if _, err = tx.ExecContext(ctx, statement, c.name, keyToken(r.Key), payload); err != nil {
 			return nil, err
 		}
+		if project {
+			if err := c.projectVectors(ctx, tx, r); err != nil {
+				return nil, err
+			}
+		}
 		keys[i] = r.Key
 	}
 	if _, err = tx.ExecContext(ctx, `UPDATE __vectorstore_collections SET next_key=? WHERE name=?`, next, c.name); err != nil {
 		return nil, err
+	}
+	if project {
+		if err := c.publishVectorProjections(ctx, tx); err != nil {
+			return nil, err
+		}
 	}
 	if err = tx.Commit(); err != nil {
 		return nil, err
@@ -354,6 +383,10 @@ func (c *Collection) Delete(ctx context.Context, keys []any) (count int64, err e
 	if _, err = c.metadata(ctx, tx); err != nil {
 		return 0, err
 	}
+	project, err := c.vectorProjectionsReady(ctx, tx)
+	if err != nil {
+		return 0, err
+	}
 	for _, key := range normalized {
 		result, e := tx.ExecContext(ctx, `DELETE FROM __vectorstore_records WHERE collection=? AND key=?`, c.name, key)
 		if e != nil {
@@ -364,6 +397,11 @@ func (c *Collection) Delete(ctx context.Context, keys []any) (count int64, err e
 			return 0, e
 		}
 		count += n
+	}
+	if project {
+		if err := c.publishVectorProjections(ctx, tx); err != nil {
+			return 0, err
+		}
 	}
 	if err = tx.Commit(); err != nil {
 		return 0, err

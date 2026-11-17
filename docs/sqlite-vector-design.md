@@ -1,8 +1,9 @@
 # SQLite vector execution design
 
-Status: investigation and executable probe complete; production implementation
-follows in separate PRs. This document does not add a provider option or change
-capability discovery. It implements the investigation gate in the
+Status: investigation/probe merged in [PR #56](https://github.com/gabisonia/go-vectorstore/pull/56).
+The packed projection foundation in section A is implemented; extension execution
+in section B remains gated. Capability discovery does not advertise a vector index.
+This document records the investigation gate in the
 [parity plan](parity-plan.md).
 
 ## Decision
@@ -110,6 +111,12 @@ Neither path should be advertised as approximate nearest-neighbor search.
 ## Implementation sequence and acceptance gates
 
 ### A. Canonical vector projections
+
+Implemented as `sqlite.StoreOptions.VectorProjections` and
+`Collection.RebuildVectorProjections`; see [provider usage](sqlite.md#opt-in-dense-vector-projections).
+The first read path supports unfiltered dense searches; all filtered/binary/sparse
+searches retain canonical evaluation. The design constraints below remain the
+acceptance criteria for future changes.
 
 Add an opt-in ordinary projection table keyed by collection, property and exact
 canonical key token, with a packed float32 BLOB and versioned readiness metadata.
