@@ -77,10 +77,10 @@ func (c *Collection) nativeManifest(ctx context.Context) (hashManifest, []byte, 
 	if err = json.Unmarshal(raw, &m); err != nil {
 		return m, nil, false, fmt.Errorf("%w: malformed Redis manifest", vectordata.ErrInvalidRecord)
 	}
-	if m.Definition != c.registration || (m.Format != 1 && m.Format != 2) {
+	if m.Definition != c.registration || (m.Format != 1 && m.Format != 2 && m.Format != 3) {
 		return m, nil, false, vectordata.ErrSchemaMismatch
 	}
-	if m.Format == 1 {
+	if m.Format != 2 {
 		return m, raw, false, nil
 	}
 	if !validRevision(m.Revision) || m.Next < 0 || m.Tokens == nil {

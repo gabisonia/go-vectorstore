@@ -4,8 +4,9 @@
 uses atomic collection snapshots with exact dense search and portable filtering
 in Go. Opt-in `NativeIndexes` adds Redis Search HNSW/FLAT indexes and scalar
 filtering over immutable hash generations, plus optional string full-text indexes.
-It is available on master after v0.4.1. The default
-encoded collection limit is 16 MiB; writes still process the whole collection.
+Opt-in `StorageJSON` uses immutable RedisJSON documents with Go exact search.
+It is available on master after v0.4.1. The default encoded collection limit is
+16 MiB; writes still process the whole collection.
 
 ```go
 store, err := redis.New(redis.StoreOptions{
@@ -50,11 +51,12 @@ while reconstructing stored vectors.
 
 `StoreOptions.StorageMode` chooses the layout for **new** collections:
 `StorageSnapshot` (the default) stores the original format-1 envelope;
-`StorageHash` creates a format-2 manifest and immutable per-record hashes.
+`StorageHash` creates a format-2 manifest and immutable per-record hashes;
+`StorageJSON` creates a format-3 manifest and immutable RedisJSON documents.
 Existing collections keep their layout regardless of the constructor option.
-Both formats support the same public model calls and Go exact search.
+All three support the same public model calls and Go exact search.
 `NativeIndexes: true` selects `StorageHash` when `StorageMode` is unspecified;
-explicit snapshot mode with native indexing is rejected.
+explicit snapshot/JSON modes with native indexing are rejected.
 
 ```go
 store, err := redis.New(redis.StoreOptions{
@@ -77,8 +79,9 @@ if err := base.(*redis.Collection).MigrateToHashStorage(ctx); err != nil {
 
 The upgrade preserves schema, records and generated sequence, validates records
 before staging, and publishes atomically under concurrent writes. Repeating it
-after success is a read-only no-op. New clients reopen either layout; older
-format-1-only binaries reject format 2. There is no downgrade operation. This is
+after success is a read-only no-op. New clients reopen all three layouts; older
+format-1-only binaries reject format 2, and pre-RedisJSON binaries reject format 3.
+Hash conversion supports format 1 only; JSON-to-hash conversion is unsupported. This is
 provider storage conversion, separate from model-schema migration capabilities.
 Snapshot compatibility is checked against an immutable fixture from merged
 commit `950401c`; SQLite's format is unchanged.
@@ -97,6 +100,73 @@ adds optional index metadata to the same format-2 manifest; earlier hash readers
 ignore these fields. A writer without native indexing can publish a plain hash
 generation again. Native readers then use Go fallback until a native write or
 explicit rebuild. Older hash writers may leave obsolete indexes for pruning.
+
+## RedisJSON storage
+
+`StorageJSON` requires the RedisJSON module, tested on standalone Redis 8.2.
+Database numbers other than zero are supported. Constructor/handle discovery is
+local; creating even an empty JSON collection checks module availability before
+staging. Missing JSON commands return `ErrUnsupported` with the native Redis
+cause and leave the source collection untouched. Ordinary Redis 7.4 remains
+supported for snapshot/hash layouts without modules.
+
+```go
+store, err := redis.New(redis.StoreOptions{
+    Addr: "localhost:63799", Namespace: "json_app", StorageMode: redis.StorageJSON,
+})
+```
+
+A string manifest retains the schema, revision, generated sequence and sorted key
+tokens. Each record is a real RedisJSON object written with `JSON.SET`, containing
+three strings: `__vs_revision`, `__vs_token` and `__vs_payload`. The payload holds
+canonical record JSON as an opaque string. RedisJSON and Lua parse only the wrapper,
+so uint64 keys, exact decimals, arbitrary JSON numbers (including values beyond
+float64 range), SQL NULL/JSON null and vector precision retain the shared codec's
+semantics. Records are not exposed as application-owned JSON documents or writable
+JSON paths; internal keys and field names are reserved.
+
+This increment provides storage with full-collection Go filtering/search. It
+creates no JSON vector, scalar or full-text indexes and advertises no new index
+capabilities. Index hints remain portable metadata. A client configured for native
+hash indexes can reopen format 3 and falls back to Go; explicitly combining
+`StorageJSON` with `NativeIndexes` in the constructor returns `ErrUnsupported`.
+
+To convert an existing snapshot or hash collection, use its unchanged registered
+definition and call:
+
+```go
+if err := base.(*redis.Collection).MigrateToJSONStorage(ctx); err != nil {
+    return err
+}
+```
+
+Conversion validates all records, stages a complete new generation and publishes
+schema/data/generated sequence in one final manifest SET. Explicit conflicts retry
+against the latest source, including concurrent writes through another client.
+Repeating conversion after success is a read-only no-op. Successful conversion
+retires previous hash documents/indexes best-effort; uncertain replies preserve
+possibly committed JSON data and require state reconciliation before an application
+retry. Use pruning to reclaim old auxiliary data if cleanup was interrupted.
+There is no JSON downgrade operation. This is provider storage conversion;
+model-schema migration planning/application remain unsupported.
+
+JSON generations use separate, namespace/collection-scoped key prefixes. A unique
+one-hour lease protects staged documents, which also receive one-hour TTLs in
+pipeline batches of 128. Publication checks the lease, revision, key tokens and
+payload presence, removes TTLs and performs the final SET. Earlier script errors
+can leave auxiliary documents but cannot publish a partial logical batch. Reads
+verify the exact manifest and lease and fetch/validate every referenced wrapper in
+one read-only Lua execution. Changed manifests retry before returning any rows;
+missing/damaged referenced documents fail the read. Canonical decoding and caller
+callbacks run after the client connection is released.
+
+`store.PruneJSONStorage(ctx, name)` reclaims obsolete non-expiring JSON documents
+and leases, including after deletion. It guards deletion with the current manifest,
+protects current generations and active TTL staging, and returns a Redis-key count.
+Concurrent changes can leave work for a later pass. `DeleteCollection` attempts both
+hash and JSON cleanup after deleting the logical collection. `PruneHashStorage`
+and `PruneNativeIndexes` can reclaim obsolete hash data/indexes after a JSON
+conversion with a lost reply. No cleanup worker runs in the background.
 
 ## Native indexes and search
 
@@ -247,7 +317,8 @@ See the [full-text sample mode](../samples/redis-store/README.md).
 
 Each collection has a Redis string at an internal key containing an encoded
 namespace and collection name. Format 1 embeds schema, sequence and all records;
-format 2 references an immutable hash generation. Keys and data
+format 2 references an immutable hash generation, and format 3 references an
+immutable RedisJSON generation. Keys and data
 are decoded by schema, preserving uint64/JSON/decimal precision and native NULL
 versus JSON null. Redis Lua never parses these numbers. SQLite shares the canonical
 record codec; its existing format-1 bytes remain compatible.
@@ -283,7 +354,7 @@ Default/fallback Query, filtered Count and Search decode/validate the full snaps
 Default nil-filter Count parses the envelope but skips record validation. QueryIter discards the page
 on a decode/validation error before yielding any records. ListCollectionNames uses
 deduplicated/sorted `SCAN` results; concurrent create/delete is not a snapshot of
-the namespace. Neither format promises incremental result decoding.
+the namespace. None of the layouts promises incremental result decoding.
 
 Native writes build a separate index for each immutable generation and wait for
 the exact document count, zero indexing failures and the expected physical schema
@@ -320,14 +391,15 @@ drops the possibly current index. Call `store.PruneNativeIndexes(ctx, name)` in
 database zero to reclaim obsolete indexes, including after deletion or failed
 staging. It protects current revisions and active staging leases and returns an
 index count, separately from hash pruning's key count. Concurrent changes may
-leave work for a later pass. Native DeleteCollection attempts both cleanups.
+leave work for a later pass. Native DeleteCollection also attempts index cleanup.
 
 ## Costs and deployment settings
 
 The encoded collection limit defaults to 16 MiB, configurable with
-`MaxCollectionBytes` up to 256 MiB. Both layouts bound the canonical snapshot size.
+`MaxCollectionBytes` up to 256 MiB. All layouts bound canonical snapshot size.
 Hash publication additionally counts manifest bytes, lease/key names, hash field
-names and values against that limit. Projection overhead can therefore make a
+names and values; JSON publication counts manifest, lease/key names and encoded
+wrapper-document bytes (including escaped payload strings) against that limit. Projection overhead can therefore make a
 format-1 collection too large to upgrade under the same configured limit. This is
 an encoded byte budget, not Redis allocator overhead or peak process memory.
 Reads/writes exceeding the configured limit return `ErrInvalidRecord`; they never
@@ -343,7 +415,7 @@ filtered Query transfers matching payloads, HNSW transfers candidate payloads,
 and FLAT transfers all matching vector-bearing payloads. Unfiltered Query and Get/GetMany retain the whole-snapshot path. See
 [local read measurements](performance.md#redis-native-read-measurements).
 
-Every hash write stages a full generation; native mode also rebuilds its entire
+Every hash/JSON write stages a full generation; native hash mode also rebuilds its entire
 index before publishing. Peak Redis storage includes old and staged data/graphs
 plus obsolete generations/indexes pending cleanup. Index allocator overhead is
 outside the encoded byte budget. Concurrent writers can multiply this work through
@@ -352,11 +424,13 @@ throughput or write-scalability claim is made.
 Reserve the provider's internal key prefix for this library; do not edit values or
 apply TTLs to collection keys.
 
-For hash layout, all generation keys and the manifest must survive together.
+For hash and JSON layouts, all generation keys and the manifest must survive together.
 Use `noeviction`; independent eviction or external edits can leave dangling
 references, which fail reads rather than returning partial records. Plain storage
 needs no Search permissions/module. Hash storage uses HSET/HMGET, PEXPIRE, PERSIST,
-PTTL, UNLINK and scripts. Native mode additionally needs FT.CREATE, FT.INFO,
+PTTL, UNLINK and scripts. JSON storage uses JSON.TYPE (availability probe),
+JSON.SET and JSON.GET alongside the same lease/publication/cleanup commands; no
+Search or COMMAND permission is needed. Native hash mode additionally needs FT.CREATE, FT.INFO,
 FT.SEARCH and FT.DROPINDEX; explicit index pruning needs FT._LIST. The provider does
 not change global Search configuration.
 
@@ -386,7 +460,8 @@ Normal tests need no server. Integration tests start a disposable `redis:8.2`
 container by default; `REDIS_TEST_IMAGE` selects another image and `REDIS_TEST_ADDR`
 can point to an existing disposable standalone server. Each factory uses its own
 namespace and deletes only its collections. CI exercises Redis 7.4/8.2 on minimum
-and current Go and runs the sample twice per layout, plus HNSW/FLAT/full-text modes on 8.2. Tests cover both layouts with
+and current Go and runs samples twice per supported layout, plus HNSW/FLAT/full-text
+and explicit JSON conversion modes on 8.2. Tests cover all three layouts with
 the shared model, embedding
 and filter-parity contracts plus concurrent writes, integer sequence limits,
 conflicts, uncertain replies, deadlines, corruption, size limits and client reopen.
@@ -401,4 +476,8 @@ independent TAG equality, updates/deletes, visible schema drift, 128 fields,
 legacy index versions, storage upgrades and generated sequences. Shared HNSW/FLAT
 lifecycle fixtures include TEXT fields.
 `REDIS_REQUIRE_SEARCH=true` requires the native tests and projection proof instead
-of permitting skips on servers without Search.
+of permitting skips on servers without Search. `REDIS_REQUIRE_JSON=true` similarly
+requires the real RedisJSON contracts. JSON tests also check extreme numeric
+precision, nonzero databases, module absence, partial staging, lost replies,
+errors after PERSIST, read retirement, concurrent conversion, generated sequences,
+corruption, pruning and compatibility with existing snapshot/hash fixtures.

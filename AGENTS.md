@@ -35,13 +35,16 @@ marked complete AI-guide program; other snippets may be partial recipes.
 PostgreSQL and sample recipe integration tests need Docker:
 
 ```sh
-go test -race -tags=integration -timeout=5m ./stores/postgres ./samples/recipes
+go test -race -tags=integration -timeout=5m ./stores/postgres
+go test -race -tags=integration -timeout=5m ./samples/recipes
 go test -race -tags=integration -timeout=5m ./stores/redis
 ```
 
 Set `PGVECTOR_TEST_IMAGE=pgvector/pgvector:pg18` for PostgreSQL 18; the default is
 pg16. `PGVECTOR_TEST_DSN` can use an existing disposable database instead. Tests
-create/drop isolated schemas. See `.github/workflows/ci.yml` for the full Go and
+create/drop isolated schemas. Keep the two PostgreSQL package runs in separate
+`go test` invocations to avoid concurrent Testcontainers reaper creation in one
+shared session. See `.github/workflows/ci.yml` for the full Go and
 PostgreSQL matrix and vulnerability scan. Live OpenAI calls are opt-in sample
 behavior; normal tests use deterministic embedders and local HTTP stand-ins.
 
@@ -61,7 +64,13 @@ capabilities; native mode explicitly builds generation-scoped indexes before
 publication. Keep native queries in the same Lua execution as manifest/readiness
 verification. Preserve NULL truth, integer precision, exact score units and tie
 fallback. Unknown publication results must never drop a possibly current index.
-CI's Redis 8.2 job requires native conformance/recall and the real projection proof.
+RedisJSON format 3 uses immutable JSON wrapper documents with canonical payload
+strings; never parse canonical numeric values through RedisJSON or Lua cjson.
+Preserve leases, final-SET publication and atomic wrapper reads. Conversion from
+snapshots/hashes is explicit; prune only obsolete non-expiring keys with current
+manifest protection. Keep JSON-native index capabilities unadvertised until built.
+CI's Redis 8.2 job requires real JSON contracts, native conformance/recall and the
+projection proof; Redis 7.4 covers missing-module behavior.
 
 ## Invariants and implementation conventions
 

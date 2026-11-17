@@ -42,10 +42,13 @@ Its deterministic three-dimensional embedder illustrates the API; use a real
 embedding model for semantic search.
 
 The [Redis provider](redis.md) supports dense search and all portable data types
-using atomic snapshots or immutable hash generations. Default reads transfer the
+using atomic snapshots or immutable hash/RedisJSON generations. Default reads transfer the
 whole collection; opt-in native HNSW/FLAT and scalar indexes accelerate eligible reads.
-The encoded limit defaults to 16 MiB. Native mode requires Redis Search/database
-zero and rebuilds its entire index on writes; inspect capabilities and limits.
+The encoded limit defaults to 16 MiB. Native hash mode requires Redis Search/database
+zero and rebuilds its entire index on writes. Opt-in `StorageJSON` requires RedisJSON
+and retains full-collection Go reads/search; explicit `MigrateToJSONStorage` converts
+snapshots/hashes while preserving schema and generated keys. Inspect capabilities
+and [layout limits](redis.md#redisjson-storage).
 
 `GetTypedModelCollection[K,T]` constructs a handle without database access.
 `EnsureTypedModelCollection[K,T]` additionally creates or validates storage.
@@ -357,7 +360,7 @@ PostgreSQL float16 storage requires pgvector 0.7+ and a visible `halfvec` type.
 | `MigrationPlanning` | False | False | True, plan-only |
 | `MigrationApplication` | False | False | True, additive changes only |
 
-Default Redis reports the same booleans/index fields as memory and buffers
+Default and JSON-layout Redis report the same booleans/index fields as memory and buffers
 snapshots/pages. With `NativeIndexes`, it additionally advertises HNSW and FLAT
 for four dense metrics and two precisions (16 tuples, up to 4,096 dimensions) and indexed
 string/int64/float64/bool data. `FullTextIndexing` is true in native mode for string

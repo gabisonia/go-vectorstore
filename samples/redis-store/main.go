@@ -25,11 +25,12 @@ func main() {
 	namespace := flag.String("namespace", "redis_demo", "Dedicated namespace for retained sample records")
 	db := flag.Int("db", 0, "Redis database number")
 	tlsEnabled := flag.Bool("tls", false, "Use verified TLS")
-	storage := flag.String("storage", "", "Layout for new collections: snapshot (default) or hash (native default)")
+	storage := flag.String("storage", "", "New collection layout: snapshot (default), hash (native default), or json (RedisJSON)")
 	native := flag.Bool("native", false, "Enable Redis Search indexes; use a separate namespace for the indexed sample model")
 	index := flag.String("index", "hnsw", "Native vector index: hnsw or flat; use a separate namespace per model")
 	fullText := flag.Bool("fulltext", false, "Index Title as Redis TEXT; requires -native and a separate namespace")
 	upgrade := flag.Bool("upgrade-hash", false, "Explicitly upgrade the sample collection to hash storage")
+	upgradeJSON := flag.Bool("upgrade-json", false, "Explicitly convert the sample collection to RedisJSON storage")
 	flag.Parse()
 	var tlsConfig *tls.Config
 	if *tlsEnabled {
@@ -38,12 +39,15 @@ func main() {
 	opts := redis.StoreOptions{Addr: *addr, Namespace: *namespace, DB: *db, Username: os.Getenv("REDIS_USERNAME"), Password: os.Getenv("REDIS_PASSWORD"), TLSConfig: tlsConfig, StorageMode: redis.StorageMode(*storage), NativeIndexes: *native}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	if err := run(ctx, opts, *upgrade, vectordata.IndexMethod(*index), *fullText); err != nil {
+	if err := run(ctx, opts, *upgrade, vectordata.IndexMethod(*index), *fullText, *upgradeJSON); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
-func run(ctx context.Context, opts redis.StoreOptions, upgrade bool, method vectordata.IndexMethod, fullText bool) error {
+func run(ctx context.Context, opts redis.StoreOptions, upgrade bool, method vectordata.IndexMethod, fullText, upgradeJSON bool) error {
+	if upgrade && upgradeJSON {
+		return fmt.Errorf("choose one storage conversion: -upgrade-hash or -upgrade-json")
+	}
 	if method != vectordata.IndexMethodHNSW && method != vectordata.IndexMethodFlat {
 		return fmt.Errorf("unknown native index %q: choose hnsw or flat", method)
 	}
@@ -73,12 +77,17 @@ func run(ctx context.Context, opts redis.StoreOptions, upgrade bool, method vect
 		}
 		d.Vectors[0].Index = &vectordata.VectorIndexOptions{Method: method}
 	}
-	if upgrade {
+	if upgrade || upgradeJSON {
 		base, err := s.EnsureModelCollection(ctx, "documents", d, vectordata.ModelCollectionOptions{})
 		if err != nil {
 			return err
 		}
-		if err = base.(*redis.Collection).MigrateToHashStorage(ctx); err != nil {
+		if upgradeJSON {
+			err = base.(*redis.Collection).MigrateToJSONStorage(ctx)
+		} else {
+			err = base.(*redis.Collection).MigrateToHashStorage(ctx)
+		}
+		if err != nil {
 			return err
 		}
 	}
