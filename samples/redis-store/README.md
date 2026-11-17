@@ -23,9 +23,26 @@ reopens the client before counting retained records. Reruns reuse the same
 collection. Flags select `-addr`, `-db`, `-namespace` and verified `-tls`;
 `REDIS_USERNAME`/`REDIS_PASSWORD` provide optional credentials.
 
+Use a dedicated namespace to create format-2 hash storage, or explicitly upgrade
+the existing snapshot fixture. Each command prints the same three result lines:
+
+```sh
+go run ./samples/redis-store -addr localhost:63799 -namespace redis_hash_demo -storage hash
+go run ./samples/redis-store -addr localhost:63799 -namespace redis_hash_demo -storage hash
+go run ./samples/redis-store -addr localhost:63799 -upgrade-hash
+```
+
+`-storage` affects new collections only. `-upgrade-hash` explicitly converts the
+sample collection, preserving records and generated sequence; repeating it is a
+no-op. New clients read both layouts; older format-1-only clients reject the
+upgraded layout. Hashes expose indexable fields but the provider creates no index.
+
 Records remain in Redis. To clean up only this fixture, call
 `store.DeleteCollection(ctx, "documents")` using its configured namespace/database.
 `docker compose stop redis` stops the local server; its volume retains data.
+Hash deletion cleans up best-effort. Use `store.PruneHashStorage(ctx, "documents")`
+to reclaim obsolete non-expiring hashes if cleanup was interrupted; active staging
+is protected and expires within one hour.
 
 The provider transfers whole collection snapshots and runs exact search/filters
 in Go. Its default encoded collection limit is 16 MiB. Accepted index hints do

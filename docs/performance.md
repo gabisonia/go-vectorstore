@@ -129,6 +129,15 @@ lost successful replies without replay, deadline cleanup, corruption, namespace
 isolation and size rejection. CI runs Redis 7.4/8.2 with minimum/current Go and the
 persistent sample twice. See [Redis costs](redis.md#costs-and-deployment-settings).
 
+Both Redis layouts run the shared suites. Hash-layout verification additionally
+checks immutable format-1 upgrades, atomic generation reads during retirement,
+staging failure/expiry, lost publication replies, a native Redis error after
+PERSIST but before SET, and manifest-guarded orphan cleanup. A real Redis 8.2 FLAT
+index verifies filtered KNN over the stored scalar/vector hash fields; this test
+creates/drops its own temporary index. Production code builds no index. Hash
+writes still replace full generations and can increase peak Redis storage while
+current, staged and obsolete data coexist. No acceleration claim is made.
+
 ## SQLite scalar query verification
 
 ```sh

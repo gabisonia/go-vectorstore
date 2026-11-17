@@ -28,20 +28,26 @@ type StoreOptions struct {
 	TLSConfig                *tls.Config
 	// Namespace isolates collections; the default is "vectorstore".
 	Namespace string
-	// MaxCollectionBytes bounds encoded snapshots on reads/writes; default 16 MiB.
+	// MaxCollectionBytes bounds canonical snapshots and hash publication bytes
+	// (manifest, keys, field names/values); default 16 MiB. Redis allocator and
+	// peak staging/retirement overhead are outside this encoded byte budget.
 	// Larger collections are rejected, never silently truncated.
 	MaxCollectionBytes int
+	// StorageMode selects the layout for newly created collections. Existing
+	// layouts are preserved; use Collection.MigrateToHashStorage for an upgrade.
+	StorageMode        StorageMode
 	Embedder           vectordata.Embedder
 	InputEmbedder      vectordata.InputEmbedder
 	EmbeddingBatchSize int
 }
 
 type Store struct {
-	client   *goredis.Client
-	prefix   string
-	metadata vectordata.StoreMetadata
-	maxBytes int
-	options  vectordata.ModelCollectionOptions
+	client      *goredis.Client
+	prefix      string
+	metadata    vectordata.StoreMetadata
+	maxBytes    int
+	options     vectordata.ModelCollectionOptions
+	storageMode StorageMode
 }
 
 var _ vectordata.ModelStore = (*Store)(nil)
@@ -51,6 +57,12 @@ var _ vectordata.ModelCollection = (*Collection)(nil)
 // owned client. Automatic command retries are disabled: uncertain writes must not
 // replay. Optimistic conflicts explicitly reported by Redis may retry in Go.
 func New(opts StoreOptions) (*Store, error) {
+	if opts.StorageMode == "" {
+		opts.StorageMode = StorageSnapshot
+	}
+	if opts.StorageMode != StorageSnapshot && opts.StorageMode != StorageHash {
+		return nil, fmt.Errorf("%w: unknown Redis storage mode", vectordata.ErrUnsupported)
+	}
 	if opts.Addr == "" {
 		opts.Addr = "localhost:6379"
 	}
@@ -75,7 +87,7 @@ func New(opts StoreOptions) (*Store, error) {
 		tlsConfig = opts.TLSConfig.Clone()
 	}
 	client := goredis.NewClient(&goredis.Options{Addr: opts.Addr, Username: opts.Username, Password: opts.Password, DB: opts.DB, TLSConfig: tlsConfig, MaxRetries: -1, ContextTimeoutEnabled: true, DialTimeout: 5 * time.Second, ReadTimeout: 5 * time.Second, WriteTimeout: 5 * time.Second})
-	return &Store{client: client, prefix: "__vectorstore_redis_v1:" + encodeName(opts.Namespace) + ":", maxBytes: opts.MaxCollectionBytes, options: defaults, metadata: vectordata.StoreMetadata{SystemName: "redis", DatabaseName: strconv.Itoa(opts.DB), Namespace: opts.Namespace}}, nil
+	return &Store{client: client, prefix: "__vectorstore_redis_v1:" + encodeName(opts.Namespace) + ":", maxBytes: opts.MaxCollectionBytes, options: defaults, storageMode: opts.StorageMode, metadata: vectordata.StoreMetadata{SystemName: "redis", DatabaseName: strconv.Itoa(opts.DB), Namespace: opts.Namespace}}, nil
 }
 
 func encodeName(name string) string { return base64.RawURLEncoding.EncodeToString([]byte(name)) }
@@ -135,7 +147,13 @@ func (s *Store) DeleteCollection(ctx context.Context, name string) (err error) {
 	if !validName(name) {
 		return vectordata.ErrSchemaMismatch
 	}
-	return s.client.Del(ctx, s.key(name)).Err()
+	if err = s.client.Del(ctx, s.key(name)).Err(); err != nil {
+		return err
+	}
+	// Publication/deletion succeeded. Cleanup is separate and may safely be
+	// repeated with PruneHashStorage; it never changes the logical result.
+	_, _ = s.PruneHashStorage(ctx, name)
+	return nil
 }
 func (s *Store) GetModelCollection(name string, d vectordata.CollectionDefinition, opts vectordata.ModelCollectionOptions) (vectordata.ModelCollection, error) {
 	if !validName(name) {

@@ -407,11 +407,16 @@ git push origin "v${RELEASE_VERSION}"
 - Model-driven API: [`docs/model-api.md`](docs/model-api.md)
 - SQLite provider: [`docs/sqlite.md`](docs/sqlite.md)
 - Redis provider: [`docs/redis.md`](docs/redis.md)
+
 - Provider and .NET parity: [`docs/parity.md`](docs/parity.md)
 - Upgrade guide: [`docs/upgrading.md`](docs/upgrading.md)
 - Model migrations: [`docs/migrations.md`](docs/migrations.md)
 - Changelog: [`CHANGELOG.md`](CHANGELOG.md)
 - Benchmarks and performance notes: [`docs/performance.md`](docs/performance.md)
+
+Redis defaults to compatible snapshot storage. Opt-in hash generations and an
+explicit storage upgrade expose indexable fields while keeping atomic batches;
+native query/index execution is a later increment.
 
 ## License
 

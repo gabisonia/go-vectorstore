@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add opt-in Redis hash generations with atomic manifest publication and explicit
+  format-1 upgrades. Preserve schema, key sequences and consistent reads; expose
+  scalar/vector hash fields without creating indexes. Add safe orphan pruning,
+  immutable compatibility fixtures, failure/concurrency tests and a real Redis
+  Search projection proof. Default snapshot storage remains compatible.
 - Add a standalone Redis model provider with atomic collection snapshots, native
   key/data precision, generated keys, exact dense float32/float16 search, portable
   filters, embedding defaults, iterators and metadata. Bound snapshot size and
