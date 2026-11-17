@@ -26,7 +26,7 @@ jobs:
       - name: Test with race detection
         run: go test -race -timeout=5m ./...
       - name: Run bounded fuzz campaigns
-        run: bash scripts/test-fuzz.sh 3s
+        run: bash scripts/test-fuzz.sh 50000x
       - name: Retain failing fuzz inputs
         if: failure()
         uses: actions/upload-artifact@v4

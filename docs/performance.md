@@ -862,7 +862,7 @@ go test -tags=integration -run 'TestIntegrationModelQueryIndexes|TestIntegration
 ```sh
 go test -race -run 'TestWALRecoveryAfterProcessKill|TestReleasedFormat1Compatibility' ./stores/sqlite
 go test -race -tags=integration -run 'TestIntegrationBufferedIteratorCancellation|TestIntegrationConnectionLoss' -timeout=3m ./stores/postgres
-bash scripts/test-fuzz.sh 5s
+bash scripts/test-fuzz.sh 50000x
 ```
 
 SQLite tests kill a subprocess without cleanup after commit and before commit of
@@ -881,7 +881,12 @@ are controlled failure cases, not a complete failover/ambiguous-commit simulatio
 Seven fuzz targets exercise decimal exactness, float16 rounding against an
 independent finite-value oracle, sparse versus dense distances, canonical struct
 codec and SQLite payload round trips, null/precision filter truth and SQL operand
-binding. CI runs three seconds per target with two workers on each supported Go
-lane; the scheduled hardening workflow runs sixty seconds per target weekly.
+binding. CI runs a 50,000-call budget per target with two workers on each supported
+Go lane and a five-minute per-target timeout. Count budgets avoid the
+[Go 1.25 fuzz deadline shutdown race](https://github.com/golang/go/issues/75804),
+which can report a spurious context deadline error when a duration budget expires.
+The script defaults to 50000x and still accepts durations such as 5s or 1m for
+local campaigns; the scheduled stable-Go hardening workflow retains sixty seconds
+per target weekly. Failures are not retried or filtered out.
 Fuzzing is bounded exploration, not an exhaustive input proof. Failing generated
 corpora are retained as workflow artifacts for reproduction and regression tests.

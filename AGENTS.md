@@ -22,7 +22,7 @@ Run checks appropriate to the changed paths:
 ```sh
 go test -race -timeout=5m ./...
 go vet ./...
-bash scripts/test-fuzz.sh 3s
+bash scripts/test-fuzz.sh 50000x
 python3 scripts/check-docs.py
 bash scripts/test-samples.sh
 bash .github/scripts/release_test.sh

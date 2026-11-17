@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Use count-bounded CI fuzz campaigns to avoid the Go 1.25 duration-expiry
+  shutdown race. Keep every fuzz target, fatal failures and per-target timeouts;
+  retain explicit duration budgets for longer local campaigns.
+
 - Add typed and dynamic model InsertOne/UpsertOne/DeleteOne/TryGet helpers for
   Microsoft-style single-record workflows. Preserve batch/provider compatibility,
   generated keys, vector projection, codec failures and found/error semantics;
