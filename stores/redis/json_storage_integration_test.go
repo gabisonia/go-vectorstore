@@ -564,7 +564,7 @@ func TestIntegrationJSONMigrationLostReplyAndNativeFallback(t *testing.T) {
 		t.Fatal(err)
 	}
 	m, _ := currentJSONManifest(t, c)
-	if m.IndexVersion != 3 || m.Index == "" {
+	if m.IndexVersion != 4 || m.Index == "" {
 		t.Fatal("explicit rebuild did not index JSON")
 	}
 }

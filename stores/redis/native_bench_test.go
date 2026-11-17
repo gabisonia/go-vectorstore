@@ -14,6 +14,15 @@ import (
 // BenchmarkRedisNativeRead compares native reads with explicit full-snapshot
 // engine construction. Setup/inserts/index construction are outside the timers.
 func BenchmarkRedisNativeRead(b *testing.B) {
+	benchmarkRedisNativeRead(b, StorageHash, false)
+}
+
+// BenchmarkRedisJSONScalarRead uses the same scalar fixture, with filtered KNN
+// as well as filtered Query/Count. Reference reads always load a full generation.
+func BenchmarkRedisJSONScalarRead(b *testing.B) {
+	benchmarkRedisNativeRead(b, StorageJSON, true)
+}
+func benchmarkRedisNativeRead(b *testing.B, mode StorageMode, filteredSearch bool) {
 	ctx := context.Background()
 	for _, size := range []int{100, 1000} {
 		b.Run(fmt.Sprintf("records%d", size), func(b *testing.B) {
@@ -21,7 +30,7 @@ func BenchmarkRedisNativeRead(b *testing.B) {
 			if err != nil {
 				b.Fatal(err)
 			}
-			s, err := New(StoreOptions{Addr: integrationAddr, Namespace: "bench_" + id, NativeIndexes: true})
+			s, err := New(StoreOptions{Addr: integrationAddr, Namespace: "bench_" + id, NativeIndexes: true, StorageMode: mode})
 			if err != nil {
 				b.Fatal(err)
 			}
@@ -51,6 +60,10 @@ func BenchmarkRedisNativeRead(b *testing.B) {
 			filter := vectordata.And(vectordata.Eq(vectordata.Column("Group"), "match"), vectordata.Gte(vectordata.Column("Rank"), int64(0)))
 			qopts := vectordata.QueryOptions{Skip: 2, OrderBy: []vectordata.SortField{{Property: "Rank"}}}
 			query := records[0].Vectors["Vector"]
+			searchOpts := vectordata.ModelSearchOptions{}
+			if filteredSearch {
+				searchOpts.Filter = filter
+			}
 			for _, op := range []string{"query", "count", "search"} {
 				for _, native := range []bool{true, false} {
 					name := "reference_" + op
@@ -73,7 +86,7 @@ func BenchmarkRedisNativeRead(b *testing.B) {
 										b.Fatalf("count %d %v", n, err)
 									}
 								case "search":
-									hits, err := c.Search(ctx, query, 5, vectordata.ModelSearchOptions{})
+									hits, err := c.Search(ctx, query, 5, searchOpts)
 									if err != nil || len(hits) != 5 {
 										b.Fatalf("search %d %v", len(hits), err)
 									}
@@ -95,7 +108,7 @@ func BenchmarkRedisNativeRead(b *testing.B) {
 										b.Fatalf("count %d %v", n, err)
 									}
 								case "search":
-									hits, err := engine.Search(ctx, query, 5, vectordata.ModelSearchOptions{})
+									hits, err := engine.Search(ctx, query, 5, searchOpts)
 									if err != nil || len(hits) != 5 {
 										b.Fatalf("search %d %v", len(hits), err)
 									}

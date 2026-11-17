@@ -22,6 +22,7 @@ const nativeMaxTextFields = 128
 
 type nativeField struct {
 	Name, Alias, Kind, Metric, Algorithm string
+	Separator                            string `json:",omitempty"`
 	Dimensions, M, EFConstruction        int
 }
 
@@ -139,13 +140,16 @@ func integerParts(v any) (int64, int64, bool) {
 	}
 	return 0, 0, false
 }
-func (c *Collection) nativeProjection(r vectordata.ModelRecord) []any {
+
+// Split integer components are at most 32 bits: both RedisJSON and Lua can
+// represent them exactly. Equality tags remain strings, including float64 tags.
+func (c *Collection) nativeScalarProjection(r vectordata.ModelRecord) []any {
 	var out []any
 	if tag, ok := nativeTag(token(r.Key)); ok {
 		out = append(out, "__vs_key_tag", tag)
 	}
 	if hi, lo, ok := integerParts(r.Key); ok {
-		out = append(out, "__vs_key_hi", strconv.FormatInt(hi, 10), "__vs_key_lo", strconv.FormatInt(lo, 10))
+		out = append(out, "__vs_key_hi", hi, "__vs_key_lo", lo)
 	}
 	for i, p := range c.definition.Data {
 		if !nativeData(p) {
@@ -161,8 +165,27 @@ func (c *Collection) nativeProjection(r vectordata.ModelRecord) []any {
 			out = append(out, "__vs_tag_"+suffix, tag)
 		}
 		if hi, lo, ok := integerParts(v); ok {
-			out = append(out, "__vs_hi_"+suffix, strconv.FormatInt(hi, 10), "__vs_lo_"+suffix, strconv.FormatInt(lo, 10))
+			out = append(out, "__vs_hi_"+suffix, hi, "__vs_lo_"+suffix, lo)
 		}
+	}
+	return out
+}
+
+// HASH projections retain their existing string encoding and byte accounting.
+func (c *Collection) nativeProjection(r vectordata.ModelRecord) []any {
+	out := c.nativeScalarProjection(r)
+	for i := 1; i < len(out); i += 2 {
+		if n, ok := out[i].(int64); ok {
+			out[i] = strconv.FormatInt(n, 10)
+		}
+	}
+	return out
+}
+func (c *Collection) jsonScalarProjection(r vectordata.ModelRecord) map[string]any {
+	fields := c.nativeScalarProjection(r)
+	out := make(map[string]any, len(fields)/2)
+	for i := 0; i < len(fields); i += 2 {
+		out[fields[i].(string)] = fields[i+1]
 	}
 	return out
 }
@@ -175,12 +198,12 @@ func (c *Collection) nativeFields(m hashManifest) ([]nativeField, error) {
 	if c.definition.Key.Type == vectordata.KeyInt64 || c.definition.Key.Type == vectordata.KeyUint64 {
 		fields = append(fields, nativeField{Name: "__vs_key_hi", Alias: "kh", Kind: "NUMERIC"}, nativeField{Name: "__vs_key_lo", Alias: "kl", Kind: "NUMERIC"})
 	}
-	if m.Format == 3 {
-		fields = []nativeField{{Name: "$.__vs_revision", Alias: "revision", Kind: "TAG"}}
+	if m.Format == 3 && m.IndexVersion == 3 {
+		fields = []nativeField{{Name: "__vs_revision", Alias: "revision", Kind: "TAG"}}
 	}
 	textFields := 0
 	for i, p := range c.definition.Data {
-		if m.Format == 3 {
+		if m.Format == 3 && m.IndexVersion == 3 {
 			continue
 		}
 		n := strconv.Itoa(i)
@@ -222,6 +245,24 @@ func (c *Collection) nativeFields(m hashManifest) ([]nativeField, error) {
 			path = "$.__vs_vectors." + alias
 		}
 		fields = append(fields, nativeField{Name: path, Alias: alias, Kind: "VECTOR", Algorithm: strings.ToUpper(string(p.Index.Method)), Metric: metric, Dimensions: p.Dimensions, M: p.Index.HNSW.M, EFConstruction: p.Index.HNSW.EfConstruction})
+	}
+	if m.Format == 3 {
+		for i := range fields {
+			f := &fields[i]
+			if f.Kind == "VECTOR" {
+				continue
+			}
+			if f.Name == "__vs_revision" {
+				f.Name = "$.__vs_revision"
+			} else {
+				f.Name = "$.__vs_scalars." + f.Name
+			}
+			// Explicit separators make TAG schema drift observable. Encoded tags contain
+			// only x/hex characters, so comma splitting cannot change literal values.
+			if m.IndexVersion == 4 && f.Kind == "TAG" {
+				f.Separator = ","
+			}
+		}
 	}
 	if len(fields) > 512 {
 		return nil, fmt.Errorf("%w: native Redis schema exceeds 512 fields", vectordata.ErrUnsupported)
@@ -265,6 +306,7 @@ local function ready(index,prefix,schema,count,keytype)
    if not a or val(a,'identifier')~=f.Name or val(a,'type')~=f.Kind then return -2 end
    if flag(a,'NOINDEX') then return -2 end
    if f.Kind=='TAG' and (not flag(a,'CASESENSITIVE') or ((keytype or 'HASH')=='HASH' and val(a,'SEPARATOR')~=',')) then return -2 end
+   if f.Kind=='TAG' and f.Separator and f.Separator~='' and val(a,'SEPARATOR')~=f.Separator then return -2 end
    if f.Kind=='TEXT' and (tonumber(val(a,'WEIGHT'))~=1 or flag(a,'NOSTEM')) then return -2 end
    if f.Kind=='TEXT' then hastext=true end
    if f.Kind=='VECTOR' then
@@ -304,6 +346,9 @@ func (c *Collection) createNativeIndex(ctx context.Context, m hashManifest) erro
 		args = append(args, f.Name, "AS", f.Alias, f.Kind)
 		if f.Kind == "TAG" {
 			args = append(args, "CASESENSITIVE")
+			if f.Separator != "" {
+				args = append(args, "SEPARATOR", f.Separator)
+			}
 		} else if f.Kind == "TEXT" {
 			args = append(args, "WEIGHT", 1)
 		} else if f.Kind == "VECTOR" {

@@ -23,6 +23,7 @@ type jsonDocument struct {
 	Token    string               `json:"__vs_token"`
 	Payload  string               `json:"__vs_payload"`
 	Vectors  map[string][]float32 `json:"__vs_vectors,omitempty"`
+	Scalars  map[string]any       `json:"__vs_scalars,omitempty"`
 }
 
 type jsonRecord struct{ key, document string }
@@ -102,7 +103,7 @@ func (c *Collection) projectJSON(ctx context.Context, state snapshot) (jsonManif
 		byToken[t] = r
 	}
 	if c.store.nativeIndexes {
-		m.Index, m.IndexVersion = c.nativeIndexName(3, m.Revision), 3
+		m.Index, m.IndexVersion = c.nativeIndexName(3, m.Revision), 4
 		m.IndexVectors = c.nativeVectors(records)
 	}
 	sort.Strings(m.Tokens)
@@ -118,6 +119,9 @@ func (c *Collection) projectJSON(ctx context.Context, state snapshot) (jsonManif
 			return m, nil, nil, err
 		}
 		doc := jsonDocument{Revision: m.Revision, Token: t, Payload: string(state.Records[t])}
+		if c.store.nativeIndexes {
+			doc.Scalars = c.jsonScalarProjection(byToken[t])
+		}
 		for i, p := range c.definition.Vectors {
 			for _, name := range m.IndexVectors {
 				if name == p.Name && byToken[t].Vectors[name] != nil {
@@ -291,7 +295,7 @@ func (c *Collection) publishJSON(ctx context.Context, mode string, old []byte, s
 
 // MigrateToJSONStorage explicitly converts snapshots or hashes to format 3.
 // Schema, canonical records and generated sequence publish atomically. Repeating
-// it on JSON storage is a read-only no-op. Native mode builds vector indexes.
+// it on JSON storage is a read-only no-op. Native mode builds scalar/vector indexes.
 func (c *Collection) MigrateToJSONStorage(ctx context.Context) (err error) {
 	defer func() { err = c.operation(ctx, "migrate_json_storage", err) }()
 	return c.mutate(ctx, func(state *snapshot) error {

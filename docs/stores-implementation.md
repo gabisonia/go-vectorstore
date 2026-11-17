@@ -288,13 +288,15 @@ final manifest SET; only explicit conflicts retry. Reads verify manifest/lease a
 all wrapper identities in one script. `MigrateToJSONStorage` converts snapshots or
 hashes explicitly; acknowledged conversion retires prior hashes/native indexes.
 Shared pruning validates known manifest formats and protects the current layout's
-generation and active staging. JSON queries/searches retain the Go engine and do
-not advertise physical JSON indexes.
+generation and active staging. Plain JSON queries/searches retain the Go engine.
 
 RedisJSON native mode uses the same prepublication index readiness and atomic
-query guard, with format-3/index-version-3 metadata and its own index prefix.
+query guard, with format-3/index-version-4 metadata and its own index prefix.
 Canonical payload strings remain opaque; bounded FLOAT32 vectors project to
-internal JSON paths. Unfiltered HNSW/FLAT read selected wrappers inside the guarded
-Lua execution. JSON Query/Count and filtered search keep exact Go evaluation;
-scalar/full-text JSON indexing remains deferred. Cleanup protects JSON leases and
+internal JSON paths. Literal scalar TAGs and exact 32-bit integer components
+support native filtered Query, Count and HNSW/FLAT. Query/scoring run in Go after
+fetching matching wrappers in the atomic guard; Count fetches no payloads. Unsupported
+filters retain Go evaluation. Version-3 vector-only indexes remain readable without
+implicit rebuild; an explicit rebuild/native write adds version-4 scalar fields.
+JSON full-text indexing remains deferred. Cleanup protects JSON leases and
 current generations, including uncertain writes. See [RedisJSON storage](redis.md#redisjson-storage).

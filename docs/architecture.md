@@ -382,10 +382,14 @@ RedisJSON/Lua never parse canonical numeric values. Reads fetch and validate
 wrappers atomically with the manifest, then use the Go exact engine. JSON has its
 own scoped key prefix and guarded pruning. Conversion from snapshots/hashes is
 explicit, preserves schema/sequence and retires old hash data/indexes only after
-acknowledged publication. Optional native JSON indexes use metadata version 3 and
+acknowledged publication. Optional native JSON indexes use metadata version 4 and
 separate scoped index names. Bounded vector arrays project under internal JSONPath
 aliases; canonical payloads remain opaque. Index readiness precedes publication;
 KNN, manifest/schema verification and selected-wrapper reads share one Lua execution.
-Unfiltered JSON search supports HNSW candidates or exhaustive FLAT remeasurement;
-Query, Count and filtered searches retain Go evaluation. Existing layouts remain
-the defaults; JSON scalar/full-text indexes remain deferred.
+JSON search supports HNSW candidates or exhaustive FLAT remeasurement. Scalar
+projections add literal TAGs/presence markers and exact split-integer NUMERIC
+fields under internal JSON paths. The shared filter compiler accelerates eligible
+Query, Count and vector filters; Query sorting/scoring remain in Go, while Count
+fetches no payloads. Version-3 vector-only indexes keep their old physical schema
+and native unfiltered search; filters use Go until rebuild/native writes publish
+version 4. Existing layouts remain the defaults; JSON full-text remains deferred.

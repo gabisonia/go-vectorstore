@@ -273,10 +273,50 @@ controlled production throughput measurements. B/op counts Go allocations only.
 
 JSON FLAT was slower than the reference at 1,000 records in this run. It remains
 exhaustive and adds index/query/wrapper-fetch work. HNSW reduces decoded payloads,
-but still reads the O(N) token manifest. All JSON filtered searches/Query/Count
-use full-generation Go evaluation. Every native write stages a full generation
+but still reads the O(N) token manifest. These vector-only measurements predate
+version-4 JSON scalar indexes; the command now exercises the current implementation.
+Eligible filters now use native execution; unsupported filters use full-generation
+Go evaluation. Every native write stages a full generation
 and rebuilds its index. Server index memory, overlapping generations, write costs
 and concurrent-writer scalability are outside these measurements.
+
+### RedisJSON scalar-filter measurements
+
+```sh
+GOTOOLCHAIN=go1.27.4 REDIS_TEST_ADDR=127.0.0.1:63799 go test -tags=integration \
+  -run '^$' -bench '^BenchmarkRedisJSONScalarRead$' -benchtime=200ms -count=3 ./stores/redis
+```
+
+This version-4 JSON fixture shares the native-read benchmark's indexed Group/Rank
+properties and seeded (44) 16-dimensional L2 HNSW vectors. Each operation filters
+to 10% of records. Query sorts by Rank, skips two and returns five; Count uses
+the same filter; Search returns five with default HNSW tuning. Reference operations
+load/decode the complete canonical generation and construct a new Go engine;
+provider routing cannot accelerate that baseline. Setup, writes and index builds
+are untimed. Correctness, NULL/precision and filtered FLAT equivalence are checked
+separately by integration tests.
+
+Local medians of three 200 ms samples on Apple M3 Pro, darwin/arm64, Go 1.27.4,
+Redis 8.2 in Docker. B/op measures Go allocations, excluding Redis memory; timings
+include local network/container overhead. No integration suite shared the server
+during this measurement.
+
+| Records | Operation | Native ms/op | Reference ms/op | Native B/op | Reference B/op |
+| --- | --- | ---: | ---: | ---: | ---: |
+| 100 | Query | 1.397 | 5.041 | 113,524 | 919,509 |
+| 100 | Count | 0.964 | 4.780 | 30,853 | 918,306 |
+| 100 | Search | 1.168 | 4.883 | 92,149 | 873,012 |
+| 1,000 | Query | 5.691 | 32.436 | 1,160,109 | 9,449,605 |
+| 1,000 | Count | 1.148 | 21.541 | 173,041 | 9,451,083 |
+| 1,000 | Search | 3.069 | 21.286 | 595,212 | 8,796,464 |
+
+These short, warm samples establish workload-specific read costs, not production
+throughput. Count avoids payload retrieval/decoding, while Query still downloads
+and sorts all matching payloads. The token manifest remains O(N); unfiltered Query,
+Get/GetMany, unsupported filters and older vector-only indexes retain their full
+snapshot paths. Every native write still stages and indexes an entire generation.
+Server allocator memory, overlapping generations, write costs and concurrent
+writers are outside these measurements.
 
 ## SQLite scalar query verification
 

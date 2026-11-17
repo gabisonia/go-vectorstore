@@ -113,7 +113,7 @@ func (c *Collection) nativeManifest(ctx context.Context) (hashManifest, []byte, 
 		}
 		seen[t] = true
 	}
-	if m.Index == "" || ((m.Format == 2 && m.IndexVersion != 1 && m.IndexVersion != 2) || (m.Format == 3 && m.IndexVersion != 3)) || len(m.Tokens) > nativeMaxDocuments {
+	if m.Index == "" || ((m.Format == 2 && m.IndexVersion != 1 && m.IndexVersion != 2) || (m.Format == 3 && m.IndexVersion != 3 && m.IndexVersion != 4)) || len(m.Tokens) > nativeMaxDocuments {
 		return m, raw, false, nil
 	}
 	if m.Index != c.nativeIndexName(m.Format, m.Revision) {
@@ -250,7 +250,7 @@ func (c *Collection) nativeQuery(ctx context.Context, filter vectordata.Filter, 
 		if err != nil || !indexed {
 			return nil, 0, false, err
 		}
-		if m.Format == 3 {
+		if m.Format == 3 && m.IndexVersion == 3 {
 			return nil, 0, false, nil
 		}
 		limit := len(m.Tokens)
@@ -332,7 +332,7 @@ func (c *Collection) nativeSearch(ctx context.Context, vector []float32, p vecto
 		if err != nil || !indexed {
 			return nil, false, err
 		}
-		if m.Format == 3 && opts.Filter != nil {
+		if m.Format == 3 && m.IndexVersion == 3 && opts.Filter != nil {
 			return nil, false, nil
 		}
 		available := false

@@ -61,8 +61,8 @@ func TestIntegrationJSONNativePrecisionAndPaths(t *testing.T) {
 	}
 	m, _ := currentJSONManifest(t, c)
 	fields, err := c.nativeFields(m)
-	if err != nil || len(fields) != 2 || fields[1].Name != "$.__vs_vectors.v0" {
-		t.Fatalf("unsafe JSON paths or scalar/text fields: %+v %v", fields, err)
+	if err != nil || len(fields) != 7 || fields[len(fields)-1].Name != "$.__vs_vectors.v0" {
+		t.Fatalf("unsafe JSON paths or unexpected scalar/text fields: %+v %v", fields, err)
 	}
 	raw, err := s.client.Do(ctx, "JSON.GET", c.jsonKeys(m)[2]).Text()
 	if err != nil {
@@ -75,8 +75,8 @@ func TestIntegrationJSONNativePrecisionAndPaths(t *testing.T) {
 	options.Filter = vectordata.Eq(vectordata.Column("Text"), input.Data["Text"])
 	native, full = 0, 0
 	hits, err = c.Search(ctx, []float32{0.3333, 1}, 1, options)
-	if err != nil || len(hits) != 1 || native != 0 || full != 1 {
-		t.Fatalf("JSON filter did not fall back: %+v %v native=%d full=%d", hits, err, native, full)
+	if err != nil || len(hits) != 1 || native != 1 || full != 0 {
+		t.Fatalf("JSON filter did not stay native: %+v %v native=%d full=%d", hits, err, native, full)
 	}
 	assertPersistentJSON(t, c)
 	// The JSON projection must fit alongside the canonical payload, not just the
@@ -204,5 +204,160 @@ func TestIntegrationJSONNativePathDriftAndUnknownVersion(t *testing.T) {
 	}})
 	if hits, err := c.Search(ctx, []float32{1, 0}, 1, vectordata.ModelSearchOptions{}); err != nil || len(hits) != 1 || native != 0 || full != 1 {
 		t.Fatalf("unknown JSON index version bypassed fallback: %+v %v native=%d full=%d", hits, err, native, full)
+	}
+}
+
+func TestIntegrationJSONNativeVectorOnlyCompatibility(t *testing.T) {
+	requireRedisJSON(t)
+	requireNativeSearch(t)
+	ctx := context.Background()
+	s := integrationStore(t, StoreOptions{StorageMode: StorageJSON, NativeIndexes: true})
+	c := nativeLifecycleCollection(t, s)
+	if _, err := c.Insert(ctx, nativeLifecycleRows("kept")); err != nil {
+		t.Fatal(err)
+	}
+	m, _ := currentJSONManifest(t, c)
+	// Recreate the preceding vector-only layout with its original JSON paths,
+	// default TAG separator and no scalar projections. Registration is unchanged.
+	for _, key := range c.jsonKeys(m)[2:] {
+		if err := s.client.Do(ctx, "JSON.DEL", key, "$.__vs_scalars").Err(); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := s.client.Do(ctx, "FT.DROPINDEX", m.Index).Err(); err != nil {
+		t.Fatal(err)
+	}
+	m.IndexVersion = 3
+	if err := c.createNativeIndex(ctx, m); err != nil {
+		t.Fatal(err)
+	}
+	before, err := json.Marshal(m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.client.Set(ctx, s.key(c.name), before, 0).Err(); err != nil {
+		t.Fatal(err)
+	}
+	native, full := 0, 0
+	s.client.AddHook(processHook{run: func(ctx context.Context, cmd goredis.Cmder, next goredis.ProcessHook) error {
+		if scriptIs(cmd, nativeJSONExecute) {
+			native++
+		}
+		if scriptIs(cmd, readJSON) {
+			full++
+		}
+		return next(ctx, cmd)
+	}})
+	filter := vectordata.Eq(vectordata.Column("Value"), "kept")
+	check := func(op string, indexed bool) {
+		t.Helper()
+		native, full = 0, 0
+		switch op {
+		case "query":
+			rows, err := c.Query(ctx, filter, 2, vectordata.QueryOptions{})
+			if err != nil || len(rows) != 2 || rows[0].Key != int64(1) {
+				t.Fatalf("legacy/rebuilt query: %+v %v", rows, err)
+			}
+		case "count":
+			if count, err := c.Count(ctx, filter); err != nil || count != 2 {
+				t.Fatalf("legacy/rebuilt count: %d %v", count, err)
+			}
+		case "search", "unfiltered":
+			options := vectordata.ModelSearchOptions{Filter: filter}
+			if op == "unfiltered" {
+				options.Filter = nil
+			}
+			hits, err := c.Search(ctx, []float32{1, 0}, 1, options)
+			if err != nil || len(hits) != 1 || hits[0].Record.Key != int64(1) {
+				t.Fatalf("legacy/rebuilt search: %+v %v", hits, err)
+			}
+		}
+		if indexed && (native != 1 || full != 0) || !indexed && (native != 0 || full != 1) {
+			t.Fatalf("%s indexed=%v: native=%d full=%d", op, indexed, native, full)
+		}
+	}
+	for _, op := range []string{"query", "count", "search"} {
+		check(op, false)
+	}
+	check("unfiltered", true)
+	_, after := currentJSONManifest(t, c)
+	if string(before) != string(after) {
+		t.Fatal("reads implicitly rebuilt the vector-only generation")
+	}
+	if err := c.RebuildNativeIndexes(ctx); err != nil {
+		t.Fatal(err)
+	}
+	rebuilt, _ := currentJSONManifest(t, c)
+	if rebuilt.IndexVersion != 4 || rebuilt.Definition != m.Definition || rebuilt.Next != m.Next || !reflect.DeepEqual(rebuilt.Tokens, m.Tokens) {
+		t.Fatalf("scalar rebuild changed model/sequence/tokens: %+v", rebuilt)
+	}
+	for _, op := range []string{"query", "count", "search", "unfiltered"} {
+		check(op, true)
+	}
+	// Native Count does not fetch/decode payloads. Query validates matching
+	// canonical records and must fail closed on a damaged payload.
+	if err := s.client.Do(ctx, "JSON.SET", c.jsonKeys(rebuilt)[2], "$.__vs_payload", `"invalid canonical payload"`).Err(); err != nil {
+		t.Fatal(err)
+	}
+	check("count", true)
+	if rows, err := c.Query(ctx, filter, 2, vectordata.QueryOptions{}); err == nil || len(rows) != 0 {
+		t.Fatalf("damaged matching payload escaped: %+v %v", rows, err)
+	}
+}
+
+func TestIntegrationJSONNativeScalarSchemaDrift(t *testing.T) {
+	requireRedisJSON(t)
+	requireNativeSearch(t)
+	for _, drift := range []string{"path", "separator"} {
+		t.Run(drift, func(t *testing.T) {
+			ctx := context.Background()
+			s := integrationStore(t, StoreOptions{StorageMode: StorageJSON, NativeIndexes: true})
+			c := nativeLifecycleCollection(t, s)
+			if _, err := c.Insert(ctx, nativeLifecycleRows("kept")); err != nil {
+				t.Fatal(err)
+			}
+			m, _ := currentJSONManifest(t, c)
+			if err := s.client.Do(ctx, "FT.DROPINDEX", m.Index).Err(); err != nil {
+				t.Fatal(err)
+			}
+			alter, changed := true, false
+			s.client.AddHook(hashFailureHook{process: func(ctx context.Context, cmd goredis.Cmder, next goredis.ProcessHook) error {
+				if alter && cmd.Name() == "ft.create" {
+					args := cmd.Args()
+					for i, arg := range args {
+						if arg != "$.__vs_scalars.__vs_tag_0" {
+							continue
+						}
+						if drift == "path" {
+							args[i] = "$.__vs_scalars.wrong"
+						} else {
+							for j := i + 1; j+1 < len(args); j++ {
+								if args[j] == "SEPARATOR" {
+									args[j+1] = "x"
+									break
+								}
+							}
+						}
+						changed = true
+						break
+					}
+				}
+				return next(ctx, cmd)
+			}})
+			if err := c.createNativeIndex(ctx, m); !errors.Is(err, vectordata.ErrSchemaMismatch) || !changed {
+				t.Fatalf("physical %s drift accepted: %v changed=%v", drift, err, changed)
+			}
+			alter = false
+			filter := vectordata.Eq(vectordata.Column("Value"), "kept")
+			if _, err := c.Count(ctx, filter); !errors.Is(err, vectordata.ErrSchemaMismatch) {
+				t.Fatalf("count ignored scalar %s drift: %v", drift, err)
+			}
+			if err := c.RebuildNativeIndexes(ctx); err != nil {
+				t.Fatal(err)
+			}
+			if count, err := c.Count(ctx, filter); err != nil || count != 2 {
+				t.Fatalf("rebuild did not restore scalar filtering: %d %v", count, err)
+			}
+		})
 	}
 }

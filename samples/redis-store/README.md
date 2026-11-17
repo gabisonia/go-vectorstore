@@ -111,11 +111,12 @@ go run ./samples/redis-store -addr localhost:63799 -namespace redis_json_flat_de
 go run ./samples/redis-store -addr localhost:63799 -namespace redis_json_flat_demo -storage json -native -index flat
 ```
 
-All four commands print the same three lines. Count still evaluates its category
-filter in Go; the JSON native sample uses unfiltered KNN to exercise the vector
-index. JSON scalar/full-text indexes are deferred, so filtered vector searches
-also use Go. `-fulltext` requires HASH storage. Rebuilds and native writes build a
+All four commands print the same three lines. Count and vector Search both push
+the Category filter into Redis using JSON scalar projections. JSON full-text
+indexes remain deferred; `-fulltext` requires HASH storage. Rebuilds and native writes build a
 new index before atomic publication; ordinary JSON readers/writers remain compatible.
+Existing version-3 vector-only generations keep Go filtering until an explicit
+rebuild or the sample's native upsert adds version-4 scalar indexes.
 
 Records remain in Redis. To clean up only this fixture, call
 `store.DeleteCollection(ctx, "documents")` using its configured namespace/database.
