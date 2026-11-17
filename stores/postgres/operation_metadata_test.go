@@ -54,6 +54,18 @@ func TestOperationMetadataRetainsConfiguredStoreAndCauses(t *testing.T) {
 	if !errors.Is(err, vectordata.ErrCollectionNotFound) || !errors.As(err, &cause) || cause != native {
 		t.Fatalf("lost native/sentinel causes: %v", err)
 	}
+	duplicate := &pgconn.PgError{Code: "23505", Message: "duplicate model key"}
+	err = c.operation("write", duplicate)
+	check(err, "write")
+	if !errors.Is(err, vectordata.ErrInvalidRecord) || !errors.As(err, &cause) || cause != duplicate {
+		t.Fatalf("duplicate write lost portable/native causes: %v", err)
+	}
+	for _, native := range []*pgconn.PgError{{Code: "42501", Message: "permission denied"}, {Code: "40001", Message: "serialization failure"}} {
+		err := c.operation("write", native)
+		if errors.Is(err, vectordata.ErrInvalidRecord) || !errors.As(err, &cause) || cause != native {
+			t.Fatalf("unrelated error reclassified: %v", err)
+		}
+	}
 	wrapped.DatabaseName = "changed"
 	if store.StoreMetadata().DatabaseName != "research" {
 		t.Fatal("error metadata changed store identity")

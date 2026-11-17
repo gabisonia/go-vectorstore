@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Add typed and dynamic model InsertOne/UpsertOne/DeleteOne/TryGet helpers for
+  Microsoft-style single-record workflows. Preserve batch/provider compatibility,
+  generated keys, vector projection, codec failures and found/error semantics;
+  make one underlying call without write retries. Fix typed batch replies silently
+  accepting nil keys or incorrect key counts. Classify duplicate PostgreSQL model
+  writes as ErrInvalidRecord while preserving native SQLSTATE diagnostics.
+  Add shared provider contracts,
+  error/cancellation regressions, executable examples and rerunnable recipes.
+
 - Add opt-in SQLite scalar indexes for indexed string/int64/float64/bool fields.
   Build new collections atomically and explicitly backfill existing format-1
   collections without changing payloads or registrations. Triggers maintain all

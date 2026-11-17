@@ -11,7 +11,7 @@ It is a workflow comparison, not a claim of API or feature equivalence with ever
 | Declare key/data/vector properties | Struct tags, explicit CollectionDefinition, StructCodec and custom codecs | Implemented |
 | Typed and dynamic records | TypedModelCollection[K,T] and ModelRecord | Implemented |
 | Native keys and data | string/int64/uint64/UUID keys, typed integer widths and aliases; 20 data types, including exact decimal/calendar values and arrays | Implemented; inspect canonical storage capabilities |
-| Collection lifecycle and CRUD | ModelStore, CollectionManager, ModelCollection; batch operations and generated int64/UUID keys | Implemented |
+| Collection lifecycle and CRUD | ModelStore, CollectionManager, ModelCollection; batch and single-record operations, TryGet found result, generated int64/UUID keys | Implemented |
 | Vector selection and retrieval | Multiple named properties, optional projection, nullable vectors | Implemented |
 | Dense, half, binary, sparse search | Search/SearchBinary/SearchSparse; explicit metric, thresholds and paging | Implemented; index support varies |
 | Squared Euclidean distance | DistanceL2Squared (`l2_squared`), squared-distance thresholds and reciprocal similarity scores | Dense float32/float16 on all providers; sparse on memory/SQLite/PostgreSQL |
@@ -24,6 +24,18 @@ It is a workflow comparison, not a claim of API or feature equivalence with ever
 | Error diagnostics | OperationError preserves error chains and embeds configured store identity for structured diagnostics | PostgreSQL/SQLite/Redis model wrappers and PostgreSQL migrations; wrapping is optional |
 | Schema evolution | Read-only plans, drift detection, explicit reviewed additive application | PostgreSQL |
 | Durable provider portability | PostgreSQL, embedded SQLite and Redis snapshots | Implemented; Redis durability depends on server policy; memory is transient |
+
+The 2026-11-17 API audit checked the current Microsoft single-record
+[upsert/delete/get workflows](https://learn.microsoft.com/en-us/dotnet/ai/vector-stores/manage-data).
+Typed models expose InsertOne/UpsertOne/DeleteOne/TryGet; dynamic models use package
+helpers over the unchanged ModelCollection interface. Get retains ErrNotFound;
+TryGet returns an explicit found result for provider absence and preserves codec,
+connection and collection errors. Generated keys are returned without mutating
+caller models. Malformed typed write replies (nil keys or incorrect key counts)
+are rejected, with no replay after an uncertain response. Duplicate PostgreSQL
+model writes expose the portable ErrInvalidRecord sentinel and native SQLSTATE
+23505 together. Shared provider contracts cover these workflows; this is workflow compatibility, not identical .NET naming
+or exception/return-value semantics.
 
 ## Provider matrix
 

@@ -41,7 +41,7 @@ type RankedNote struct {
 
 func run(ctx context.Context, args []string, out io.Writer) error {
 	flags := flag.NewFlagSet("recipes", flag.ContinueOnError)
-	recipe := flags.String("recipe", "named-vectors", "named-vectors, scalar-query, key-filters, squared-l2, iterators, embedded-iterators, metadata, capabilities, hybrid, migration")
+	recipe := flags.String("recipe", "named-vectors", "single-record, named-vectors, scalar-query, key-filters, squared-l2, iterators, embedded-iterators, metadata, capabilities, hybrid, migration")
 	dsn := flags.String("dsn", "", "PostgreSQL DSN (required for hybrid/migration)")
 	path := flags.String("sqlite", "", "SQLite file (default: memory)")
 	prefix := flags.String("prefix", "recipe_demo", "Dedicated collection prefix")
@@ -49,7 +49,7 @@ func run(ctx context.Context, args []string, out io.Writer) error {
 		return err
 	}
 	switch *recipe {
-	case "named-vectors", "scalar-query", "key-filters", "squared-l2", "iterators", "embedded-iterators", "metadata", "capabilities", "hybrid", "migration":
+	case "single-record", "named-vectors", "scalar-query", "key-filters", "squared-l2", "iterators", "embedded-iterators", "metadata", "capabilities", "hybrid", "migration":
 	default:
 		return fmt.Errorf("unknown recipe %q", *recipe)
 	}
@@ -82,6 +82,50 @@ func execute(ctx context.Context, store vectordata.ModelStore, recipe, prefix st
 	}
 	name := prefix + "_" + recipe
 	switch recipe {
+	case "single-record":
+		c, err := vectordata.EnsureTypedModelCollection[string, Note](ctx, store, name, nil, vectordata.ModelCollectionOptions{})
+		if err != nil {
+			return err
+		}
+		key, err := c.UpsertOne(ctx, Note{ID: "one", Text: "hello"})
+		if err != nil {
+			return err
+		}
+		note, found, err := c.TryGet(ctx, key, vectordata.RetrievalOptions{})
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(out, "Found: %s (%t, %s)\n", note.ID, found, note.Text)
+		_, found, err = c.TryGet(ctx, "absent", vectordata.RetrievalOptions{})
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(out, "Missing found: %t\n", found)
+		base, err := store.GetModelCollection(name, c.Definition(), vectordata.ModelCollectionOptions{})
+		if err != nil {
+			return err
+		}
+		if _, err := vectordata.InsertOne(ctx, base, vectordata.ModelRecord{Key: "two", Data: map[string]any{"Text": "dynamic"}}); err != nil {
+			return err
+		}
+		_, found, err = vectordata.TryGet(ctx, base, "two", vectordata.RetrievalOptions{})
+		if err != nil {
+			return err
+		}
+		fmt.Fprintf(out, "Dynamic found: %t\n", found)
+		deleted, err := c.DeleteOne(ctx, key)
+		if err != nil {
+			return err
+		}
+		repeated, err := c.DeleteOne(ctx, key)
+		if err != nil {
+			return err
+		}
+		if _, err := vectordata.DeleteOne(ctx, base, "two"); err != nil {
+			return err
+		}
+		fmt.Fprintf(out, "Deleted: %t; repeated delete: %t\n", deleted, repeated)
+		return nil
 	case "scalar-query":
 		c, err := vectordata.EnsureTypedModelCollection[int64, RankedNote](ctx, store, name, nil, vectordata.ModelCollectionOptions{})
 		if err != nil {

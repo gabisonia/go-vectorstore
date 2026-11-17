@@ -7,6 +7,7 @@ need no API key.
 
 | Recipe | Command | Expected result |
 | --- | --- | --- |
+| Single-record CRUD and optional lookup | `go run ./samples/recipes -recipe single-record` | `Missing found: false`, `Deleted: true; repeated delete: false` |
 | Named vectors and projection | `go run ./samples/recipes -recipe named-vectors` | `guide: BodyVector distance 0.000; loaded dimensions 3` |
 | Key-filter query/count | `go run ./samples/recipes -recipe key-filters -sqlite /tmp/recipes.db` | `Matched keys: 2`, `Paged key: 2`, `Exact-key count: 1` |
 | Scalar filtering and paging | `go run ./samples/recipes -recipe scalar-query -sqlite /tmp/recipes.db` | `Scalar count: 3`, `Scalar page: 3 rank 2` |
@@ -99,3 +100,16 @@ go test -race -tags=integration -timeout=3m ./samples/recipes
 Docker is required unless `PGVECTOR_TEST_DSN` points to a disposable database;
 `PGVECTOR_TEST_IMAGE` selects the pgvector image. Each test uses a private schema
 and removes it afterward.
+
+The `single-record` recipe demonstrates typed UpsertOne/TryGet/DeleteOne and dynamic
+InsertOne/TryGet/DeleteOne. It deletes its two records, so repeated runs are safe:
+
+```sh
+go run ./samples/recipes -recipe single-record -sqlite /tmp/recipes.db
+go run ./samples/recipes -recipe single-record -sqlite /tmp/recipes.db
+```
+
+The collection remains. A missing key returns `found=false, err=nil`; Get still
+returns ErrNotFound. Provider, codec and collection errors remain errors. Prefer
+batch writes when processing multiple records to combine embedding requests and
+storage work. Explicit/generated keys follow the same rules as existing batches.

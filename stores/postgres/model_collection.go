@@ -37,8 +37,13 @@ func (c *ModelCollection) operation(op string, err error) error {
 		return nil
 	}
 	var pgErr *pgconn.PgError
-	if errors.As(err, &pgErr) && pgErr.Code == "42P01" {
-		err = fmt.Errorf("%w: %w", vectordata.ErrCollectionNotFound, err)
+	if errors.As(err, &pgErr) {
+		switch {
+		case pgErr.Code == "42P01":
+			err = fmt.Errorf("%w: %w", vectordata.ErrCollectionNotFound, err)
+		case op == "write" && pgErr.Code == "23505":
+			err = fmt.Errorf("%w: %w", vectordata.ErrInvalidRecord, err)
+		}
 	}
 	return c.store.operation(c.name, op, err)
 }

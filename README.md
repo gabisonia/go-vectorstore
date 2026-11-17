@@ -149,7 +149,9 @@ uses native predicates for indexed native arrays.
 
 See the [provider and .NET parity checklist](docs/parity.md), [SQLite guide](docs/sqlite.md),
 [upgrade guide](docs/upgrading.md), and [changelog](CHANGELOG.md).
-Original `Record`/`Collection` callers remain compatible.
+Model callers can use `InsertOne`/`UpsertOne`/`DeleteOne` and `TryGet` for
+[single-record workflows](samples/recipes/README.md). Batch operations remain
+available for bulk writes. Original `Record`/`Collection` callers remain compatible.
 Bulk PostgreSQL writes automatically use binary vector parameters to reduce
 serialization allocations; see [the measured transport comparison](docs/performance.md#binary-vector-ingestion-and-copy-comparison).
 
