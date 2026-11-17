@@ -4,6 +4,10 @@
 [modernc.org/sqlite](https://pkg.go.dev/modernc.org/sqlite). It needs no database
 server, extension, C compiler, or API key.
 
+The next optional vector execution path is described in the
+[SQLite vector design](sqlite-vector-design.md), with a reproducible driver probe.
+It is not yet a provider feature; current vector searches use the Go exact engine.
+
 ```go
 store, err := sqlite.Open(ctx, "/var/lib/myapp/vectors.db", sqlite.StoreOptions{})
 if err != nil {

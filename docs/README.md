@@ -14,6 +14,7 @@ Redis and memory, plus the original PostgreSQL Record API.
 
 - [Model API](model-api.md): schemas, typed/native keys and data, optional named vectors, filters, embeddings, search and iterators
 - [SQLite provider](sqlite.md): setup, persistence, concurrency and snapshot-scan limits
+- [SQLite vector design](sqlite-vector-design.md): opt-in extension choice, executable compatibility probe and implementation gates
 - [Parity implementation plan](parity-plan.md): ordered increments, acceptance checks and delivery status
 - [Provider and .NET parity](parity.md): implemented workflows, provider capabilities and deliberate differences
 - [Upgrade guide](upgrading.md): installation, compatibility changes and adoption steps

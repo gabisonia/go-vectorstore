@@ -43,6 +43,30 @@ jobs:
       - name: Test release tooling
         run: bash .github/scripts/release_test.sh
 
+  sqlite-vec-probe:
+    name: SQLite vec probe (${{ matrix.os }}, Go ${{ matrix.go }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {os: ubuntu-latest, go: '1.25.x'}
+          - {os: ubuntu-latest, go: stable}
+          - {os: macos-latest, go: '1.25.x'}
+          - {os: windows-latest, go: '1.25.x'}
+    env:
+      CGO_ENABLED: '0'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go }}
+          cache: true
+      - name: Verify opt-in extension and unextended writer compatibility
+        run: go test -count=1 -v -tags=sqlitevecprobe -timeout=3m ./internal/sqlitevecprobe
+      - name: Vet probe
+        run: go vet -tags=sqlitevecprobe ./internal/sqlitevecprobe
+
   integration-postgres:
     name: Postgres ${{ matrix.postgres }} (Go ${{ matrix.go }})
     runs-on: ubuntu-latest

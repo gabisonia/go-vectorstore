@@ -5,7 +5,7 @@ time, validate it locally and in CI, and continue after its merge. Keep the
 existing model interfaces and stored formats compatible. Fix confirmed defects
 encountered within each increment; record unrelated work separately.
 
-## 1. Provider annotations — implemented; awaiting merge
+## 1. Provider annotations — merged
 
 Add optional annotations to key, data and vector definitions, matching the purpose
 of Microsoft's [ProviderAnnotations](https://learn.microsoft.com/en-us/dotnet/api/microsoft.extensions.vectordata.vectorstoreproperty.providerannotations?view=net-10.0-pp).
@@ -21,15 +21,15 @@ Use JSON values rather than runtime objects because Go definitions are persisted
 - Add executable examples, rerunnable samples, docs and CI coverage. Finish with
   a reviewable PR and passing CI; do not merge automatically.
 
-Local verification passed the root race suite, minimum-Go checks, full PostgreSQL
-and Redis 8.2/7.4 suites, eight fuzz campaigns and sample reruns. The associated
-PR must pass CI before merge.
+[PR #55](https://github.com/gabisonia/go-vectorstore/pull/55) merged after all 13 CI
+jobs passed. Local verification passed the root race suite, minimum-Go checks,
+full PostgreSQL and Redis 8.2/7.4 suites, eight fuzz campaigns and sample reruns.
 
 Acceptance: unchanged models reopen unchanged files; annotations survive every
 provider; Redis NoStem changes keyword matching and mismatched indexes fail
 closed. Unknown Redis-owned options are rejected rather than silently ignored.
 
-## 2. SQLite vector execution — queued
+## 2. SQLite vector execution — design and probe implemented; awaiting merge
 
 First investigate sqlite-vec integration and its platform/driver requirements.
 Keep the current pure-Go, extension-free provider available. Propose a separate
@@ -42,6 +42,14 @@ means those features are not prerequisites for this increment.
 Acceptance: a documented compatibility/design decision followed by independently
 reviewable implementation PRs; no silent file conversion or new default native
 dependency. Do not call sqlite-vec exact search ANN acceleration.
+
+The [SQLite vector design](sqlite-vector-design.md) selects the already-pinned
+driver's pure-Go sqlite-vec package through a future opt-in adapter. Its executable
+probe covers extension availability, distances, filter placement and a separate
+unextended writer. Float32 rounding and mixed-writer trigger behavior require
+explicit correctness gates before native ranking ships. Next: ordinary vector
+projections and transactional invalidation, then native execution and measurement
+in separate PRs. This design/probe increment changes no production capabilities.
 
 ## 3. Connector breadth: Qdrant — queued
 

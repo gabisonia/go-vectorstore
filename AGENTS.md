@@ -32,6 +32,17 @@ These commands need no provider credentials. The sample script creates/removes
 its own temporary SQLite files. Documentation checks execute only the explicitly
 marked complete AI-guide program; other snippets may be partial recipes.
 
+The SQLite vector design has an isolated, opt-in compatibility probe:
+
+```sh
+CGO_ENABLED=0 go test -count=1 -v -tags=sqlitevecprobe -timeout=3m ./internal/sqlitevecprobe
+```
+
+Its tagged test binary links `modernc.org/sqlite/vec`; the default provider does
+not. The probe runs a separate unextended writer and records float32 precision
+and trigger compatibility gates. Keep it independent of production capabilities;
+see [docs/sqlite-vector-design.md](docs/sqlite-vector-design.md).
+
 PostgreSQL and sample recipe integration tests need Docker:
 
 ```sh
