@@ -31,7 +31,11 @@ type StoreOptions struct {
 	NativeIndexes bool
 	// VectorProjections builds packed dense vectors for new collections. Existing
 	// collections require RebuildVectorProjections. Ranking remains exact in Go.
-	VectorProjections  bool
+	VectorProjections bool
+	// VectorExecution selects optional native candidate execution. SQLiteVec
+	// requires the extension to be linked (normally through stores/sqlitevec),
+	// implies VectorProjections, and retains canonical Go distance/score ranking.
+	VectorExecution    VectorExecution
 	Embedder           vectordata.Embedder
 	InputEmbedder      vectordata.InputEmbedder
 	EmbeddingBatchSize int
@@ -43,6 +47,7 @@ type Store struct {
 	databaseName      string
 	nativeIndexes     bool
 	vectorProjections bool
+	nativeVectors     bool
 }
 
 var _ vectordata.ModelStore = (*Store)(nil)
@@ -53,6 +58,9 @@ var _ vectordata.InputSearcher = (*Collection)(nil)
 // provider tables if needed. Paths are literal filenames, not driver DSNs.
 // Close must be called when the store is no longer needed.
 func Open(ctx context.Context, path string, opts StoreOptions) (*Store, error) {
+	if opts.VectorExecution != VectorExecutionGo && opts.VectorExecution != VectorExecutionSQLiteVec {
+		return nil, fmt.Errorf("%w: unknown SQLite vector execution mode", vectordata.ErrUnsupported)
+	}
 	defaults, err := (vectordata.ModelCollectionOptions{Embedder: opts.Embedder, InputEmbedder: opts.InputEmbedder, EmbeddingBatchSize: opts.EmbeddingBatchSize}).WithDefaults(vectordata.ModelCollectionOptions{})
 	if err != nil {
 		return nil, err
@@ -69,7 +77,7 @@ func Open(ctx context.Context, path string, opts StoreOptions) (*Store, error) {
 		if err != nil {
 			return nil, err
 		}
-		dsn = (&url.URL{Scheme: "file", Path: absolute}).String()
+		dsn = sqliteFileURI(filepath.ToSlash(absolute))
 		databaseName = absolute
 	}
 	q := url.Values{}
@@ -85,12 +93,30 @@ func Open(ctx context.Context, path string, opts StoreOptions) (*Store, error) {
 	}
 	db.SetMaxOpenConns(1)
 	db.SetMaxIdleConns(1)
-	s := &Store{db: db, options: defaults, databaseName: databaseName, nativeIndexes: opts.NativeIndexes, vectorProjections: opts.VectorProjections}
+	s := &Store{db: db, options: defaults, databaseName: databaseName, nativeIndexes: opts.NativeIndexes,
+		vectorProjections: opts.VectorProjections || opts.VectorExecution == VectorExecutionSQLiteVec,
+		nativeVectors:     opts.VectorExecution == VectorExecutionSQLiteVec}
+	if s.nativeVectors {
+		if err := s.verifyVectorExtension(ctx); err != nil {
+			db.Close()
+			return nil, err
+		}
+	}
 	if err := s.initialize(ctx); err != nil {
 		db.Close()
 		return nil, err
 	}
 	return s, nil
+}
+
+// Accept an absolute slash-separated filename. Drive paths need a leading slash
+// so url.URL keeps C: in the path, rather than turning it into URI authority.
+// A UNC path stays in the path too (file:////server/share), with empty authority.
+func sqliteFileURI(path string) string {
+	if !strings.HasPrefix(path, "/") {
+		path = "/" + path
+	}
+	return (&url.URL{Scheme: "file", Path: path}).String()
 }
 func (s *Store) initialize(ctx context.Context) error {
 	tx, err := s.beginTx(ctx)

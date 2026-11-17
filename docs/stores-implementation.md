@@ -19,6 +19,7 @@ The shared core and provider packages are:
 - `stores/postgres/filtersql`: PostgreSQL SQL compiler; the core compiler entry point is a compatibility shim
 - `stores/postgres`: native model columns plus the original Record API
 - `stores/sqlite`: durable model storage with exact snapshot queries/search
+- `stores/sqlitevec`: optional adapter for verified scalar L1 candidates over the same SQLite engine
 - `stores/memory`: transient model storage with exact search
 - `stores/redis`: atomic collection snapshots with Go dense exact search
 - `internal/modelcodec`: canonical JSON record encoding shared by SQLite and Redis
@@ -250,6 +251,15 @@ for every writer, including older/non-native handles. Creation and explicit back
 are atomic; existing format-1 payloads/registrations stay unchanged. Unsupported
 filters keep their existing paths. Vector indexes, full-text/hybrid and migrations
 remain unadvertised. See [SQLite storage and limits](sqlite.md).
+
+Optional sqlite-vec execution verifies the pinned v0.1.9 non-SIMD build before
+initialization. Its scalar L1 loop matches sequential float64 Go L1, so a complete
+distance-boundary candidate set preserves exact top+Skip and key ties. Candidate
+keys/distances materialize in SQLite; Go reads only candidate vectors, ranks and
+fetches the selected canonical page within the same deferred transaction. Other
+metrics, filters and dirty projections keep their existing paths. The adapter
+aliases the provider, keeping codecs, writes, metadata and capabilities shared.
+See the [native candidate proof](sqlitevec.md#exact-distance-candidate-proof).
 
 ## Redis storage boundary
 

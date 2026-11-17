@@ -35,6 +35,7 @@ require it. Use current stable Go for up-to-date standard-library security fixes
 - `vectordata`: backend-agnostic core interfaces, record model, filters, typed wrapper
 - `stores/postgres`: Postgres implementation with `pgxpool`
 - `stores/sqlite`: durable SQLite model collections with exact search and opt-in scalar indexes
+- `stores/sqlitevec`: optional scalar L1 extension execution with exact Go ranking over the same SQLite format
 - `stores/redis`: atomic snapshots/hash generations, dense exact search and opt-in HNSW/FLAT
 - `stores/memory`: transient model collections for development and contract tests
 - `samples`: runnable demos (see `samples/README.md`)
@@ -390,6 +391,7 @@ git push origin "v${RELEASE_VERSION}"
 - Focused model workflows: [`recipes`](samples/recipes/README.md)
 - Model-driven collections (no API key): [`samples/model-store`](samples/model-store/README.md)
 - Persistent SQLite and optional vectors (no API key): [`samples/sqlite-store`](samples/sqlite-store/README.md)
+- Optional SQLite scalar L1 execution: [`samples/sqlitevec-store`](samples/sqlitevec-store/README.md)
 - Semantic search sample app: `samples/semantic-search`
 - RAG sample app (`RAGrimosa`): `samples/ragrimosa`
 
@@ -408,6 +410,7 @@ git push origin "v${RELEASE_VERSION}"
 - Connector development guide: [`docs/connector-development.md`](docs/connector-development.md)
 - Model-driven API: [`docs/model-api.md`](docs/model-api.md)
 - SQLite provider: [`docs/sqlite.md`](docs/sqlite.md)
+- Opt-in sqlite-vec and precision proof: [`docs/sqlitevec.md`](docs/sqlitevec.md)
 - Redis provider: [`docs/redis.md`](docs/redis.md)
 
 - Provider and .NET parity: [`docs/parity.md`](docs/parity.md)

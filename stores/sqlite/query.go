@@ -195,7 +195,7 @@ func (c *Collection) Search(ctx context.Context, v []float32, top int, o vectord
 	}
 	return c.searchRecords(ctx, p, top, o, func(r vectordata.ModelRecord) (float64, error) {
 		return exactsearch.DenseDistance(v, r.Vectors[p.Name], p.Metric), nil
-	})
+	}, v)
 }
 func (c *Collection) validateSearch(top int, o vectordata.ModelSearchOptions) (vectordata.VectorProperty, error) {
 	p, err := c.definition.Vector(o.VectorProperty)
@@ -243,7 +243,7 @@ func (c *Collection) SearchBinary(ctx context.Context, v vectordata.BinaryVector
 	return c.searchRecords(ctx, p, top, o, func(r vectordata.ModelRecord) (float64, error) {
 		n, err := vectordata.HammingDistance(v, r.BinaryVectors[p.Name])
 		return float64(n), err
-	})
+	}, nil)
 }
 func (c *Collection) SearchBinaryIter(ctx context.Context, v vectordata.BinaryVector, top int, o vectordata.ModelSearchOptions) iter.Seq2[vectordata.ModelSearchResult, error] {
 	return sequence(ctx, func() ([]vectordata.ModelSearchResult, error) { return c.SearchBinary(ctx, v, top, o) })
@@ -260,7 +260,7 @@ func (c *Collection) SearchSparse(ctx context.Context, v vectordata.SparseVector
 	}
 	return c.searchRecords(ctx, p, top, o, func(r vectordata.ModelRecord) (float64, error) {
 		return vectordata.SparseDistance(v, r.SparseVectors[p.Name], p.Metric)
-	})
+	}, nil)
 }
 func (c *Collection) SearchSparseIter(ctx context.Context, v vectordata.SparseVector, top int, o vectordata.ModelSearchOptions) iter.Seq2[vectordata.ModelSearchResult, error] {
 	return sequence(ctx, func() ([]vectordata.ModelSearchResult, error) { return c.SearchSparse(ctx, v, top, o) })

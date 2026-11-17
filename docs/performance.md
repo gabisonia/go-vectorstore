@@ -66,6 +66,38 @@ process pinned to published v0.4.0 also verified an update and generated-key ins
 into a projected file, followed by current-reader invalidation/fallback, explicit
 rebuild and exact projected search. The immutable release fixture is checked in CI.
 
+## SQLite-vec L1 verification
+
+```sh
+go test -race ./stores/sqlitevec ./internal/exactsearch
+go test -race -tags=sqlitevecprobe -run TestNativeVector ./stores/sqlite
+go test -run '^$' -bench BenchmarkL1Execution -benchmem -benchtime=100ms -count=3 ./stores/sqlitevec
+```
+
+The benchmark compares three handles over one canonical persisted collection:
+default scanning, packed Go scanning and sqlite-vec scalar L1 candidates. It uses
+1k/10k records, 128 dimensions, 4 KiB string data, unique distances and an unfiltered
+top-10 page without offset. Each path's complete page is compared before timing.
+Creation/inserts are untimed; reads are warm. On Go 1.26.1, darwin/arm64, Apple M3
+Pro, three 100 ms samples produced these medians:
+
+| Records | Path | Time/search | Go B/op (approximately) | Go allocs/op |
+| --- | --- | --- | --- | --- |
+| 1,000 | Canonical | 46.61 ms | 24,124,000 | 46,864 |
+| 1,000 | Packed Go | 1.59 ms | 2,449,000 | 14,399 |
+| 1,000 | sqlite-vec L1 | 1.47 ms | 280,000 | 788 |
+| 10,000 | Canonical | 461.13 ms | 241,131,000 | 469,860 |
+| 10,000 | Packed Go | 13.41 ms | 22,177,000 | 140,397 |
+| 10,000 | sqlite-vec L1 | 11.73 ms | 280,000 | 787 |
+
+Canonical timings have only one to three iterations/sample and are coarse.
+Allocation figures are cumulative Go allocations, not total process memory or
+SQLite temporary-storage requirements. The native path still scans all vectors
+and materializes key/distance pairs in SQLite; large ties can send all vectors to
+Go. This fixture excludes cold I/O, filters, dense ties and write/rebuild cost.
+Use longer workload-specific runs before choosing a path. See the
+[candidate proof and execution limits](sqlitevec.md).
+
 ## SQLite batch lookup and count verification
 
 ```sh

@@ -14,6 +14,7 @@ import (
 	"github.com/gabisonia/go-vectorstore/internal/exactsearch"
 	"github.com/gabisonia/go-vectorstore/stores/memory"
 	"github.com/gabisonia/go-vectorstore/stores/sqlite"
+	"github.com/gabisonia/go-vectorstore/stores/sqlitevec"
 	"github.com/gabisonia/go-vectorstore/vectordata"
 )
 
@@ -29,7 +30,12 @@ func stores(t *testing.T) map[string]vectordata.ModelStore {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { projected.Close() })
-	return map[string]vectordata.ModelStore{"memory": memory.New(), "sqlite": s, "sqlite_projected": projected}
+	native, err := sqlitevec.Open(context.Background(), filepath.Join(t.TempDir(), "native.db"), sqlitevec.StoreOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { native.Close() })
+	return map[string]vectordata.ModelStore{"memory": memory.New(), "sqlite": s, "sqlite_projected": projected, "sqlitevec": native}
 }
 func denseValues(r vectordata.ModelRecord, p vectordata.VectorProperty) []float32 {
 	if p.Kind != vectordata.VectorSparse {

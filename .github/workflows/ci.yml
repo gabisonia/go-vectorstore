@@ -63,9 +63,11 @@ jobs:
           go-version: ${{ matrix.go }}
           cache: true
       - name: Verify opt-in extension and unextended writer compatibility
-        run: go test -count=1 -v -tags=sqlitevecprobe -timeout=3m ./internal/sqlitevecprobe
+        run: |
+          go test -count=1 -v -tags=sqlitevecprobe -timeout=3m ./internal/sqlitevecprobe ./stores/sqlitevec
+          go test -count=1 -v -tags=sqlitevecprobe -run 'TestNativeVector|TestFileURI' -timeout=3m ./stores/sqlite
       - name: Vet probe
-        run: go vet -tags=sqlitevecprobe ./internal/sqlitevecprobe
+        run: go vet -tags=sqlitevecprobe ./internal/sqlitevecprobe ./stores/sqlitevec
 
   integration-postgres:
     name: Postgres ${{ matrix.postgres }} (Go ${{ matrix.go }})
