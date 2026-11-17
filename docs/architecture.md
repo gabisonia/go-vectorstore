@@ -10,6 +10,7 @@ The shared core and provider implementations are:
 - `stores/postgres`: PostgreSQL + pgvector implementation
 - `stores/sqlite`: durable embedded model storage with exact snapshot search
 - `stores/memory`: transient exact-search model implementation
+- `stores/redis`: standalone atomic snapshots and dense Go exact search
 
 Providers share model contracts, portable filter evaluation, and a conformance suite.
 
@@ -17,7 +18,8 @@ Providers share model contracts, portable filter evaluation, and a conformance s
 
 The model API uses CollectionDefinition to describe a native key, data properties
 and named vectors. ModelRecord holds Key, Data, Vectors, BinaryVectors and
-SparseVectors. All three providers implement it. TypedModelCollection[K,T] maps
+SparseVectors. Providers advertise supported vector kinds through capabilities.
+TypedModelCollection[K,T] maps
 application structs through tags or a custom ModelCodec. See the
 [model guide](model-api.md) for native types, optional vectors and embeddings.
 
@@ -168,7 +170,8 @@ Behavior details:
 - numeric-looking metadata strings are compared numerically; malformed or out-of-range strings do not match numeric comparisons
 - column filters are whitelist-based (`id`, `content` for Record collections; registered key/data fields for models)
 - native array set filters use PostgreSQL `&&`/`@>` with normalized operands; JSON paths retain whole-element matching
-- memory and SQLite evaluate model filters through the shared in-process evaluator
+- memory and Redis evaluate model filters through the shared in-process evaluator;
+  SQLite pushes supported scalar queries into SQL and uses that evaluator otherwise
 
 JSON path extraction behavior comes from PostgreSQL [JSON/JSONB functions and operators](https://www.postgresql.org/docs/current/functions-json.html).
 
@@ -294,7 +297,7 @@ without an API key. See [samples](../samples/README.md).
 
 Current scope:
 
-- PostgreSQL + pgvector and embedded SQLite backends
+- PostgreSQL + pgvector, embedded SQLite and standalone Redis snapshot backends
 - original Record API: one vector per collection
 - model API: native keys, data properties, and multiple named vectors
 - in-memory model provider for development and shared contract tests
@@ -336,10 +339,21 @@ sequences in a database file. Parameterized SQL, foreign-key cascades and immedi
 write transactions make batch changes atomic across handles. WAL and FULL
 synchronization are configured on each connection. GetMany performs indexed key
 lookups within one deferred read snapshot, and unfiltered Count uses SQL counting
-without decoding payloads. Query and filtered Count load a snapshot, release the
-connection, then use the memory engine. Exact search streams a deferred read
+without decoding payloads. Key filters use the primary index; supported scalar
+queries/counts run in SQL. Other query/count combinations load a snapshot, release
+the connection, then use the memory engine. Exact search streams a deferred read
 snapshot through the shared `internal/exactsearch` top-K selector, retaining only
 `top + Skip` candidates. Memory uses that selector over a shallow snapshot of
 immutable records. Both copy only the returned search page and release resources
 before application iteration. Runtime embedders are cleared during stored reads.
 Native values are decoded by declared type, with a separate SQL NULL marker for JSON properties. See [sqlite.md](sqlite.md) for workload limits.
+
+Redis stores one versioned collection envelope per Redis string. Reads obtain a
+consistent snapshot with one GET. Writes prepare/validate records before publishing
+through a compare-and-swap script with one final SET, covering data and generated
+keys atomically. Explicit conflicts may retry; uncertain results never replay.
+Canonical record JSON is shared with SQLite through `internal/modelcodec` without
+changing SQLite format 1. Redis supports dense float32/float16 and evaluates
+portable filters/exact search through the memory engine after releasing the client
+connection. Full-snapshot transfers, a default 16 MiB encoded limit and Redis's
+configured persistence/eviction policy define its initial scope. See [redis.md](redis.md).

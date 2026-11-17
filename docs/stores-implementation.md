@@ -20,6 +20,8 @@ The shared core and provider packages are:
 - `stores/postgres`: native model columns plus the original Record API
 - `stores/sqlite`: durable model storage with exact snapshot queries/search
 - `stores/memory`: transient model storage with exact search
+- `stores/redis`: atomic collection snapshots with Go dense exact search
+- `internal/modelcodec`: canonical JSON record encoding shared by SQLite and Redis
 
 All built-in providers implement ModelStore and ModelCollection. Only PostgreSQL
 also implements the original VectorStore/Collection contracts. New model providers
@@ -145,7 +147,7 @@ Filter AST supports:
 Execution strategy by backend:
 
 - PostgreSQL: compile AST to parameterized SQL via `stores/postgres/filtersql`
-- Memory and SQLite models: evaluate the shared AST against collection snapshots
+- Memory/Redis models and SQLite fallback queries: evaluate the shared AST against collection snapshots
 
 Important behavior:
 
@@ -204,7 +206,7 @@ normalized records in process. The original implementation
 and interfaces remain supported.
 
 The portable AST is in `vectordata/filterast`; PostgreSQL compilation is in
-`stores/postgres/filtersql`. Memory and SQLite provide exact search. All three
+`stores/postgres/filtersql`. Memory, SQLite and Redis provide exact search. All
 providers run `vectordata/conformance.Run`. SQLite adds file-reopen, concurrent
 handle, rollback and precision tests; PostgreSQL integration tests cover the
 driver, native schemas, indexes, migrations and transactions. See
@@ -236,3 +238,20 @@ every payload. Memory allocates O(collection size) shallow record headers, while
 candidate retention in both providers grows with top + Skip. Index hints are
 accepted for portability; SQLite advertises no physical property/vector indexes,
 full-text/hybrid search or migrations. See [SQLite storage and limits](sqlite.md).
+
+## Redis storage boundary
+
+Redis owns a standalone go-redis client with automatic retries disabled. One
+Redis string holds a format-1 envelope with schema, unique revision, next generated
+integer key and canonical records. A GET provides one consistent collection read.
+The compare-and-swap script compares opaque old bytes and executes one final SET;
+Lua does not parse numeric keys or make intermediate writes. Only explicit conflict
+replies retry; preparation/embedding runs once outside retries. Network/timeout
+errors can represent a committed batch and are returned without replay.
+
+Queries and dense search materialize a memory collection, clearing runtime
+embedders before inserting stored records. Get/GetMany decode selected records;
+all still transfer the entire envelope. The configurable snapshot limit defaults
+to 16 MiB. Redis SCAN listing is deduplicated/sorted but not a namespace snapshot.
+Metadata is local, native indexing/hybrid/migrations are unadvertised, and server
+persistence/eviction policy determines durability. See [Redis limits](redis.md).

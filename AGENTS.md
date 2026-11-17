@@ -6,7 +6,7 @@ This file describes contributing to this repository.
 ## Repository map
 
 - `vectordata`: public model/Record contracts, codecs, filters, embeddings and capabilities.
-- `stores/memory`, `stores/sqlite`, `stores/postgres`: concrete providers.
+- `stores/memory`, `stores/sqlite`, `stores/postgres`, `stores/redis`: concrete providers.
 - `internal/exactsearch`: shared bounded exact-search ranking for memory/SQLite.
 - `vectordata/conformance`: shared provider behavior and filter parity fixtures.
 - `samples`: runnable workflows; sample-only helpers live in `samples/internal`.
@@ -36,6 +36,7 @@ PostgreSQL and sample recipe integration tests need Docker:
 
 ```sh
 go test -race -tags=integration -timeout=5m ./stores/postgres ./samples/recipes
+go test -race -tags=integration -timeout=5m ./stores/redis
 ```
 
 Set `PGVECTOR_TEST_IMAGE=pgvector/pgvector:pg18` for PostgreSQL 18; the default is
@@ -43,6 +44,13 @@ pg16. `PGVECTOR_TEST_DSN` can use an existing disposable database instead. Tests
 create/drop isolated schemas. See `.github/workflows/ci.yml` for the full Go and
 PostgreSQL matrix and vulnerability scan. Live OpenAI calls are opt-in sample
 behavior; normal tests use deterministic embedders and local HTTP stand-ins.
+
+Redis tests start a disposable Redis 8.2 container; `REDIS_TEST_IMAGE=redis:7.4`
+selects the other CI version and `REDIS_TEST_ADDR` uses an existing disposable
+standalone server. Factories isolate namespaces. Redis snapshots use a shared
+canonical codec with SQLite; preserve its format-1 compatibility. Retry only
+explicit CAS conflicts, never uncertain network/write replies. Snapshot limits
+and full-collection transfer costs must remain documented.
 
 ## Invariants and implementation conventions
 

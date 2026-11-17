@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add a standalone Redis model provider with atomic collection snapshots, native
+  key/data precision, generated keys, exact dense float32/float16 search, portable
+  filters, embedding defaults, iterators and metadata. Bound snapshot size and
+  retry only explicit CAS conflicts; add Docker conformance/CI and a persistent
+  sample. Native property/vector/full-text indexes remain unsupported.
 - Add an isolated local documentation-agent sample using Microsoft Agent Framework
   Go, go-vectorstore v0.4.1, SQLite and Ollama. Compose initializes local models;
   typed search/read tools and source-ID checks demonstrate agent-driven retrieval

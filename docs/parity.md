@@ -14,30 +14,31 @@ It is a workflow comparison, not a claim of API or feature equivalence with ever
 | Collection lifecycle and CRUD | ModelStore, CollectionManager, ModelCollection; batch operations and generated int64/UUID keys | Implemented |
 | Vector selection and retrieval | Multiple named properties, optional projection, nullable vectors | Implemented |
 | Dense, half, binary, sparse search | Search/SearchBinary/SearchSparse; explicit metric, thresholds and paging | Implemented; index support varies |
-| Squared Euclidean distance | DistanceL2Squared (`l2_squared`), squared-distance thresholds and reciprocal similarity scores | All three providers; dense float32/float16 and sparse |
+| Squared Euclidean distance | DistanceL2Squared (`l2_squared`), squared-distance thresholds and reciprocal similarity scores | Dense float32/float16 on all providers; sparse on memory/SQLite/PostgreSQL |
 | Automatic embeddings | Text/custom-input embedders, direct input fields, store/collection/property overrides, bounded batches, SearchText/SearchInput | Implemented for dense outputs |
 | Filtered retrieval/search | Portable AST, JSON paths, native arrays, Contains/ContainsAny/ContainsAll | Implemented |
-| Read iteration and cancellation | Listing, batch reads, text/custom-input and every supported hybrid variant use iter.Seq2/context.Context | Implemented; PostgreSQL cursor enumeration, memory/SQLite snapshots/pages; compatibility fallbacks buffer slices |
+| Read iteration and cancellation | Listing, batch reads, text/custom-input and every supported hybrid variant use iter.Seq2/context.Context | Implemented; PostgreSQL cursor enumeration, memory/SQLite/Redis snapshots/pages; compatibility fallbacks buffer slices |
 | Hybrid keyword/vector search | Optional HybridSearcher and binary/sparse variants, RRF; string queries or plain-text KeywordTerms lists | PostgreSQL; inspect HybridKeywordTerms capability |
 | Provider discovery | CapabilityProvider reports keys, types, vector kinds, physical index tuples and optional workflows | Implemented |
-| Store/collection metadata | Optional metadata interfaces and helpers report system, database, namespace and collection identity; typed wrappers forward discovery | All three providers; local configuration snapshots |
-| Error diagnostics | OperationError preserves error chains and embeds configured store identity for structured diagnostics | PostgreSQL/SQLite model wrappers and PostgreSQL migrations; wrapping is optional |
+| Store/collection metadata | Optional metadata interfaces and helpers report system, database, namespace and collection identity; typed wrappers forward discovery | All providers; local configuration snapshots |
+| Error diagnostics | OperationError preserves error chains and embeds configured store identity for structured diagnostics | PostgreSQL/SQLite/Redis model wrappers and PostgreSQL migrations; wrapping is optional |
 | Schema evolution | Read-only plans, drift detection, explicit reviewed additive application | PostgreSQL |
-| Durable provider portability | PostgreSQL and embedded SQLite | Implemented; memory is transient |
+| Durable provider portability | PostgreSQL, embedded SQLite and Redis snapshots | Implemented; Redis durability depends on server policy; memory is transient |
 
 ## Provider matrix
 
-| Capability | PostgreSQL | SQLite | Memory |
-| --- | --- | --- | --- |
-| Persistence | Server tables | Local database file | Process lifetime |
-| Model keys, all native data types | Yes | Yes | Yes |
-| Dense/float16/binary/sparse and optional vectors | Yes | Yes | Yes |
-| Exact search | Yes | Yes, snapshot scan | Yes, snapshot scan |
-| Physical vector indexes | HNSW/IVFFlat, supported tuples | No | No |
-| Native data indexes | B-tree/GIN by property type | No | No |
-| Full-text and hybrid search | Yes | No | No |
-| Migration planning/application | Yes, additive subset | No | No |
-| Original Record API | Yes | No | No |
+| Capability | PostgreSQL | SQLite | Memory | Redis |
+| --- | --- | --- | --- | --- |
+| Persistence | Server tables | Local database file | Process lifetime | Server persistence policy |
+| Model keys, all portable data types | Yes | Yes | Yes | Yes, canonical JSON |
+| Dense/float16 and optional vectors | Yes | Yes | Yes | Yes |
+| Binary/sparse vectors | Yes | Yes | Yes | No |
+| Exact search | Yes | Yes, snapshot scan | Yes, snapshot scan | Yes, Go snapshot scan |
+| Physical vector indexes | HNSW/IVFFlat, supported tuples | No | No | No |
+| Native data indexes | B-tree/GIN by property type | No | No | No |
+| Full-text and hybrid search | Yes | No | No | No |
+| Migration planning/application | Yes, additive subset | No | No | No |
+| Original Record API | Yes | No | No | No |
 
 Use Capabilities on the concrete store and optional interface assertions at
 runtime; do not infer ANN/index support from accepted schema hints. PostgreSQL
@@ -51,6 +52,11 @@ filters, ordering and paging also run in SQL over payload JSON; unsupported
 combinations retain full-snapshot evaluation. Accepted index hints do not add
 property or ANN indexes. See [query costs](sqlite.md#query-costs-and-provider-limits)
 and [scalar measurements](performance.md#sqlite-scalar-query-verification).
+
+Redis is available on master after v0.4.1. It stores one atomic snapshot per
+collection, transfers the whole collection per nonempty record operation and runs
+exact dense search/filtering in Go. Its default encoded size limit is 16 MiB;
+accepted index hints build no physical indexes. See [Redis costs and guarantees](redis.md).
 
 ## Deliberate differences and future extensions
 

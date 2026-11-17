@@ -1,4 +1,16 @@
 services:
+  redis:
+    image: redis:8.2
+    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec", "--maxmemory-policy", "noeviction"]
+    ports:
+      - "127.0.0.1:63799:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
   postgres:
     image: pgvector/pgvector:pg16
     container_name: go-vectorstore-pg
@@ -13,3 +25,6 @@ services:
       interval: 2s
       timeout: 2s
       retries: 30
+
+volumes:
+  redis-data:
