@@ -10,6 +10,12 @@ import (
 // Canonicalize operands before a scan acquires database resources. Subsequent
 // matching must not invoke caller MarshalJSON/MarshalText/String methods while
 // SQLite holds its single pooled connection. JSON numbers retain exact precision.
+// FreezeFilter validates and owns normalized operands before provider I/O or
+// caller embedding callbacks. It preserves JSON and integer precision.
+func FreezeFilter(filter vectordata.Filter, d vectordata.CollectionDefinition) (vectordata.Filter, error) {
+	return freezeFilter(filter, d)
+}
+
 func freezeFilter(filter vectordata.Filter, d vectordata.CollectionDefinition) (vectordata.Filter, error) {
 	if err := vectordata.ValidateModelFilter(filter, d); err != nil {
 		return nil, err

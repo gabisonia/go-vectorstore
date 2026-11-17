@@ -29,6 +29,7 @@ func main() {
 	native := flag.Bool("native", false, "Enable Redis Search indexes; use a separate namespace for the indexed sample model")
 	index := flag.String("index", "hnsw", "Native vector index: hnsw or flat; use a separate namespace per model")
 	fullText := flag.Bool("fulltext", false, "Index Title as Redis TEXT; requires -native and a separate namespace")
+	hybrid := flag.Bool("hybrid", false, "Run keyword/vector RRF search; implies -fulltext and requires -native")
 	upgrade := flag.Bool("upgrade-hash", false, "Explicitly upgrade the sample collection to hash storage")
 	upgradeJSON := flag.Bool("upgrade-json", false, "Explicitly convert the sample collection to RedisJSON storage")
 	flag.Parse()
@@ -39,12 +40,18 @@ func main() {
 	opts := redis.StoreOptions{Addr: *addr, Namespace: *namespace, DB: *db, Username: os.Getenv("REDIS_USERNAME"), Password: os.Getenv("REDIS_PASSWORD"), TLSConfig: tlsConfig, StorageMode: redis.StorageMode(*storage), NativeIndexes: *native}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	if err := run(ctx, opts, *upgrade, vectordata.IndexMethod(*index), *fullText, *upgradeJSON); err != nil {
+	if err := run(ctx, opts, *upgrade, vectordata.IndexMethod(*index), *fullText, *upgradeJSON, *hybrid); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
-func run(ctx context.Context, opts redis.StoreOptions, upgrade bool, method vectordata.IndexMethod, fullText, upgradeJSON bool) error {
+func run(ctx context.Context, opts redis.StoreOptions, upgrade bool, method vectordata.IndexMethod, fullText, upgradeJSON, hybrid bool) error {
+	if hybrid {
+		if !opts.NativeIndexes {
+			return fmt.Errorf("-hybrid requires -native")
+		}
+		fullText = true
+	}
 	if upgrade && upgradeJSON {
 		return fmt.Errorf("choose one storage conversion: -upgrade-hash or -upgrade-json")
 	}
@@ -110,6 +117,15 @@ func run(ctx context.Context, opts redis.StoreOptions, upgrade bool, method vect
 	}
 	for _, hit := range hits {
 		fmt.Printf("Nearest: %s (distance %.3f)\n", hit.Item.Title, hit.Distance)
+	}
+	if hybrid {
+		results, err := c.HybridSearch(ctx, []float32{1, 0, 0}, "storage", 1, vectordata.HybridSearchOptions{ModelSearchOptions: vectordata.ModelSearchOptions{Filter: filter}})
+		if err != nil {
+			return err
+		}
+		for _, hit := range results {
+			fmt.Printf("Hybrid: %s (%s)\n", hit.Item.Title, hit.ScoreKind)
+		}
 	}
 	if err = s.Close(); err != nil {
 		return err

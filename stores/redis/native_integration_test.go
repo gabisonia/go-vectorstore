@@ -864,6 +864,7 @@ func TestIntegrationNativeSmoke(t *testing.T) {
 
 func runNativeStorage(t *testing.T, run func(*testing.T, StorageMode)) {
 	t.Helper()
+	requireNativeSearch(t)
 	for _, mode := range []StorageMode{StorageHash, StorageJSON} {
 		t.Run(string(mode), func(t *testing.T) {
 			if mode == StorageJSON {

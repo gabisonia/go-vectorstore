@@ -28,7 +28,7 @@ func TestNativeConfigurationAndBoundFilters(t *testing.T) {
 		t.Fatal("native mode did not select hash storage")
 	}
 	caps := s.Capabilities()
-	if len(caps.VectorIndexCapabilities) != 16 || len(caps.IndexedDataTypes) != 4 || caps.HybridSearch || !caps.FullTextIndexing {
+	if len(caps.VectorIndexCapabilities) != 16 || len(caps.IndexedDataTypes) != 4 || !caps.HybridSearch || !caps.FullTextIndexing {
 		t.Fatalf("capabilities: %+v", caps)
 	}
 	caps.VectorIndexCapabilities[0].MaxDimensions = 1

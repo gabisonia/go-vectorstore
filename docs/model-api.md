@@ -366,7 +366,7 @@ for four dense metrics and two precisions (16 tuples, up to 4,096 dimensions).
 Both native layouts advertise indexed string/int64/float64/bool data and
 `FullTextIndexing` for strings marked `IsFullTextIndexed`/`fulltext`. JSON version-5
 indexes add TEXT on explicit rebuild/native writes; older schemas remain readable.
-Hybrid/migrations remain false.
+Native Redis advertises dense hybrid search; HybridKeywordTerms/migrations remain false.
 This creates Redis TEXT fields but adds no keyword-query API. `SearchText` still
 embeds its input for vector search. This is local discovery; see
 [Redis runtime limits and costs](redis.md).
@@ -553,7 +553,8 @@ Built-in stores/collections support iterator forms for all model reads:
 | Custom-input hybrid search | `InputHybridSearchIterator` | `HybridSearchInputIter` |
 | Binary/sparse hybrid search | `BinaryHybridSearchIterator`, `SparseHybridSearchIterator` | `HybridSearchBinaryIter`, `HybridSearchSparseIter` |
 
-Hybrid iterators require a hybrid-capable provider (currently PostgreSQL).
+Hybrid iterators require a hybrid-capable provider (PostgreSQL or native Redis
+for dense vectors and string keywords).
 The typed model wrapper exposes the collection iterator methods directly.
 When using `ModelStore` or `ModelCollection` interfaces, call package helpers such
 as `vectordata.ListCollectionNamesIter(ctx, store)` and
@@ -1017,10 +1018,15 @@ Results have `ScoreKind=ScoreRRF`; their score thresholds apply to fusion scores
 not vector similarity. Raw vector distance is still returned. Fusion scores
 should not be compared with ordinary vector similarity scores.
 
-The memory, SQLite and Redis providers do not implement hybrid search. Typed
-calls return `ErrUnsupported` for this optional capability. Memory/SQLite use
-exact vector search; Redis optionally uses native HNSW/FLAT with exact fallback. Only native
-Redis mode creates physical indexes from supported hints.
+The memory and SQLite providers do not implement hybrid search. Native Redis
+supports dense/vector, text and custom-input RRF hybrid calls and iterators on
+HASH/JSON TEXT generations. Its plain keyword string uses bound AND terms with
+English stemming/default stopwords and Redis BM25 ranking. Filters and optional
+vector eligibility apply before each candidate limit. Both lists and canonical
+payloads come from one guarded generation; distances are remeasured in Go.
+KeywordTerms lists remain unsupported. Plain Redis and legacy/missing TEXT indexes
+return `ErrUnsupported`; rebuilds are explicit. See Redis-specific keyword,
+read-cost and readiness rules before comparing rankings across providers.
 See [SQLite storage and limits](sqlite.md) and [Redis limits](redis.md).
 
 ### Keyword lists
@@ -1115,7 +1121,8 @@ Required-vector embedding behavior is unchanged.
 
 All vector search variants exclude records without the selected property before
 ranking, thresholds, and paging. PostgreSQL hybrid search also excludes them from
-both candidate lists, including otherwise matching keyword records. Other vector
+both candidate lists, including otherwise matching keyword records. Native Redis
+hybrid also excludes missing selected vectors from both lists. Other vector
 properties may be absent in a returned record. Query, Get, and Count retain such
 records. Search queries themselves still require a valid vector.
 

@@ -74,8 +74,13 @@ NUMERIC components limited to exact 32-bit halves. Preserve version-3 vector-onl
 schemas/Go filter fallback until an explicit rebuild or native write publishes
 version 4 or 5. Full-text hints select version 5 with raw strings under safe
 internal TEXT paths; version-4 scalar schemas remain readable until explicit
-rebuild/native writes. Validate observable TEXT settings and keep public keyword/
-hybrid capabilities unadvertised. Keep filtering/KNN/wrapper reads in the
+rebuild/native writes. Validate observable TEXT settings. Native hybrid reads
+must fetch both candidate lists and their canonical payloads from one guarded
+generation; filter/exclude missing vectors before candidate limits, preserve exact
+key ties and RRF score units, and reject missing TEXT indexes without partial
+results or implicit rebuilds. KeywordTerms lists remain unadvertised. Freeze
+operands before embedding callbacks and embed once across read retries.
+Keep filtering/KNN/wrapper reads in the
 manifest/readiness Lua guard.
 Scope index pruning to each layout's lease and namespace.
 CI's Redis 8.2 job requires real JSON contracts, native conformance/recall and the

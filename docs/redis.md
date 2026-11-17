@@ -43,7 +43,8 @@ standalone address, not Redis Cluster, Sentinel or read-replica routing.
 
 Binary/sparse vector definitions return `ErrUnsupported`. Without `NativeIndexes`,
 index hints are accepted for portability and build no indexes. Native mode honors
-string full-text hints; keyword-query and hybrid APIs are unsupported. Unknown search `ProviderOptions`
+string full-text hints and supports dense RRF hybrid search. Standalone keyword
+queries, KeywordTerms lists and binary/sparse hybrid search remain unsupported. Unknown search `ProviderOptions`
 return `ErrUnsupported`. Migration planning and
 application are not advertised. Runtime embedders are never persisted or invoked
 while reconstructing stored vectors.
@@ -181,7 +182,8 @@ write adds TEXT. Scalar version-4 reads stay native, and version-3 filters still
 fall back to Go. Canonical payloads, registrations and storage format 3 are
 unchanged. Plain/older writers remain compatible and can publish earlier index
 versions again. See [full-text indexing](#full-text-indexing) for tokenizer,
-validation and limit details. Public keyword-query and hybrid APIs remain absent.
+validation and limit details. Dense hybrid search uses these indexes; standalone
+keyword-query and KeywordTerms-list APIs remain absent.
 
 To convert an existing snapshot or hash collection, use its unchanged registered
 definition and call:
@@ -370,10 +372,82 @@ previously absent full-text hint changes the registered model definition; rebuil
 does not perform that model-schema migration.
 
 This feature creates and validates physical indexes. `SearchText` and `SearchInput`
-still generate embeddings for vector search; no public keyword-query or hybrid
-search API is added. `HybridSearch` and `HybridKeywordTerms` capabilities stay
-false. Internal index names/field aliases remain private implementation details.
+still generate embeddings for vector search; hybrid APIs explicitly combine keyword
+and vector candidates. `HybridSearch` is true only in native mode, while
+`HybridKeywordTerms` stays false. Internal index names/field aliases remain private.
 See the [full-text sample mode](../samples/redis-store/README.md).
+
+## Hybrid search
+
+Native HASH and JSON collections implement `HybridSearcher`, `InputHybridSearcher`
+and their lazy buffered iterators. Mark a string with `IsFullTextIndexed` and use
+a dense float32/float16 vector property. Select `TextProperty`/`VectorProperty`
+when the definition contains more than one eligible property. Typed wrappers use
+the same contract:
+
+```go
+hits, err := collection.HybridSearch(ctx, []float32{1, 0, 0}, "storage choices", 5,
+    vectordata.HybridSearchOptions{
+        TextProperty: "Title",
+        CandidateLimit: 100,
+        ModelSearchOptions: vectordata.ModelSearchOptions{
+            VectorProperty: "Vector",
+            Filter: vectordata.Eq(vectordata.Column("Category"), "guide"),
+        },
+    })
+```
+
+Keywords are plain UTF-8 text without NUL, limited to 16,384 bytes and 128 tokens.
+Letters, numbers, combining marks and underscores form bound TEXT operands;
+other characters separate tokens. Tokens are combined with AND. Quotes, `|`,
+`-`, `*`, field syntax and backslashes do not expose Redis query operators.
+Punctuation-only input contributes no keyword candidates; blank input is invalid.
+Redis applies its English stemming/default stopwords and the explicit `BM25`
+scorer supported by Redis 8.2. Keyword scores differ from PostgreSQL's text ranking.
+See Redis [scoring](https://redis.io/docs/latest/develop/ai/search-and-query/advanced-concepts/scoring/).
+
+`CandidateLimit` defaults to `max(100, top + Skip)`, must cover the requested page,
+and is capped at 1,000,000. Each candidate list is ranked after filtering and
+excluding records without the selected vector. Vector ties, keyword-score ties
+and fused-score ties use native key order. Fusion adds `1/(RRFConstant + rank)`
+for each list containing a record, with one-based ranks and default constant 60.
+Results report `ScoreKind=ScoreRRF` and the canonical raw vector distance.
+Distance and fused-score thresholds apply after fusion, followed by paging.
+RRF scores are not vector similarity scores.
+
+Both index searches and their canonical payload union execute in one Lua guard
+with exact manifest, lease, physical-schema and readiness checks. A changed
+manifest retries the complete read. Keyword matches are all retrieved so Go can
+apply unsupported filters, exclude optional missing vectors and resolve ties
+before the keyword candidate limit. Supported scalar filters are also pushed
+into both Redis searches. No partial keyword result set is accepted when a
+server result cap prevents complete ranking.
+
+HNSW oversamples vector candidates and retains approximate recall; unresolved
+boundary ties/underfill use a fresh guarded exact scan of the same complete read.
+FLAT retrieves all matching vectors for exact Go remeasurement before limiting.
+`SearchTuning{Exact: true}`, unsupported vector-index tuples, unsafe magnitudes
+and unsupported filters use the full canonical generation for vector ranking.
+The keyword side remains native in these cases. Provider tuning follows ordinary
+vector search, including rejection of positive EF_RUNTIME on FLAT.
+
+Hybrid search requires a ready TEXT generation (HASH metadata 2 or JSON metadata
+5). Plain storage, old scalar/vector-only indexes, missing/unready indexes and
+KeywordTerms lists return `ErrUnsupported`; schema drift/damage returns the
+existing schema/record errors. No read creates or rebuilds indexes implicitly.
+Use an explicit rebuild with the unchanged full-text-marked definition when
+upgrading an old index. Invalid options/filters/keywords are rejected before I/O
+or embedding. Text/custom-input forms verify index availability before embedding,
+snapshot filter/threshold values, release connections before callbacks, and embed
+once even when publication conflicts require read retries.
+
+`HybridSearchText` and `HybridSearchInput` embed query input; their keyword string
+is independent. Iterators buffer a complete page, release Redis resources before
+yielding, and preserve cancellation/early-stop behavior. Writes still replace the
+entire generation/index. Hybrid reads retain the O(N) manifest, retrieve all keyword
+matches, and may scan all canonical records. Measure target workloads before
+assuming native hybrid reduces transfer or latency. See the rerunnable
+[hybrid sample](../samples/redis-store/README.md).
 
 ## Atomicity and concurrency
 
@@ -543,7 +617,9 @@ JSON-native checks additionally cover internal paths, full-precision canonical
 results, projection byte budgets, unknown versions and publication conflicts.
 Scalar checks additionally cover all key types, exact integer ranges, NULL truth,
 physical path/separator drift, native routing, Count without payload decoding and
-explicit upgrades from version-3 vector-only indexes. JSON TEXT checks also cover
+explicit upgrades from version-3 vector-only indexes. Hybrid checks cover RRF
+scores/limits, both-list filters, all key types, optional vectors, HNSW recall,
+roundoff/ties, generation retirement, embedding snapshots and missing TEXT indexes. JSON TEXT checks also cover
 version-4 scalar-only compatibility, safe text paths, projection fidelity, storage
 conversion and explicit rebuild without implicit read upgrades.
 `REDIS_REQUIRE_SEARCH=true` requires the native tests and projection proof instead

@@ -73,8 +73,8 @@ go run ./samples/redis-store -addr localhost:63799 -namespace redis_text_demo -n
 be combined with `-index flat` in its own namespace. Both runs retain the same
 three output lines. Creation and the reopened native Count validate the TEXT
 schema/readiness while ordinary filtered vector search remains available.
-This demonstrates indexing, not a public keyword-query API: SearchText still
-creates embeddings and hybrid search remains unsupported. TEXT uses English
+SearchText still creates embeddings. Use the hybrid mode below to explicitly
+combine keyword and vector candidates; standalone keyword queries remain absent. TEXT uses English
 stemming, default Redis stopwords and weight 1. Existing definitions with the
 same full-text hint can gain TEXT via `RebuildNativeIndexes`; adding the hint to
 an existing unmarked definition is a separate model-schema change.
@@ -131,9 +131,37 @@ internal paths, English stemming, default stopwords and weight 1. NULL omits the
 projection; empty/NUL/Unicode values retain canonical fidelity. Existing version-4
 scalar indexes keep native reads until explicit rebuild/native writes add TEXT.
 Adding a new full-text hint changes model registration, so use a separate namespace
-for this sample. Physical text indexing adds no public keyword/hybrid query API;
-SearchText continues to generate vector embeddings. Plain and older writers remain
+for this sample. SearchText continues to generate vector embeddings; hybrid mode explicitly
+combines text and vector candidates. Plain and older writers remain
 compatible; native writes rebuild the full generation/index.
+
+Run native hybrid search in a dedicated namespace (`-hybrid` implies `-fulltext`):
+
+```sh
+go run ./samples/redis-store -addr localhost:63799 -namespace redis_hybrid_demo -native -hybrid
+go run ./samples/redis-store -addr localhost:63799 -namespace redis_hybrid_demo -native -hybrid
+go run ./samples/redis-store -addr localhost:63799 -namespace redis_json_hybrid_demo -storage json -native -index flat -hybrid
+go run ./samples/redis-store -addr localhost:63799 -namespace redis_json_hybrid_demo -storage json -native -index flat -hybrid
+```
+
+Each run prints:
+
+```text
+Guides: 2
+Nearest: System architecture (distance 0.000)
+Hybrid: Storage choices (reciprocal_rank_fusion)
+Records after reconnect: 3
+```
+
+The Category filter applies to both candidate lists. The keyword `storage` boosts
+Storage choices through RRF, while ordinary vector search still selects System
+architecture. Hybrid scores are RRF, not vector similarity. HASH/JSON and either
+vector method are supported; `-hybrid` requires `-native`. Text-marked models need
+a separate namespace from the basic unmarked model. Missing/legacy TEXT indexes
+require an explicit rebuild/native write. KeywordTerms lists remain unsupported.
+Both candidate sets and payloads come from one guarded generation; keyword matches
+are all retrieved for deterministic filtering/ties, and exact fallbacks can scan
+the complete generation. These examples make no hybrid throughput claim.
 
 Records remain in Redis. To clean up only this fixture, call
 `store.DeleteCollection(ctx, "documents")` using its configured namespace/database.

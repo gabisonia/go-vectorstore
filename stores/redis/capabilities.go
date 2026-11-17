@@ -23,6 +23,7 @@ func (s *Store) Capabilities() vectordata.ProviderCapabilities {
 	}
 	if s.nativeIndexes {
 		caps.FullTextIndexing = true
+		caps.HybridSearch = true
 		caps.VectorIndexMethods = []vectordata.IndexMethod{vectordata.IndexMethodHNSW, vectordata.IndexMethodFlat}
 		caps.IndexedDataTypes = []vectordata.DataType{vectordata.TypeString, vectordata.TypeInt64, vectordata.TypeFloat64, vectordata.TypeBool}
 		for _, method := range caps.VectorIndexMethods {

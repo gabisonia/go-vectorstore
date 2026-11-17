@@ -418,8 +418,9 @@ Redis defaults to compatible snapshot storage. Opt-in RedisJSON uses immutable
 JSON documents with precise canonical payloads and explicit snapshot/hash conversion.
 Opt-in native indexing supports HNSW/FLAT vector search on immutable HASH/JSON
 generations, preserving atomic batches. Both layouts accelerate supported scalar
-filters and create TEXT fields from string full-text hints. Unsupported
-filters keep exact Go evaluation; keyword/hybrid APIs remain unsupported.
+filters and create TEXT fields from string full-text hints. Native dense hybrid
+fuses plain-text keyword/vector ranks with RRF from one guarded generation.
+Unsupported filters keep exact Go evaluation; KeywordTerms lists remain unsupported.
 Native indexing requires Redis Search and database zero; writes rebuild the generation's index.
 See [native support and fallback rules](docs/redis.md#native-indexes-and-search).
 

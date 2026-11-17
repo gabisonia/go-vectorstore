@@ -141,8 +141,8 @@ func testIntegrationNativeFullTextTokenizationAndUpdatesStorage(t *testing.T, mo
 	if count, err := c.Count(ctx, vectordata.Eq(vectordata.Column("Body"), "gopher")); err != nil || count != 0 || full == 0 {
 		t.Fatalf("TEXT-only equality lost exact fallback: %d %v reads=%d", count, err, full)
 	}
-	if _, ok := any(c).(vectordata.HybridSearcher); ok || s.Capabilities().HybridSearch {
-		t.Fatal("full-text indexing unexpectedly enabled hybrid search")
+	if _, ok := any(c).(vectordata.HybridSearcher); !ok || !s.Capabilities().HybridSearch {
+		t.Fatal("native Redis hybrid interface/capability missing")
 	}
 	rows[0].Data[title] = "replacement galaxy"
 	if _, err := c.Upsert(ctx, rows[:1]); err != nil {
