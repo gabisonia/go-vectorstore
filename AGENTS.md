@@ -102,7 +102,11 @@ ten-minute timeout, while storage checks retain five minutes.
 - Keep context cancellation discoverable through errors.Is. Close iterators,
   cursors and transactions on early return. Do not invoke caller codecs while
   holding memory locks or SQLite's single connection.
-- Keep SQLite format compatibility and consistent WAL snapshots. Retry only
+- Keep SQLite format compatibility and consistent WAL snapshots. Opt-in scalar
+  projections must retain canonical payloads/registrations and SQL NULL truth,
+  maintain every writer through transactional triggers, and backfill existing
+  collections only explicitly. Keep candidate predicates conservative under OR/NOT
+  and verify real value-index/key-lookup query plans. Retry only
   transaction acquisition/side-effect-free reads; never replay write statements
   or commits after an uncertain result.
 - PostgreSQL migrations separate read-only planning from explicit application.

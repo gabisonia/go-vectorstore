@@ -353,7 +353,7 @@ PostgreSQL float16 storage requires pgvector 0.7+ and a visible `halfvec` type.
 | `OptionalVectors` | True | True | True |
 | `VectorIndexMethods` | None | None | HNSW, IVFFlat |
 | `VectorIndexCapabilities` | None | None | Supported method/metric/precision combinations and dimension/nonzero limits |
-| `IndexedDataTypes` | None | None | String, int64, float64, bool, time, UUID, bytes, calendar values, decimals and native arrays |
+| `IndexedDataTypes` | None | String/int64/float64/bool with NativeIndexes | String, int64, float64, bool, time, UUID, bytes, calendar values, decimals and native arrays |
 | `FullTextIndexing` | False | False | True, for string properties |
 | `HybridSearch` | False | False | True |
 | `HybridKeywordTerms` | False | False | True, plain-text keyword groups |
@@ -375,8 +375,11 @@ embeds its input for vector search. This is local discovery; see
 It accepts no HNSW/IVFFlat construction parameters. Memory/SQLite treat it as a
 portable hint; PostgreSQL rejects physical FLAT index definitions locally.
 
-Index fields describe physical acceleration. Memory, SQLite and default Redis
-accept index hints for portability without creating property or vector indexes. Generic
+Index fields describe physical acceleration. Memory, default SQLite and default
+Redis accept index hints for portability without creating property or vector indexes.
+SQLite `NativeIndexes` builds scalar indexes for new collections; existing
+collections require explicit `RebuildScalarIndexes` with the unchanged definition.
+It preserves canonical storage format 1 and does not add vector indexes. Generic
 JSON indexing remains unsupported; provider-specific indexes are outside this
 metadata. Except for the detailed combination list below,
 empty slices mean no support for that feature.

@@ -20,7 +20,7 @@ CGO_ENABLED=0 go test ./stores/sqlite
 ```
 
 The CGO-disabled command verifies embedded storage can run without a C toolchain.
-SQLite queries materialize the whole collection; exact searches stream a full
+SQLite fallback queries materialize the whole collection; exact searches stream a full
 scan. These checks establish correctness, not an ANN throughput claim. See
 [SQLite costs](sqlite.md#query-costs-and-provider-limits).
 
@@ -108,6 +108,31 @@ callback reentry. Real-driver hooks commit updates/deletes between batches to
 verify one WAL snapshot; EXPLAIN checks key lookups and covering-index counts.
 The portable `key-filters` recipe exercises the public workflow on memory,
 SQLite and PostgreSQL.
+
+## SQLite scalar index verification
+
+```sh
+go test -race -run 'TestNativeScalar|TestScalarQueriesMatch' ./stores/sqlite
+CGO_ENABLED=0 go test -run 'TestNativeScalar|TestScalarQueriesMatch' ./stores/sqlite
+```
+
+EXPLAIN QUERY PLAN checks prove the actual Query/Count plans search the covering
+scalar value index and then the canonical record primary key. Fixtures cover
+string/int64/float64/bool equality, ranges, In and NULL. The shared model contract
+also runs with NativeIndexes enabled. Independent memory comparisons cover all
+key kinds, optional values, integer extremes, float64 precision, NUL/Unicode names,
+NULL/NOT/OR truth, sorting, projection and paging. Seeded Boolean trees compare
+128 nested AND/OR/NOT filters against the independent memory evaluator. A seeded
+256-value float fixture
+checks indexed round-trip equality. WAL tests publish through a second non-native
+handle between registration and index reads, asserting one coherent snapshot.
+
+Lifecycle tests cover explicit format-1 backfill without payload changes, legacy
+writer triggers, collection cleanup/recreation and failed batch/rebuild rollback,
+including generated sequences. Samples run both indexed reruns and explicit
+rebuild in CI. These are correctness and query-plan checks; existing unindexed
+benchmarks do not measure indexed throughput. Projection rows/indexes add O(records
+× indexed fields) storage and maintenance; backfills hold a writer transaction.
 
 ## Redis snapshot verification
 

@@ -1,7 +1,7 @@
 // Package sqlite provides durable embedded model collections with exact search.
 // Reads use indexed key lookups or native scalar SQL where supported, with
 // snapshot evaluation for other predicates. Exact search uses bounded ranking.
-// No native ANN, full-text
+// Opt-in scalar indexes accelerate eligible filters. No native ANN, full-text
 // indexes, hybrid search, or automatic schema migrations are provided.
 package sqlite
 
@@ -25,15 +25,19 @@ import (
 // StoreOptions configures runtime embedding defaults. SQLite uses WAL mode,
 // FULL synchronization, foreign keys, and context-aware lock waits up to five seconds.
 type StoreOptions struct {
+	// NativeIndexes builds scalar projections for supported IsIndexed fields in new
+	// collections. Existing collections require RebuildScalarIndexes.
+	NativeIndexes      bool
 	Embedder           vectordata.Embedder
 	InputEmbedder      vectordata.InputEmbedder
 	EmbeddingBatchSize int
 }
 
 type Store struct {
-	db           *sql.DB
-	options      vectordata.ModelCollectionOptions
-	databaseName string
+	db            *sql.DB
+	options       vectordata.ModelCollectionOptions
+	databaseName  string
+	nativeIndexes bool
 }
 
 var _ vectordata.ModelStore = (*Store)(nil)
@@ -76,7 +80,7 @@ func Open(ctx context.Context, path string, opts StoreOptions) (*Store, error) {
 	}
 	db.SetMaxOpenConns(1)
 	db.SetMaxIdleConns(1)
-	s := &Store{db: db, options: defaults, databaseName: databaseName}
+	s := &Store{db: db, options: defaults, databaseName: databaseName, nativeIndexes: opts.NativeIndexes}
 	if err := s.initialize(ctx); err != nil {
 		db.Close()
 		return nil, err
@@ -97,12 +101,20 @@ func (s *Store) initialize(ctx context.Context) error {
 			return err
 		}
 	}
+	if s.nativeIndexes {
+		if err := initializeScalarIndexes(ctx, tx); err != nil {
+			return err
+		}
+	}
 	return tx.Commit()
 }
 func (s *Store) Close() error { return s.db.Close() }
-func (*Store) Capabilities() vectordata.ProviderCapabilities {
+func (s *Store) Capabilities() vectordata.ProviderCapabilities {
 	caps := memory.New().Capabilities()
 	caps.Backend = "sqlite"
+	if s.nativeIndexes {
+		caps.IndexedDataTypes = []vectordata.DataType{vectordata.TypeString, vectordata.TypeInt64, vectordata.TypeFloat64, vectordata.TypeBool}
+	}
 	return caps
 }
 func (s *Store) ListCollectionNames(ctx context.Context) ([]string, error) {
@@ -239,11 +251,21 @@ func (c *Collection) EnsureExists(ctx context.Context) (err error) {
 		return err
 	}
 	defer tx.Rollback()
-	if _, err = tx.ExecContext(ctx, `INSERT INTO __vectorstore_collections(name,definition) VALUES(?,?) ON CONFLICT(name) DO NOTHING`, c.name, c.registration); err != nil {
+	result, err := tx.ExecContext(ctx, `INSERT INTO __vectorstore_collections(name,definition) VALUES(?,?) ON CONFLICT(name) DO NOTHING`, c.name, c.registration)
+	if err != nil {
 		return err
 	}
 	if _, err = c.metadata(ctx, tx); err != nil {
 		return err
+	}
+	created, err := result.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if created != 0 && c.store.nativeIndexes {
+		if err := c.rebuildScalarIndexes(ctx, tx); err != nil {
+			return err
+		}
 	}
 	return tx.Commit()
 }
