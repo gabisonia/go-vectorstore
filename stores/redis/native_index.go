@@ -1,0 +1,342 @@
+package redis
+
+import (
+	"context"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"math"
+	"strconv"
+	"strings"
+	"time"
+
+	"github.com/gabisonia/go-vectorstore/vectordata"
+	goredis "github.com/redis/go-redis/v9"
+)
+
+const nativeMaxDimensions = 4096
+const nativeMaxDocuments = 1000000
+const nativeTagLimit = 1024
+
+type nativeField struct {
+	Name, Alias, Kind, Metric     string
+	Dimensions, M, EFConstruction int
+}
+
+func nativeVectorProperty(p vectordata.VectorProperty) bool {
+	return p.Index != nil && p.Index.Method == vectordata.IndexMethodHNSW && p.Dimensions <= nativeMaxDimensions && p.Index.HNSW.M <= 512 && p.Index.HNSW.EfConstruction <= 1000000 && (p.Metric == vectordata.DistanceCosine || p.Metric == vectordata.DistanceL2 || p.Metric == vectordata.DistanceL2Squared || p.Metric == vectordata.DistanceInnerProduct)
+}
+func nativeVectorSafe(v []float32) bool {
+	for _, x := range v {
+		a := math.Abs(float64(x))
+		if a > 1e10 || a != 0 && a < 1e-10 {
+			return false
+		}
+	}
+	return true
+}
+func nativeData(p vectordata.DataProperty) bool {
+	return p.IsIndexed && (p.Type == vectordata.TypeString || p.Type == vectordata.TypeInt64 || p.Type == vectordata.TypeFloat64 || p.Type == vectordata.TypeBool)
+}
+func nativeTag(v any) (string, bool) {
+	var text string
+	switch x := v.(type) {
+	case string:
+		text = x
+	case int64:
+		text = strconv.FormatInt(x, 10)
+	case uint64:
+		text = strconv.FormatUint(x, 10)
+	case float64:
+		if x == 0 {
+			x = 0
+		}
+		text = strconv.FormatFloat(x, 'g', -1, 64)
+	case bool:
+		if x {
+			text = "1"
+		} else {
+			text = "0"
+		}
+	default:
+		return "", false
+	}
+	if len(text) > (nativeTagLimit-1)/2 {
+		return "", false
+	}
+	return "x" + hex.EncodeToString([]byte(text)), true
+}
+func integerParts(v any) (int64, int64, bool) {
+	switch x := v.(type) {
+	case int64:
+		return x >> 32, int64(uint32(x)), true
+	case uint64:
+		return int64(x >> 32), int64(uint32(x)), true
+	}
+	return 0, 0, false
+}
+func (c *Collection) nativeProjection(r vectordata.ModelRecord) []any {
+	var out []any
+	if tag, ok := nativeTag(token(r.Key)); ok {
+		out = append(out, "__vs_key_tag", tag)
+	}
+	if hi, lo, ok := integerParts(r.Key); ok {
+		out = append(out, "__vs_key_hi", strconv.FormatInt(hi, 10), "__vs_key_lo", strconv.FormatInt(lo, 10))
+	}
+	for i, p := range c.definition.Data {
+		if !nativeData(p) {
+			continue
+		}
+		v := r.Data[p.Name]
+		if v == nil {
+			continue
+		}
+		suffix := strconv.Itoa(i)
+		out = append(out, "__vs_has_"+suffix, "x")
+		if tag, ok := nativeTag(v); ok {
+			out = append(out, "__vs_tag_"+suffix, tag)
+		}
+		if hi, lo, ok := integerParts(v); ok {
+			out = append(out, "__vs_hi_"+suffix, strconv.FormatInt(hi, 10), "__vs_lo_"+suffix, strconv.FormatInt(lo, 10))
+		}
+	}
+	return out
+}
+func (s *Store) indexPrefix(name string) string {
+	return "__vectorstore_redis_idx_v1:" + encodeName(s.metadata.Namespace) + ":" + encodeName(name) + ":"
+}
+func (c *Collection) indexName(revision string) string { return c.store.indexPrefix(c.name) + revision }
+func (c *Collection) nativeFields(m hashManifest) ([]nativeField, error) {
+	fields := []nativeField{{Name: "__vs_revision", Alias: "revision", Kind: "TAG"}, {Name: "__vs_key_tag", Alias: "key", Kind: "TAG"}}
+	if c.definition.Key.Type == vectordata.KeyInt64 || c.definition.Key.Type == vectordata.KeyUint64 {
+		fields = append(fields, nativeField{Name: "__vs_key_hi", Alias: "kh", Kind: "NUMERIC"}, nativeField{Name: "__vs_key_lo", Alias: "kl", Kind: "NUMERIC"})
+	}
+	for i, p := range c.definition.Data {
+		if !nativeData(p) {
+			continue
+		}
+		n := strconv.Itoa(i)
+		fields = append(fields, nativeField{Name: "__vs_has_" + n, Alias: "h" + n, Kind: "TAG"}, nativeField{Name: "__vs_tag_" + n, Alias: "t" + n, Kind: "TAG"})
+		if p.Type == vectordata.TypeInt64 {
+			fields = append(fields, nativeField{Name: "__vs_hi_" + n, Alias: "hi" + n, Kind: "NUMERIC"}, nativeField{Name: "__vs_lo_" + n, Alias: "lo" + n, Kind: "NUMERIC"})
+		}
+	}
+	seen := map[string]bool{}
+	for _, name := range m.IndexVectors {
+		p, err := c.definition.Vector(name)
+		if err != nil || !nativeVectorProperty(p) || seen[name] {
+			return nil, vectordata.ErrSchemaMismatch
+		}
+		seen[name] = true
+		alias := ""
+		for i, v := range c.definition.Vectors {
+			if v.Name == name {
+				alias = "v" + strconv.Itoa(i)
+			}
+		}
+		metric := "L2"
+		if p.Metric == vectordata.DistanceCosine {
+			metric = "COSINE"
+		} else if p.Metric == vectordata.DistanceInnerProduct {
+			metric = "IP"
+		}
+		fields = append(fields, nativeField{Name: "v_" + encodeName(name), Alias: alias, Kind: "VECTOR", Metric: metric, Dimensions: p.Dimensions, M: p.Index.HNSW.M, EFConstruction: p.Index.HNSW.EfConstruction})
+	}
+	if len(fields) > 512 {
+		return nil, fmt.Errorf("%w: native Redis schema exceeds 512 fields", vectordata.ErrUnsupported)
+	}
+	return fields, nil
+}
+
+// Check both readiness and physical schema in the same Redis execution as a
+// query. Lua uses RESP2 for stable module reply shapes, independent of the client.
+const nativeReadyLua = `
+redis.setresp(2)
+local function text(v) if type(v)=='table' and v.ok then return v.ok end return v end
+local function val(t,k)
+ if type(t)~='table' then return nil end
+ if t.map then t=t.map end
+ if t[k]~=nil then return text(t[k]) end
+ for i=1,#t-1 do local key=text(t[i]);if type(key)=='string' and string.lower(key)==string.lower(k) then return text(t[i+1]) end end
+ return nil
+end
+local function flag(t,k)
+ local flags=val(t,'flags') or t
+ for _,v in ipairs(flags) do v=text(v);if type(v)=='string' and string.upper(v)==k then return true end end
+ return false
+end
+local function ready(index,prefix,schema,count)
+ local info=redis.pcall('FT.INFO',index)
+ if info.err then
+   if string.find(string.lower(info.err),'unknown index',1,true) or string.find(string.lower(info.err),'no such index',1,true) then return 2 end
+   error(info.err)
+ end
+ local definition=val(info,'index_definition')
+ local prefixes=val(definition,'prefixes')
+ if val(definition,'key_type')~='HASH' or type(prefixes)~='table' or #prefixes~=1 or text(prefixes[1])~=prefix then return -2 end
+ local expected=cjson.decode(schema)
+ local attrs=val(info,'attributes')
+ if type(attrs)~='table' or #attrs~=#expected then return -2 end
+ for _,f in ipairs(expected) do
+   local a=nil
+   for _,candidate in ipairs(attrs) do if val(candidate,'attribute')==f.Alias then a=candidate break end end
+   if not a or val(a,'identifier')~=f.Name or val(a,'type')~=f.Kind then return -2 end
+   if flag(a,'NOINDEX') then return -2 end
+   if f.Kind=='TAG' and (not flag(a,'CASESENSITIVE') or val(a,'SEPARATOR')~=',') then return -2 end
+   if f.Kind=='VECTOR' and (val(a,'algorithm')~='HNSW' or val(a,'data_type')~='FLOAT32' or tonumber(val(a,'dim'))~=f.Dimensions or val(a,'distance_metric')~=f.Metric or tonumber(val(a,'M'))~=f.M or tonumber(val(a,'ef_construction'))~=f.EFConstruction) then return -2 end
+ end
+ local failures=tonumber(val(info,'hash_indexing_failures'))
+ if not failures then failures=tonumber(val(val(info,'Index Errors'),'indexing failures')) end
+ if failures==nil or failures~=0 then return -3 end
+ if tonumber(val(info,'indexing'))~=0 or tonumber(val(info,'num_docs'))~=tonumber(count) then return 2 end
+ return 1
+end
+`
+
+const nativeIndexStatus = nativeReadyLua + `return {ready(KEYS[1],ARGV[1],ARGV[2],ARGV[3])}`
+
+func (c *Collection) createNativeIndex(ctx context.Context, m hashManifest) error {
+	fields, err := c.nativeFields(m)
+	if err != nil {
+		return err
+	}
+	args := []any{"FT.CREATE", m.Index, "ON", "HASH", "PREFIX", 1, c.generationPrefix(m.Revision), "SCHEMA"}
+	for _, f := range fields {
+		args = append(args, f.Name, "AS", f.Alias, f.Kind)
+		if f.Kind == "TAG" {
+			args = append(args, "CASESENSITIVE")
+		} else if f.Kind == "VECTOR" {
+			args = append(args, "HNSW", 10, "TYPE", "FLOAT32", "DIM", f.Dimensions, "DISTANCE_METRIC", f.Metric, "M", f.M, "EF_CONSTRUCTION", f.EFConstruction)
+		}
+	}
+	if err = c.store.client.Do(ctx, args...).Err(); err != nil {
+		if strings.Contains(strings.ToLower(err.Error()), "unknown command") {
+			return fmt.Errorf("%w: Redis Search is required: %w", vectordata.ErrUnsupported, err)
+		}
+		return err
+	}
+	schema, _ := json.Marshal(fields)
+	wait, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	for {
+		reply, err := c.store.client.Eval(wait, nativeIndexStatus, []string{m.Index}, c.generationPrefix(m.Revision), string(schema), len(m.Tokens)).Slice()
+		if err != nil {
+			return err
+		}
+		status, err := nativeStatus(reply)
+		if err != nil {
+			return err
+		}
+		if status == 1 {
+			return nil
+		}
+		if status < 0 {
+			return nativeStatusError(status)
+		}
+		timer := time.NewTimer(10 * time.Millisecond)
+		select {
+		case <-wait.Done():
+			timer.Stop()
+			return wait.Err()
+		case <-timer.C:
+		}
+	}
+}
+func nativeStatus(result []any) (int64, error) {
+	if len(result) == 0 {
+		return 0, vectordata.ErrInvalidRecord
+	}
+	n, ok := result[0].(int64)
+	if !ok {
+		return 0, vectordata.ErrInvalidRecord
+	}
+	return n, nil
+}
+func nativeStatusError(status int64) error {
+	if status == -2 {
+		return fmt.Errorf("%w: native Redis index schema differs", vectordata.ErrSchemaMismatch)
+	}
+	return fmt.Errorf("%w: native Redis index/generation is damaged (%d)", vectordata.ErrInvalidRecord, status)
+}
+func (c *Collection) dropNativeIndex(ctx context.Context, name string) {
+	prefix := c.store.indexPrefix(c.name)
+	if c.store.metadata.DatabaseName == "0" && strings.HasPrefix(name, prefix) && validRevision(strings.TrimPrefix(name, prefix)) {
+		_ = c.store.client.Do(ctx, "FT.DROPINDEX", name).Err()
+	}
+}
+
+// RebuildNativeIndexes explicitly publishes a fresh indexed hash generation.
+// The model definition is unchanged; existing format-1 data must be upgraded first.
+func (c *Collection) RebuildNativeIndexes(ctx context.Context) (err error) {
+	defer func() { err = c.operation(ctx, "rebuild_native_indexes", err) }()
+	if !c.store.nativeIndexes {
+		return vectordata.ErrUnsupported
+	}
+	return c.mutate(ctx, func(state *snapshot) error {
+		if state.Format != 2 {
+			return fmt.Errorf("%w: upgrade to hash storage first", vectordata.ErrUnsupported)
+		}
+		return nil
+	})
+}
+
+const nativePruneGuard = `
+local current=redis.call('GET',KEYS[1])
+if ARGV[1]=='missing' then if current then return 0 end
+elseif current~=ARGV[2] then return 0 end
+if redis.call('PTTL',KEYS[2])>=0 then return 0 end
+return 1`
+
+// PruneNativeIndexes drops obsolete generation indexes without deleting records.
+// Current indexes and active staging leases are protected. The result counts
+// indexes, separately from PruneHashStorage's key count.
+func (s *Store) PruneNativeIndexes(ctx context.Context, name string) (count int64, err error) {
+	defer func() { err = s.operation(name, "prune_native_indexes", resolveContext(ctx, err)) }()
+	if s.metadata.DatabaseName != "0" {
+		return 0, vectordata.ErrUnsupported
+	}
+	if !validName(name) {
+		return 0, vectordata.ErrSchemaMismatch
+	}
+	names, err := s.client.Do(ctx, "FT._LIST").StringSlice()
+	if err != nil {
+		return 0, err
+	}
+	prefix := s.indexPrefix(name)
+	for _, index := range names {
+		revision := strings.TrimPrefix(index, prefix)
+		if revision == index || !validRevision(revision) {
+			continue
+		}
+		raw, getErr := s.client.Get(ctx, s.key(name)).Bytes()
+		mode := "present"
+		var current struct {
+			Format   int
+			Revision string
+		}
+		if errors.Is(getErr, goredis.Nil) {
+			mode = "missing"
+		} else if getErr != nil {
+			return count, getErr
+		} else if json.Unmarshal(raw, &current) != nil || (current.Format != 1 && current.Format != 2) || !validRevision(current.Revision) {
+			return count, vectordata.ErrInvalidRecord
+		}
+		if current.Revision == revision {
+			continue
+		}
+		lease := s.hashPrefix(name) + revision + ":lease"
+		ok, guardErr := s.client.Eval(ctx, nativePruneGuard, []string{s.key(name), lease}, mode, raw).Int()
+		if guardErr != nil {
+			return count, guardErr
+		}
+		if ok == 0 {
+			continue
+		}
+		if dropErr := s.client.Do(ctx, "FT.DROPINDEX", index).Err(); dropErr != nil {
+			return count, dropErr
+		}
+		count++
+	}
+	return count, nil
+}

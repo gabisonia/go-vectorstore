@@ -116,7 +116,7 @@ go test -race -tags=integration -timeout=5m ./stores/redis
 REDIS_TEST_IMAGE=redis:7.4 go test -count=1 -race -tags=integration -timeout=5m ./stores/redis
 ```
 
-The Redis provider transfers a complete collection snapshot even for one-key
+Default Redis storage transfers a complete collection snapshot even for one-key
 reads and nil-filter Count. Writes also read/serialize/publish complete snapshots;
 explicit CAS conflicts can repeat those transfers. Query, filtered Count and dense
 search materialize the shared memory engine. The default encoded collection limit
@@ -134,9 +134,55 @@ checks immutable format-1 upgrades, atomic generation reads during retirement,
 staging failure/expiry, lost publication replies, a native Redis error after
 PERSIST but before SET, and manifest-guarded orphan cleanup. A real Redis 8.2 FLAT
 index verifies filtered KNN over the stored scalar/vector hash fields; this test
-creates/drops its own temporary index. Production code builds no index. Hash
+creates/drops its own temporary index. Plain hash mode builds no index. Hash
 writes still replace full generations and can increase peak Redis storage while
-current, staged and obsolete data coexist. No acceleration claim is made.
+current, staged and obsolete data coexist.
+
+Native mode additionally runs the shared contracts against real Search, compares
+scalar filters with an independent full-snapshot memory engine, and verifies
+readiness, concurrent publication, uncertain replies, rebuilds and orphan cleanup.
+The HNSW recall fixture has 512 seeded 16-dimensional vectors, six top-10 queries
+and EF_RUNTIME 200 for each of four metrics and two precisions. The minimum
+recall@10 is 0.90; a local Redis 8.2 run achieved 1.00 in all eight combinations.
+Separate tests exercise optional vectors, thresholds, paging and duplicate-distance
+tie fallback. This small fixture does not predict production recall.
+
+## Redis native read measurements
+
+```sh
+REDIS_TEST_ADDR=127.0.0.1:63799 go test -tags=integration -run '^$' \
+  -bench BenchmarkRedisNativeRead -benchmem -benchtime=100ms -count=3 ./stores/redis
+```
+
+The benchmark creates its own indexed hash collection on a disposable Search
+server. Each record has two indexed scalar properties and a 16-dimensional L2
+vector (seed 44). Query matches 10% of records, sorts by integer Rank, skips two
+and returns five; Count uses the same filter; unfiltered Search returns five.
+The reference explicitly loads the full snapshot and builds a memory engine per
+operation, so future native routing cannot silently accelerate the baseline.
+Collection setup, writes and index construction are outside the timers.
+
+Local results: Redis 8.2 in Docker, Apple M3 Pro, darwin/arm64, Go 1.27.4.
+Values are medians of three 100 ms runs; B/op measures Go allocations, excluding
+Redis memory. Timings include local container/network overhead.
+
+| Records | Operation | Native ms/op | Reference ms/op | Native B/op | Reference B/op |
+| --- | --- | ---: | ---: | ---: | ---: |
+| 100 | Query | 1.301 | 2.757 | 110,326 | 548,414 |
+| 100 | Count | 0.892 | 2.224 | 28,004 | 547,656 |
+| 100 | Search | 2.637 | 2.778 | 319,062 | 495,021 |
+| 1,000 | Query | 4.929 | 10.711 | 1,159,384 | 5,701,435 |
+| 1,000 | Count | 1.027 | 10.257 | 170,034 | 5,699,752 |
+| 1,000 | Search | 2.129 | 9.945 | 565,701 | 4,976,029 |
+
+These short, warm read measurements are workload-specific. Native overhead is
+visible at 100 records, where Search is close to the reference. Unsupported
+filters, unsafe vector magnitudes, missing indexes and unresolved ties can fall
+back to full snapshots. The token manifest is still O(record count), matching
+Query payloads still require Go decoding/sorting, and every native write stages
+and indexes a complete new generation. Graph allocator memory and overlapping
+old/staged/orphan generations are outside these numbers. Measure recall,
+write costs, concurrency and memory on the target deployment before sizing it.
 
 ## SQLite scalar query verification
 

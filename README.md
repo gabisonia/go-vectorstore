@@ -27,7 +27,7 @@ require it. Use current stable Go for up-to-date standard-library security fixes
 - Go 1.25+
 - PostgreSQL provider: PostgreSQL 16+ with `pgvector` extension
 - SQLite provider: a writable database file; no database server or C toolchain required
-- Redis provider: standalone Redis; whole-collection snapshots and Go exact search ([limits](docs/redis.md))
+- Redis provider: standalone snapshots with Go exact search; opt-in HNSW and scalar indexes ([limits](docs/redis.md))
 - Docker (optional, for integration tests and sample compose flows)
 
 ## Project layout
@@ -35,7 +35,7 @@ require it. Use current stable Go for up-to-date standard-library security fixes
 - `vectordata`: backend-agnostic core interfaces, record model, filters, typed wrapper
 - `stores/postgres`: Postgres implementation with `pgxpool`
 - `stores/sqlite`: durable SQLite model collections with exact search
-- `stores/redis`: atomic Redis model snapshots with dense exact search
+- `stores/redis`: atomic snapshots/hash generations, dense exact search and opt-in HNSW
 - `stores/memory`: transient model collections for development and contract tests
 - `samples`: runnable demos (see `samples/README.md`)
 - `docs`: architecture and implementation notes
@@ -414,9 +414,10 @@ git push origin "v${RELEASE_VERSION}"
 - Changelog: [`CHANGELOG.md`](CHANGELOG.md)
 - Benchmarks and performance notes: [`docs/performance.md`](docs/performance.md)
 
-Redis defaults to compatible snapshot storage. Opt-in hash generations and an
-explicit storage upgrade expose indexable fields while keeping atomic batches;
-native query/index execution is a later increment.
+Redis defaults to compatible snapshot storage. Opt-in native indexing uses immutable
+hash generations for HNSW and scalar-filter acceleration, preserving atomic batches.
+It requires Redis Search and database zero; writes rebuild the generation's index.
+See [native support and fallback rules](docs/redis.md#native-indexes-and-search).
 
 ## License
 

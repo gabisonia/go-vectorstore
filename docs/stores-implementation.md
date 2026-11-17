@@ -253,7 +253,7 @@ Queries and dense search materialize a memory collection, clearing runtime
 embedders before inserting stored records. Get/GetMany decode selected records;
 all still transfer the entire envelope. The configurable snapshot limit defaults
 to 16 MiB. Redis SCAN listing is deduplicated/sorted but not a namespace snapshot.
-Metadata is local, native indexing/hybrid/migrations are unadvertised, and server
+Metadata is local; full-text/hybrid/migrations are unadvertised, and server
 persistence/eviction policy determines durability. See [Redis limits](redis.md).
 
 `StorageHash` creates new collections with a format-2 manifest and immutable HASH
@@ -265,5 +265,11 @@ logical changes. An interrupted script may leave auxiliary keys but cannot publi
 a partial batch. Reads verify manifest bytes and fetch the entire generation in
 one side-effect-free script; changed manifests retry and missing rows fail closed.
 Retirement and `PruneHashStorage` protect current generations and active staging.
-Byte budgets include hash projection overhead. Native indexing remains a separate
-capability; real Redis Search tests establish that the fields are indexable.
+Byte budgets include hash projection overhead. `NativeIndexes` builds one Redis
+Search index per generation before publication, then verifies manifest/lease,
+physical schema and readiness with FT.SEARCH in one Lua execution. Literal TAG
+projections preserve NULL/equality semantics; high/low integer NUMERIC projections
+preserve all 64 bits. Matching payloads or HNSW candidates are decoded after the
+connection is released, with exact Go sorting/scoring and unsupported-case fallback.
+Writes rebuild the full index. Index cleanup separately protects current revisions
+and active leases; unknown publication results never drop a possibly current index.

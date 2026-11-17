@@ -1,10 +1,10 @@
 # Redis model provider
 
-`stores/redis` implements model collections on standalone Redis, with exact dense
-search and portable filtering in Go. It is available on master after v0.4.1.
-The connector uses atomic collection reads and creates no Redis Search,
-ANN, data-property or full-text indexes. It is intended for small collections;
-every nonempty record operation transfers the entire collection.
+`stores/redis` implements model collections on standalone Redis. The default
+uses atomic collection snapshots with exact dense search and portable filtering
+in Go. Opt-in `NativeIndexes` adds Redis Search HNSW and scalar filtering over
+immutable hash generations. It is available on master after v0.4.1. The default
+encoded collection limit is 16 MiB; writes still process the whole collection.
 
 ```go
 store, err := redis.New(redis.StoreOptions{
@@ -38,9 +38,10 @@ standalone address, not Redis Cluster, Sentinel or read-replica routing.
   before callbacks and typed codecs run.
 - Local capability/identity metadata and structured operation errors.
 
-Binary/sparse vector definitions return `ErrUnsupported`. Index/full-text hints
-are accepted for portability but do not build indexes or enable hybrid search.
-Unknown search `ProviderOptions` return `ErrUnsupported`. Migration planning and
+Binary/sparse vector definitions return `ErrUnsupported`. Without `NativeIndexes`,
+index hints are accepted for portability and build no indexes. Full-text and
+hybrid search are unsupported in either mode. Unknown search `ProviderOptions`
+return `ErrUnsupported`. Migration planning and
 application are not advertised. Runtime embedders are never persisted or invoked
 while reconstructing stored vectors.
 
@@ -51,6 +52,8 @@ while reconstructing stored vectors.
 `StorageHash` creates a format-2 manifest and immutable per-record hashes.
 Existing collections keep their layout regardless of the constructor option.
 Both formats support the same public model calls and Go exact search.
+`NativeIndexes: true` selects `StorageHash` when `StorageMode` is unspecified;
+explicit snapshot mode with native indexing is rejected.
 
 ```go
 store, err := redis.New(redis.StoreOptions{
@@ -85,13 +88,82 @@ data fields use `d_` plus the base64url logical name. Native NULL omits that fie
 other types remain in the canonical payload. Present dense vectors use `v_` plus
 the encoded name, with little-endian FLOAT32 bytes; float16 values are already
 rounded before projection. Absent vectors have no blob. Int64 projections use
-exact decimal text: future Redis NUMERIC filtering must address its double
-precision limits explicitly. The layout is internal, not an application write API.
+exact decimal text. Native indexing adds separate high/low 32-bit NUMERIC fields
+for exact integer ranges. The layout is internal, not an application write API.
 
-These hashes are a foundation for native indexing, not an indexing feature.
-Production code creates no FT indexes and capability metadata remains unchanged.
-A real Redis 8.2 test creates/drops a temporary FLAT index and checks filtered KNN
-results over the projected fields. Standalone Redis 7.4 does not need Search.
+Plain `StorageHash` needs no Search module and creates no indexes. Native mode
+adds optional index metadata to the same format-2 manifest; earlier hash readers
+ignore these fields. A writer without native indexing can publish a plain hash
+generation again. Native readers then use Go fallback until a native write or
+explicit rebuild. Older hash writers may leave obsolete indexes for pruning.
+
+## Native indexes and search
+
+Native mode requires standalone Redis with Search, tested on Redis 8.2, and
+database zero. The constructor rejects nonzero databases; it does not probe the
+server. Missing Search fails index creation without publishing the collection.
+Ordinary Redis 7.4 continues to support snapshot/hash modes.
+
+```go
+store, err := redis.New(redis.StoreOptions{
+    Addr: "localhost:63799", Namespace: "native_app", NativeIndexes: true,
+})
+// On a new definition, before obtaining/ensuring the collection:
+definition.Data[0].IsIndexed = true
+definition.Vectors[0].Index = &vectordata.VectorIndexOptions{
+    Method: vectordata.IndexMethodHNSW,
+}
+```
+
+Register the same definition when reopening. Enabling the store option does not
+silently convert existing storage or change its registered definition. For an
+existing format-1 collection, `MigrateToHashStorage` builds native indexes during
+conversion. For an existing hash collection with matching index hints, call
+`base.(*redis.Collection).RebuildNativeIndexes(ctx)` explicitly. Repeating the
+storage conversion on format 2 is a no-op, so it does not rebuild indexes.
+
+Capabilities are local configuration metadata, not a module/permission probe:
+
+- HNSW supports dense float32/float16 models with cosine, L2, squared L2 and inner
+  product: eight advertised tuples, up to 4,096 dimensions. Float16 values are
+  rounded before FLOAT32 projection. HNSW `M` is at most 512 and
+  `EfConstruction` at most 1,000,000. L1, IVFFlat and other unsupported hints keep
+  Go exact search.
+- Nonzero vector components must have absolute values in `[1e-10, 1e10]` for the
+  native path. Any unsafe stored vector omits that vector field from the entire
+  generation's index; an unsafe query also uses Go exact search. The canonical
+  values remain intact.
+- Keys support equality, `In`, existence and int64/uint64 ranges. Indexed string,
+  int64, float64 and bool data properties support equality, `In` and existence;
+  indexed int64 also supports ranges. Integer ranges retain all 64 bits through
+  split fields. Literal TAG values use hex encoding, including punctuation and
+  empty strings; float equality preserves signed-zero equivalence.
+- `And`, `Or` and `Not` retain SQL NULL/UNKNOWN semantics. Unsupported filters,
+  including float/string ordering, JSON, arrays, calendar/decimal values and
+  unindexed data, fall back as a whole. Large literals (over 511 bytes after key
+  tokenization), `In` lists over 256, deep/large trees and excessive parameters
+  also use Go evaluation. Native schemas allow at most 512 physical fields.
+
+Native filtered Query downloads matching canonical records, validates them and
+sorts/pages in Go. Native Count returns the index count without decoding record
+payloads or validating their vectors. HNSW selects an enlarged candidate set,
+then recomputes distances/scores and applies thresholds, stable key ordering and
+paging in Go. Candidates expand when a page underfills or a boundary tie remains;
+unresolved ties/underfill use the full exact snapshot. ANN recall otherwise remains
+approximate. Missing/not-ready indexes fall back; physical schema drift and
+indexing failures return errors. Filters outside the native subset use exact search.
+
+```go
+opts := vectordata.ModelSearchOptions{
+    ProviderOptions: redis.SearchTuning{EFRuntime: 200},
+}
+// For a full-snapshot exact reference instead:
+opts.ProviderOptions = redis.SearchTuning{Exact: true}
+```
+
+`EFRuntime` defaults to 128; accepted values are 0 through 10,000. Positive values
+require native mode and cannot be combined with `Exact`. Options are passed by
+value. Distances, score units and thresholds retain the public model contract.
 
 ## Atomicity and concurrency
 
@@ -127,13 +199,25 @@ manifest, then verify those exact bytes and read its payloads in one side-effect
 Lua execution. A changed manifest retries the read, at most 64 attempts; missing or
 damaged referenced hashes fail the whole read. Retiring the previous generation
 cannot race this atomic read. Concurrent batch writes cannot produce mixed
-results. Query/filter/search evaluation happens
+results. Go query/filter/search evaluation happens
 after the connection is released. Get/GetMany validate only requested records;
-Query, filtered Count and Search decode/validate the full snapshot. Nil-filter
-Count parses the envelope but skips record validation. QueryIter discards the page
+Default/fallback Query, filtered Count and Search decode/validate the full snapshot.
+Default nil-filter Count parses the envelope but skips record validation. QueryIter discards the page
 on a decode/validation error before yielding any records. ListCollectionNames uses
 deduplicated/sorted `SCAN` results; concurrent create/delete is not a snapshot of
 the namespace. Neither format promises incremental result decoding.
+
+Native writes build a separate index for each immutable generation and wait for
+the exact document count, zero indexing failures and the expected physical schema
+before publication (at most 30 seconds, bounded by caller context). Failure leaves
+the old manifest/sequence intact. Native reads verify the manifest, lease and
+index readiness and execute FT.SEARCH in one Lua execution. A concurrent change
+retries before returning any rows; retiring an old generation cannot mix reads.
+FT.SEARCH uses `TIMEOUT 0` to prevent partial timeout replies. Inside Lua it runs
+synchronously on Redis's main thread; a client deadline can return while server
+work continues. Reserve all internal keys/index names for this library. Native
+Count trusts the immutable index rather than detecting arbitrary external payload
+edits; external edits/eviction are unsupported.
 
 ## Hash staging and cleanup
 
@@ -152,6 +236,14 @@ pass. Unpublished keys with TTLs expire within one hour; pruning does not force
 their removal. DeleteCollection removes the logical collection first and attempts
 the same cleanup. The library runs no background cleanup workers.
 
+Native indexes do not have TTLs. After acknowledged publication their predecessors
+are dropped best-effort, without deleting documents. Uncertain publication never
+drops the possibly current index. Call `store.PruneNativeIndexes(ctx, name)` in
+database zero to reclaim obsolete indexes, including after deletion or failed
+staging. It protects current revisions and active staging leases and returns an
+index count, separately from hash pruning's key count. Concurrent changes may
+leave work for a later pass. Native DeleteCollection attempts both cleanups.
+
 ## Costs and deployment settings
 
 The encoded collection limit defaults to 16 MiB, configurable with
@@ -165,22 +257,30 @@ truncate. A client with a smaller limit may reject a collection another client
 created. The size check occurs after downloading a read, so it does not bound the
 network or allocation cost of an externally modified oversized Redis value.
 
-Get, GetMany, Count and writes transfer O(collection size) bytes. Query, filtered
-Count and search additionally materialize a memory collection; retained memory and
-decoding allocations grow with collection size. The exact selector bounds its
-candidates, but the Redis snapshot itself remains materialized. Hash writes stage
-a full new generation, so peak Redis storage includes the current and staged data
-plus obsolete generations pending cleanup. Reads still transfer all canonical
-payloads; this increment does not accelerate public queries. Concurrent writers
-can increase transfers through conflicts. No production throughput claim is made.
+Default and fallback reads transfer O(collection size) bytes; Query, filtered
+Count and search additionally decode a memory collection. The exact selector
+bounds candidates but the snapshot remains materialized. Native reads still
+transfer the O(record count) token manifest; eligible Count avoids record payloads,
+filtered Query transfers matching payloads, and HNSW transfers candidate payloads.
+Unfiltered Query and Get/GetMany retain the whole-snapshot path. See
+[local read measurements](performance.md#redis-native-read-measurements).
+
+Every hash write stages a full generation; native mode also rebuilds its entire
+index before publishing. Peak Redis storage includes old and staged data/graphs
+plus obsolete generations/indexes pending cleanup. Index allocator overhead is
+outside the encoded byte budget. Concurrent writers can multiply this work through
+conflicts. This design favors read-heavy, bounded collections; no production
+throughput or write-scalability claim is made.
 Reserve the provider's internal key prefix for this library; do not edit values or
 apply TTLs to collection keys.
 
 For hash layout, all generation keys and the manifest must survive together.
 Use `noeviction`; independent eviction or external edits can leave dangling
-references, which fail reads rather than returning partial records. Redis Search
-permissions/modules are unnecessary for production storage in this increment;
-hash storage additionally uses HSET/HMGET, PEXPIRE, PERSIST, PTTL, UNLINK and scripts.
+references, which fail reads rather than returning partial records. Plain storage
+needs no Search permissions/module. Hash storage uses HSET/HMGET, PEXPIRE, PERSIST,
+PTTL, UNLINK and scripts. Native mode additionally needs FT.CREATE, FT.INFO,
+FT.SEARCH and FT.DROPINDEX; explicit index pruning needs FT._LIST. The provider does
+not change global Search configuration.
 
 Durability, replication and failover depend on Redis configuration. The local
 Compose service enables AOF with `appendfsync everysec`, a persistent volume and
@@ -208,11 +308,14 @@ Normal tests need no server. Integration tests start a disposable `redis:8.2`
 container by default; `REDIS_TEST_IMAGE` selects another image and `REDIS_TEST_ADDR`
 can point to an existing disposable standalone server. Each factory uses its own
 namespace and deletes only its collections. CI exercises Redis 7.4/8.2 on minimum
-and current Go and runs the sample twice per layout. Tests cover both layouts with
+and current Go and runs the sample twice per layout, plus native mode on 8.2. Tests cover both layouts with
 the shared model, embedding
 and filter-parity contracts plus concurrent writes, integer sequence limits,
 conflicts, uncertain replies, deadlines, corruption, size limits and client reopen.
 Hash checks also cover a native publication error after PERSIST, failed/expiring
 staging, retirement during reads, orphan pruning, explicit fixture upgrades and
-Redis Search projection compatibility. `REDIS_REQUIRE_SEARCH=true` requires the
-projection proof instead of permitting a skip on servers without Search.
+Redis Search projection compatibility. Native suites run the shared contracts,
+scalar differential cases, HNSW recall, tie fallback, schema drift, readiness
+deadlines, concurrent publication, explicit rebuilds and uncertain-reply cleanup.
+`REDIS_REQUIRE_SEARCH=true` requires the native tests and projection proof instead
+of permitting skips on servers without Search.

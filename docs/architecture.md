@@ -364,5 +364,8 @@ SET. An atomic read checks the manifest and fetches its payloads together. Old
 generations can then be retired without racing a reader; interrupted cleanup is
 reclaimable through manifest-guarded pruning. Existing format-1 collections remain
 readable and require explicit storage conversion. Hash scalar and binary vector
-fields prepare for native indexes, while production queries still use Go exact
-evaluation and advertise no new indexing capabilities.
+fields support optional generation-scoped Redis Search indexes. Native mode builds
+the index and verifies readiness before publishing; reads verify manifest/schema
+and query the index atomically. Scalar filters and HNSW candidates reduce payload
+transfer, with Go sorting/remeasurement and whole-snapshot fallback. Each write
+still rebuilds a full generation and graph. Full-text/hybrid are unsupported.

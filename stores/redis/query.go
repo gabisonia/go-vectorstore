@@ -129,6 +129,12 @@ func (c *Collection) Query(ctx context.Context, filter vectordata.Filter, top in
 	if err = vectordata.ValidateModelFilter(filter, c.definition); err != nil {
 		return nil, err
 	}
+	if c.store.nativeIndexes && filter != nil {
+		rows, _, used, nativeErr := c.nativeQuery(ctx, filter, top, opts, false)
+		if nativeErr != nil || used {
+			return rows, nativeErr
+		}
+	}
 	engine, err := c.engine(ctx)
 	if err != nil {
 		return nil, err
@@ -139,6 +145,12 @@ func (c *Collection) Count(ctx context.Context, filter vectordata.Filter) (count
 	defer func() { err = c.operation(ctx, "count", err) }()
 	if err = vectordata.ValidateModelFilter(filter, c.definition); err != nil {
 		return 0, err
+	}
+	if c.store.nativeIndexes {
+		_, n, used, nativeErr := c.nativeQuery(ctx, filter, 0, vectordata.QueryOptions{}, true)
+		if nativeErr != nil || used {
+			return n, nativeErr
+		}
 	}
 	if filter == nil {
 		state, _, err := c.load(ctx)
@@ -167,8 +179,8 @@ func (c *Collection) validateSearch(top int, opts vectordata.ModelSearchOptions)
 	if err = vectordata.ValidateModelFilter(opts.Filter, c.definition); err != nil {
 		return p, err
 	}
-	if opts.ProviderOptions != nil {
-		return p, vectordata.ErrUnsupported
+	if _, err = c.searchTuning(opts); err != nil {
+		return p, err
 	}
 	return p, nil
 }
@@ -182,6 +194,17 @@ func (c *Collection) Search(ctx context.Context, vector []float32, top int, opts
 	if err != nil {
 		return nil, err
 	}
+	tuning, err := c.searchTuning(opts)
+	if err != nil {
+		return nil, err
+	}
+	if c.store.nativeIndexes {
+		rows, used, nativeErr := c.nativeSearch(ctx, vector, p, top, opts, tuning)
+		if nativeErr != nil || used {
+			return rows, nativeErr
+		}
+	}
+	opts.ProviderOptions = nil
 	engine, err := c.engine(ctx)
 	if err != nil {
 		return nil, err
@@ -197,7 +220,12 @@ func (c *Collection) SearchInput(ctx context.Context, input any, top int, opts v
 	if err != nil {
 		return nil, err
 	}
-	if _, _, err = c.load(ctx); err != nil {
+	if c.store.nativeIndexes {
+		_, _, _, err = c.nativeManifest(ctx)
+	} else {
+		_, _, err = c.load(ctx)
+	}
+	if err != nil {
 		return nil, err
 	}
 	vector, err := vectordata.EmbedInputQuery(ctx, input, p, c.options)
