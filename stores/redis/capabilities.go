@@ -22,7 +22,7 @@ func (s *Store) Capabilities() vectordata.ProviderCapabilities {
 		DistanceMetrics: []vectordata.DistanceMetric{vectordata.DistanceCosine, vectordata.DistanceL2, vectordata.DistanceL2Squared, vectordata.DistanceInnerProduct, vectordata.DistanceL1},
 	}
 	if s.nativeIndexes {
-		caps.FullTextIndexing = s.storageMode != StorageJSON
+		caps.FullTextIndexing = true
 		caps.VectorIndexMethods = []vectordata.IndexMethod{vectordata.IndexMethodHNSW, vectordata.IndexMethodFlat}
 		caps.IndexedDataTypes = []vectordata.DataType{vectordata.TypeString, vectordata.TypeInt64, vectordata.TypeFloat64, vectordata.TypeBool}
 		for _, method := range caps.VectorIndexMethods {

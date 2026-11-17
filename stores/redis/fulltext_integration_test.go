@@ -4,6 +4,7 @@ package redis
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"reflect"
@@ -21,7 +22,7 @@ func fullTextKeys(t *testing.T, c *Collection, query string, params ...any) []st
 	t.Helper()
 	ctx := context.Background()
 	m, raw, indexed, err := c.nativeManifest(ctx)
-	if err != nil || !indexed || m.IndexVersion != 2 {
+	if err != nil || !indexed || (m.IndexVersion != 2 && m.IndexVersion != 5) {
 		t.Fatalf("full-text generation unavailable: %+v %t %v", m, indexed, err)
 	}
 	reply, used, err := c.nativeReply(ctx, m, raw, nativeFilterPlan{query: query, params: params}, len(m.Tokens), "", nil, 0)
@@ -41,9 +42,13 @@ func fullTextKeys(t *testing.T, c *Collection, query string, params ...any) []st
 }
 
 func TestIntegrationNativeFullTextTokenizationAndUpdates(t *testing.T) {
+	runNativeStorage(t, testIntegrationNativeFullTextTokenizationAndUpdatesStorage)
+}
+
+func testIntegrationNativeFullTextTokenizationAndUpdatesStorage(t *testing.T, mode StorageMode) {
 	requireNativeSearch(t)
 	ctx := context.Background()
-	s := integrationStore(t, StoreOptions{NativeIndexes: true})
+	s := integrationStore(t, StoreOptions{NativeIndexes: true, StorageMode: mode})
 	title := `Title."雪`
 	d := vectordata.CollectionDefinition{Key: vectordata.KeyProperty{Name: "ID", Type: vectordata.KeyInt64}, Data: []vectordata.DataProperty{{Name: title, StorageName: "headline", Type: vectordata.TypeString, Optional: true, IsIndexed: true, IsFullTextIndexed: true}, {Name: "Body", Type: vectordata.TypeString, Optional: true, IsFullTextIndexed: true}, {Name: "Plain", Type: vectordata.TypeString}}}
 	base, err := s.EnsureModelCollection(ctx, "text", d, vectordata.ModelCollectionOptions{})
@@ -88,18 +93,35 @@ func TestIntegrationNativeFullTextTokenizationAndUpdates(t *testing.T) {
 		if err != nil || r.Data[title] != titles[key-1] {
 			t.Fatalf("canonical NULL/empty/NUL text changed: %+v %v", r, err)
 		}
-		projected := c.generationPrefix(m.Revision) + "r:" + encodeName(token(int64(key)))
-		present, err := s.client.HExists(ctx, projected, "d_"+encodeName(title)).Result()
+		projected := c.nativeGenerationPrefix(m) + "r:" + encodeName(token(int64(key)))
+		var present bool
+		if mode == StorageJSON {
+			raw, err := s.client.Do(ctx, "JSON.GET", projected).Text()
+			if err != nil {
+				t.Fatal(err)
+			}
+			var doc jsonDocument
+			if err := json.Unmarshal([]byte(raw), &doc); err != nil {
+				t.Fatal(err)
+			}
+			value, exists := doc.Text["text0"]
+			present = exists
+			if exists && value != titles[key-1] {
+				t.Fatalf("JSON TEXT changed NUL/empty: %q", value)
+			}
+		} else {
+			present, err = s.client.HExists(ctx, projected, "d_"+encodeName(title)).Result()
+		}
 		if err != nil || present != (key != 3) {
 			t.Fatalf("NULL/empty projection: key=%d present=%t %v", key, present, err)
 		}
 	}
 	native, full := 0, 0
 	s.client.AddHook(processHook{run: func(ctx context.Context, cmd goredis.Cmder, next goredis.ProcessHook) error {
-		if scriptIs(cmd, nativeExecute) {
+		if scriptIs(cmd, nativeSearchScript(mode)) {
 			native++
 		}
-		if scriptIs(cmd, readHash) {
+		if scriptIs(cmd, nativeReadScript(mode)) {
 			full++
 		}
 		return next(ctx, cmd)
@@ -141,9 +163,13 @@ func TestIntegrationNativeFullTextTokenizationAndUpdates(t *testing.T) {
 }
 
 func TestIntegrationNativeFullTextLegacyIndexAndRebuild(t *testing.T) {
+	runNativeStorage(t, testIntegrationNativeFullTextLegacyIndexAndRebuildStorage)
+}
+
+func testIntegrationNativeFullTextLegacyIndexAndRebuildStorage(t *testing.T, mode StorageMode) {
 	requireNativeSearch(t)
 	ctx := context.Background()
-	s := integrationStore(t, StoreOptions{NativeIndexes: true})
+	s := integrationStore(t, StoreOptions{NativeIndexes: true, StorageMode: mode})
 	c := nativeLifecycleCollection(t, s)
 	// Emulate the previous native writer: the persisted registration retains the
 	// full-text hint, but its physical projection/schema ignores that hint.
@@ -153,13 +179,17 @@ func TestIntegrationNativeFullTextLegacyIndexAndRebuild(t *testing.T) {
 	if _, err := old.Upsert(ctx, nativeLifecycleRows("legacy")); err != nil {
 		t.Fatal(err)
 	}
-	m, _ := currentManifest(t, c)
-	if m.IndexVersion != 1 || m.Definition != c.registration {
+	m, before := currentManifest(t, c)
+	legacyVersion := 1
+	if mode == StorageJSON {
+		legacyVersion = 4
+	}
+	if m.IndexVersion != legacyVersion || m.Definition != c.registration {
 		t.Fatalf("legacy fixture registration/version: %+v", m)
 	}
 	full := 0
 	s.client.AddHook(processHook{run: func(ctx context.Context, cmd goredis.Cmder, next goredis.ProcessHook) error {
-		if scriptIs(cmd, readHash) {
+		if scriptIs(cmd, nativeReadScript(mode)) {
 			full++
 		}
 		return next(ctx, cmd)
@@ -167,8 +197,22 @@ func TestIntegrationNativeFullTextLegacyIndexAndRebuild(t *testing.T) {
 	if count, err := c.Count(ctx, vectordata.Eq(vectordata.Column("Value"), "legacy")); err != nil || count != 2 || full != 0 {
 		t.Fatalf("legacy native index became unreadable: %d %v reads=%d", count, err, full)
 	}
+	if rows, err := c.Query(ctx, vectordata.Eq(vectordata.Column("Value"), "legacy"), 2, vectordata.QueryOptions{}); err != nil || len(rows) != 2 || full != 0 {
+		t.Fatalf("legacy filtered query: %+v %v reads=%d", rows, err, full)
+	}
+	if hits, err := c.Search(ctx, []float32{1, 0}, 1, vectordata.ModelSearchOptions{Filter: vectordata.Eq(vectordata.Column("Value"), "legacy")}); err != nil || len(hits) != 1 || full != 0 {
+		t.Fatalf("legacy filtered search: %+v %v reads=%d", hits, err, full)
+	}
+	_, after := currentManifest(t, c)
+	if string(before) != string(after) {
+		t.Fatal("reads implicitly rebuilt legacy indexes")
+	}
 	if err := c.RebuildNativeIndexes(ctx); err != nil {
 		t.Fatal(err)
+	}
+	rebuilt, _ := currentManifest(t, c)
+	if rebuilt.Definition != m.Definition || rebuilt.Next != m.Next || !reflect.DeepEqual(rebuilt.Tokens, m.Tokens) {
+		t.Fatalf("TEXT rebuild changed registration/sequence/records: %+v", rebuilt)
 	}
 	if got := fullTextKeys(t, c, "@text0:legacy"); !reflect.DeepEqual(got, []string{"1", "2"}) {
 		t.Fatalf("explicit TEXT rebuild failed: %v", got)
@@ -188,9 +232,17 @@ func TestIntegrationNativeFullTextLegacyIndexAndRebuild(t *testing.T) {
 }
 
 func TestIntegrationNativeFullTextStorageUpgradeAndReopen(t *testing.T) {
+	runNativeStorage(t, testIntegrationNativeFullTextStorageUpgradeAndReopenStorage)
+}
+
+func testIntegrationNativeFullTextStorageUpgradeAndReopenStorage(t *testing.T, target StorageMode) {
 	requireNativeSearch(t)
 	ctx := context.Background()
-	for _, mode := range []StorageMode{StorageSnapshot, StorageHash} {
+	sources := []StorageMode{StorageSnapshot, StorageHash}
+	if target == StorageJSON {
+		sources = append(sources, StorageJSON)
+	}
+	for _, mode := range sources {
 		t.Run(string(mode), func(t *testing.T) {
 			plain := integrationStore(t, StoreOptions{StorageMode: mode})
 			c := nativeLifecycleCollection(t, plain)
@@ -198,7 +250,7 @@ func TestIntegrationNativeFullTextStorageUpgradeAndReopen(t *testing.T) {
 			if err != nil || len(keys) != 1 {
 				t.Fatalf("initial generated record: %v %v", keys, err)
 			}
-			native, err := New(StoreOptions{Addr: integrationAddr, Namespace: plain.metadata.Namespace, NativeIndexes: true})
+			native, err := New(StoreOptions{Addr: integrationAddr, Namespace: plain.metadata.Namespace, NativeIndexes: true, StorageMode: target})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -208,7 +260,9 @@ func TestIntegrationNativeFullTextStorageUpgradeAndReopen(t *testing.T) {
 				t.Fatal(err)
 			}
 			indexed := base.(*Collection)
-			if mode == StorageSnapshot {
+			if target == StorageJSON && mode != StorageJSON {
+				err = indexed.MigrateToJSONStorage(ctx)
+			} else if mode == StorageSnapshot {
 				err = indexed.MigrateToHashStorage(ctx)
 			} else {
 				err = indexed.RebuildNativeIndexes(ctx)
@@ -220,7 +274,7 @@ func TestIntegrationNativeFullTextStorageUpgradeAndReopen(t *testing.T) {
 				t.Fatalf("storage conversion lost TEXT: %v", got)
 			}
 			if r, err := c.Get(ctx, keys[0], vectordata.RetrievalOptions{}); err != nil || r.Data["Value"] != "retained" {
-				t.Fatalf("plain reader could not reopen version 2: %+v %v", r, err)
+				t.Fatalf("plain reader could not reopen TEXT storage: %+v %v", r, err)
 			}
 			next, err := indexed.Insert(ctx, []vectordata.ModelRecord{{Data: map[string]any{"Value": "next"}}})
 			if err != nil || len(next) != 1 || next[0] != keys[0].(int64)+1 {
@@ -231,11 +285,15 @@ func TestIntegrationNativeFullTextStorageUpgradeAndReopen(t *testing.T) {
 }
 
 func TestIntegrationNativeFullTextSchemaDrift(t *testing.T) {
+	runNativeStorage(t, testIntegrationNativeFullTextSchemaDriftStorage)
+}
+
+func testIntegrationNativeFullTextSchemaDriftStorage(t *testing.T, mode StorageMode) {
 	requireNativeSearch(t)
 	ctx := context.Background()
-	for _, change := range []string{"type", "weight", "nostem", "noindex", "nofields", "nooffsets", "nofreqs", "stopwords"} {
+	for _, change := range []string{"type", "weight", "nostem", "noindex", "nofields", "nooffsets", "nofreqs", "stopwords", "path"} {
 		t.Run(change, func(t *testing.T) {
-			s := integrationStore(t, StoreOptions{NativeIndexes: true})
+			s := integrationStore(t, StoreOptions{NativeIndexes: true, StorageMode: mode})
 			d := vectordata.CollectionDefinition{Key: vectordata.KeyProperty{Name: "ID"}, Data: []vectordata.DataProperty{{Name: "Title", Type: vectordata.TypeString, IsFullTextIndexed: true}}}
 			base, err := s.EnsureModelCollection(ctx, "drift", d, vectordata.ModelCollectionOptions{})
 			if err != nil {
@@ -249,7 +307,14 @@ func TestIntegrationNativeFullTextSchemaDrift(t *testing.T) {
 			if err := s.client.Do(ctx, "FT.DROPINDEX", m.Index).Err(); err != nil {
 				t.Fatal(err)
 			}
-			args := []any{"FT.CREATE", m.Index, "ON", "HASH", "PREFIX", 1, c.generationPrefix(m.Revision)}
+			keytype, revision, keyPath, textPath := "HASH", "__vs_revision", "__vs_key_tag", "d_"+encodeName("Title")
+			if mode == StorageJSON {
+				keytype, revision, keyPath, textPath = "JSON", "$.__vs_revision", "$.__vs_scalars.__vs_key_tag", "$.__vs_text.text0"
+			}
+			if change == "path" {
+				textPath += "wrong"
+			}
+			args := []any{"FT.CREATE", m.Index, "ON", keytype, "PREFIX", 1, c.nativeGenerationPrefix(m)}
 			switch change {
 			case "nofields":
 				args = append(args, "NOFIELDS")
@@ -260,7 +325,15 @@ func TestIntegrationNativeFullTextSchemaDrift(t *testing.T) {
 			case "stopwords":
 				args = append(args, "STOPWORDS", 0)
 			}
-			args = append(args, "SCHEMA", "__vs_revision", "AS", "revision", "TAG", "CASESENSITIVE", "__vs_key_tag", "AS", "key", "TAG", "CASESENSITIVE", "d_"+encodeName("Title"), "AS", "text0")
+			args = append(args, "SCHEMA", revision, "AS", "revision", "TAG", "CASESENSITIVE")
+			if mode == StorageJSON {
+				args = append(args, "SEPARATOR", ",")
+			}
+			args = append(args, keyPath, "AS", "key", "TAG", "CASESENSITIVE")
+			if mode == StorageJSON {
+				args = append(args, "SEPARATOR", ",")
+			}
+			args = append(args, textPath, "AS", "text0")
 			if change == "type" {
 				args = append(args, "TAG", "CASESENSITIVE")
 			} else {
@@ -291,9 +364,13 @@ func TestIntegrationNativeFullTextSchemaDrift(t *testing.T) {
 }
 
 func TestIntegrationNativeFullTextFieldLimit(t *testing.T) {
+	runNativeStorage(t, testIntegrationNativeFullTextFieldLimitStorage)
+}
+
+func testIntegrationNativeFullTextFieldLimitStorage(t *testing.T, mode StorageMode) {
 	requireNativeSearch(t)
 	ctx := context.Background()
-	s := integrationStore(t, StoreOptions{NativeIndexes: true})
+	s := integrationStore(t, StoreOptions{NativeIndexes: true, StorageMode: mode})
 	d := vectordata.CollectionDefinition{Key: vectordata.KeyProperty{Name: "ID"}}
 	data := map[string]any{}
 	for i := range 128 {
@@ -315,11 +392,15 @@ func TestIntegrationNativeFullTextFieldLimit(t *testing.T) {
 }
 
 func TestIntegrationNativeFullTextPublicationConflict(t *testing.T) {
+	runNativeStorage(t, testIntegrationNativeFullTextPublicationConflictStorage)
+}
+
+func testIntegrationNativeFullTextPublicationConflictStorage(t *testing.T, mode StorageMode) {
 	requireNativeSearch(t)
 	ctx := context.Background()
-	s := integrationStore(t, StoreOptions{NativeIndexes: true})
+	s := integrationStore(t, StoreOptions{NativeIndexes: true, StorageMode: mode})
 	c := nativeLifecycleCollection(t, s)
-	other, err := New(StoreOptions{Addr: integrationAddr, Namespace: s.metadata.Namespace, NativeIndexes: true})
+	other, err := New(StoreOptions{Addr: integrationAddr, Namespace: s.metadata.Namespace, NativeIndexes: true, StorageMode: mode})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -330,7 +411,7 @@ func TestIntegrationNativeFullTextPublicationConflict(t *testing.T) {
 	}
 	attempts := 0
 	s.client.AddHook(hashFailureHook{process: func(ctx context.Context, cmd goredis.Cmder, next goredis.ProcessHook) error {
-		if scriptIs(cmd, publishHash) {
+		if scriptIs(cmd, nativePublishScript(mode)) {
 			attempts++
 			if attempts == 1 {
 				if _, err := writer.Insert(ctx, []vectordata.ModelRecord{{Data: map[string]any{"Value": "winner"}}}); err != nil {
@@ -355,7 +436,11 @@ func TestIntegrationNativeFullTextPublicationConflict(t *testing.T) {
 	}
 	count := 0
 	for _, index := range indexes {
-		if strings.HasPrefix(index, s.indexPrefix(c.name)) {
+		prefix := s.indexPrefix(c.name)
+		if mode == StorageJSON {
+			prefix = s.jsonIndexPrefix(c.name)
+		}
+		if strings.HasPrefix(index, prefix) {
 			count++
 		}
 	}

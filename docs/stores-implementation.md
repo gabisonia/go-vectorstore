@@ -291,12 +291,15 @@ Shared pruning validates known manifest formats and protects the current layout'
 generation and active staging. Plain JSON queries/searches retain the Go engine.
 
 RedisJSON native mode uses the same prepublication index readiness and atomic
-query guard, with format-3/index-version-4 metadata and its own index prefix.
+query guard, with format-3/index-version-4-or-5 metadata and its own index prefix.
 Canonical payload strings remain opaque; bounded FLOAT32 vectors project to
 internal JSON paths. Literal scalar TAGs and exact 32-bit integer components
 support native filtered Query, Count and HNSW/FLAT. Query/scoring run in Go after
 fetching matching wrappers in the atomic guard; Count fetches no payloads. Unsupported
 filters retain Go evaluation. Version-3 vector-only indexes remain readable without
-implicit rebuild; an explicit rebuild/native write adds version-4 scalar fields.
-JSON full-text indexing remains deferred. Cleanup protects JSON leases and
+implicit rebuild; an explicit rebuild/native write adds scalar fields. Full-text
+hints select version 5 with a separate raw-string JSON map and safe TEXT aliases.
+Version-4 scalar/vector fields stay unchanged until explicit rebuild/native writes;
+TEXT uses the same tokenizer/observable schema checks as HASH. Canonical payloads
+stay opaque. Keyword/hybrid APIs remain absent. Cleanup protects JSON leases and
 current generations, including uncertain writes. See [RedisJSON storage](redis.md#redisjson-storage).

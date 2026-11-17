@@ -103,6 +103,16 @@ func (c *Collection) nativeIndexVersion() int {
 	}
 	return 1
 }
+
+// Versions 3/4 retain their vector-only/scalar schemas even when the registered
+// definition contains a previously ignored full-text hint. Only writes/rebuilds
+// choose version 5; collections without text hints keep version 4.
+func (c *Collection) nativeJSONIndexVersion() int {
+	if c.nativeIndexVersion() == 2 {
+		return 5
+	}
+	return 4
+}
 func nativeTag(v any) (string, bool) {
 	var text string
 	switch x := v.(type) {
@@ -213,7 +223,7 @@ func (c *Collection) nativeFields(m hashManifest) ([]nativeField, error) {
 				fields = append(fields, nativeField{Name: "__vs_hi_" + n, Alias: "hi" + n, Kind: "NUMERIC"}, nativeField{Name: "__vs_lo_" + n, Alias: "lo" + n, Kind: "NUMERIC"})
 			}
 		}
-		if m.IndexVersion == 2 && nativeText(p) {
+		if (m.IndexVersion == 2 || m.IndexVersion == 5) && nativeText(p) {
 			textFields++
 			fields = append(fields, nativeField{Name: "d_" + encodeName(p.Name), Alias: "text" + n, Kind: "TEXT"})
 		}
@@ -252,14 +262,16 @@ func (c *Collection) nativeFields(m hashManifest) ([]nativeField, error) {
 			if f.Kind == "VECTOR" {
 				continue
 			}
-			if f.Name == "__vs_revision" {
+			if f.Kind == "TEXT" {
+				f.Name = "$.__vs_text." + f.Alias
+			} else if f.Name == "__vs_revision" {
 				f.Name = "$.__vs_revision"
 			} else {
 				f.Name = "$.__vs_scalars." + f.Name
 			}
 			// Explicit separators make TAG schema drift observable. Encoded tags contain
 			// only x/hex characters, so comma splitting cannot change literal values.
-			if m.IndexVersion == 4 && f.Kind == "TAG" {
+			if (m.IndexVersion == 4 || m.IndexVersion == 5) && f.Kind == "TAG" {
 				f.Separator = ","
 			}
 		}
@@ -338,7 +350,7 @@ func (c *Collection) createNativeIndex(ctx context.Context, m hashManifest) erro
 		keytype = "JSON"
 	}
 	args := []any{"FT.CREATE", m.Index, "ON", keytype, "PREFIX", 1, c.nativeGenerationPrefix(m)}
-	if m.IndexVersion == 2 {
+	if m.IndexVersion == 2 || m.IndexVersion == 5 {
 		args = append(args, "LANGUAGE", "english")
 	}
 	args = append(args, "SCHEMA")

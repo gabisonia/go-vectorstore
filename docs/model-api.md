@@ -363,9 +363,10 @@ PostgreSQL float16 storage requires pgvector 0.7+ and a visible `halfvec` type.
 Plain Redis layouts report the same booleans/index fields as memory and buffer
 snapshots/pages. With `NativeIndexes`, HASH and JSON advertise HNSW and FLAT
 for four dense metrics and two precisions (16 tuples, up to 4,096 dimensions).
-Both native layouts advertise indexed string/int64/float64/bool data; only HASH
-advertises `FullTextIndexing` for strings marked `IsFullTextIndexed`/`fulltext`.
-JSON full-text indexes are deferred; hybrid/migrations remain false.
+Both native layouts advertise indexed string/int64/float64/bool data and
+`FullTextIndexing` for strings marked `IsFullTextIndexed`/`fulltext`. JSON version-5
+indexes add TEXT on explicit rebuild/native writes; older schemas remain readable.
+Hybrid/migrations remain false.
 This creates Redis TEXT fields but adds no keyword-query API. `SearchText` still
 embeds its input for vector search. This is local discovery; see
 [Redis runtime limits and costs](redis.md).

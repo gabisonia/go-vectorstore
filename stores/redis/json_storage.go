@@ -24,6 +24,7 @@ type jsonDocument struct {
 	Payload  string               `json:"__vs_payload"`
 	Vectors  map[string][]float32 `json:"__vs_vectors,omitempty"`
 	Scalars  map[string]any       `json:"__vs_scalars,omitempty"`
+	Text     map[string]string    `json:"__vs_text,omitempty"`
 }
 
 type jsonRecord struct{ key, document string }
@@ -103,7 +104,7 @@ func (c *Collection) projectJSON(ctx context.Context, state snapshot) (jsonManif
 		byToken[t] = r
 	}
 	if c.store.nativeIndexes {
-		m.Index, m.IndexVersion = c.nativeIndexName(3, m.Revision), 4
+		m.Index, m.IndexVersion = c.nativeIndexName(3, m.Revision), c.nativeJSONIndexVersion()
 		m.IndexVectors = c.nativeVectors(records)
 	}
 	sort.Strings(m.Tokens)
@@ -121,6 +122,16 @@ func (c *Collection) projectJSON(ctx context.Context, state snapshot) (jsonManif
 		doc := jsonDocument{Revision: m.Revision, Token: t, Payload: string(state.Records[t])}
 		if c.store.nativeIndexes {
 			doc.Scalars = c.jsonScalarProjection(byToken[t])
+		}
+		if m.IndexVersion == 5 {
+			for i, p := range c.definition.Data {
+				if nativeText(p) && byToken[t].Data[p.Name] != nil {
+					if doc.Text == nil {
+						doc.Text = map[string]string{}
+					}
+					doc.Text["text"+strconv.Itoa(i)] = byToken[t].Data[p.Name].(string)
+				}
+			}
 		}
 		for i, p := range c.definition.Vectors {
 			for _, name := range m.IndexVectors {

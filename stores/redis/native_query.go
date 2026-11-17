@@ -113,7 +113,7 @@ func (c *Collection) nativeManifest(ctx context.Context) (hashManifest, []byte, 
 		}
 		seen[t] = true
 	}
-	if m.Index == "" || ((m.Format == 2 && m.IndexVersion != 1 && m.IndexVersion != 2) || (m.Format == 3 && m.IndexVersion != 3 && m.IndexVersion != 4)) || len(m.Tokens) > nativeMaxDocuments {
+	if m.Index == "" || ((m.Format == 2 && m.IndexVersion != 1 && m.IndexVersion != 2) || (m.Format == 3 && m.IndexVersion != 3 && m.IndexVersion != 4 && m.IndexVersion != 5)) || len(m.Tokens) > nativeMaxDocuments {
 		return m, raw, false, nil
 	}
 	if m.Index != c.nativeIndexName(m.Format, m.Revision) {

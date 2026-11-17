@@ -2,14 +2,21 @@
 
 ## Unreleased
 
+- Honor string full-text hints in native RedisJSON mode with separate raw TEXT
+  projections, capability discovery and index metadata version 5. Preserve legacy
+  vector/scalar schemas until explicit rebuild/native writes and keep canonical
+  payloads/registrations unchanged. Cover tokenization, NULL/Unicode fidelity,
+  schema drift, field limits, storage conversion and atomic lifecycle on both
+  layouts; add a rerunnable JSON full-text sample and CI coverage. Public keyword/
+  hybrid APIs remain unsupported.
+
 - Add native RedisJSON scalar filtering for indexed strings, int64, float64 and
   bool values plus keys, accelerating filtered Query/Count and HNSW/FLAT search.
   Preserve full integer precision and SQL NULL truth with separate literal TAGs,
   presence markers and split integer projections. Index metadata version 4 retains
   vector-only version-3 reads until explicit rebuild/native writes. Cover native
   routing, precision, drift, compatibility and atomic lifecycle behavior; update
-  samples, capability discovery and measured benchmarks. JSON full-text remains
-  deferred.
+  samples, capability discovery and measured benchmarks.
 
 - Add opt-in RedisJSON native HNSW/FLAT vector indexes with canonical precision,
   prepublication readiness, atomic KNN/wrapper reads, explicit rebuild and safe
