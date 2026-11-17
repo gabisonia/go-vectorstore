@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add an opt-in pure-Go sqlite-vec adapter over the shared SQLite provider.
+  Verified non-SIMD scalar L1 candidates retain complete boundary ties and exact
+  Go ranking, thresholds and paging in one WAL snapshot. Gate extension version/
+  build flags before schema creation; retain fallback for other metrics, filters
+  and dirty projections. Add numerical bit checks, native SQL/snapshot/error
+  proofs, three-OS CGo-free CI, rerunnable samples and measured fixture limits.
+
 - Add opt-in SQLite packed dense vector projections with explicit bounded-memory
   backfill, transactional readiness and unaware-writer invalidation. Preserve
   canonical format 1 and exact Go distances/native-key ties; unfiltered dense

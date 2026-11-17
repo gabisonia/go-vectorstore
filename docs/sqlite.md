@@ -6,8 +6,9 @@ server, extension, C compiler, or API key.
 
 The next optional vector execution path is described in the
 [SQLite vector design](sqlite-vector-design.md), with a reproducible driver probe.
-Extension-based ranking is not yet a provider feature. Current vector searches
-use the Go exact engine, optionally reading packed projections as described below.
+The [optional sqlite-vec adapter](sqlitevec.md) executes verified scalar L1
+candidates and retains exact Go ranking. The base provider keeps its existing
+execution, optionally reading packed projections as described below.
 
 ```go
 store, err := sqlite.Open(ctx, "/var/lib/myapp/vectors.db", sqlite.StoreOptions{})

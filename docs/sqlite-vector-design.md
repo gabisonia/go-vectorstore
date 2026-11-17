@@ -1,8 +1,9 @@
 # SQLite vector execution design
 
 Status: investigation/probe merged in [PR #56](https://github.com/gabisonia/go-vectorstore/pull/56).
-The packed projection foundation in section A is implemented; extension execution
-in section B remains gated. Capability discovery does not advertise a vector index.
+The packed projection foundation merged in [PR #57](https://github.com/gabisonia/go-vectorstore/pull/57).
+The scalar L1 adapter in section B is implemented; additional native metrics remain
+gated. Capability discovery does not advertise a vector index.
 This document records the investigation gate in the
 [parity plan](parity-plan.md).
 
@@ -13,13 +14,12 @@ Use the already-pinned `modernc.org/sqlite v1.59.0` for the optional path, inclu
 its `modernc.org/sqlite/vec` package. No dependency update, replacement driver,
 dynamic library download or C compiler is required for this choice.
 
-The future `stores/sqlitevec` adapter will import the extension and share the
+The `stores/sqlitevec` adapter imports the extension and shares the
 existing SQLite engine, codecs, transaction/retry rules and embedding resolution.
-Do not duplicate a provider or expose `database/sql` ownership to applications.
-Keep extension imports out of the base provider; the adapter's constructor will
-explicitly select vector execution and verify the extension before creating any
-projection state. Internal engine plumbing and additive options belong in an
-implementation PR, not this probe.
+Store/Collection are aliases for the existing provider; `database/sql` ownership
+stays internal. Extension imports stay out of the base provider. The adapter's
+constructor explicitly selects vector execution and verifies the extension before
+creating any projection state. The shared options retain the default Go path.
 
 The extension registers process-wide for subsequently opened modernc connections.
 Importing the adapter will therefore make its SQL functions available on ordinary
@@ -151,6 +151,13 @@ fallback to the existing scan whenever that cannot be guaranteed. This is a
 useful, independently reviewable foundation without native ranking claims.
 
 ### B. Opt-in extension execution
+
+Implemented for unfiltered dense scalar L1 in [stores/sqlitevec](sqlitevec.md).
+The pinned non-SIMD scalar loop uses the same sequential float64 operations as Go,
+so complete boundary ties give a conservative candidate bound with factor 1.
+Version/build-flag verification and exact Go reranking preserve the existing
+numeric contract. L2/cosine, filters and other unsupported shapes retain their
+current paths. The acceptance criteria below still govern additional metrics.
 
 Add the optional adapter and extension availability checks; reuse the foundation.
 Start with ordinary-table scalar distance execution for supported dense metrics,

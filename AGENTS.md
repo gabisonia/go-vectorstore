@@ -7,6 +7,7 @@ This file describes contributing to this repository.
 
 - `vectordata`: public model/Record contracts, codecs, filters, embeddings and capabilities.
 - `stores/memory`, `stores/sqlite`, `stores/postgres`, `stores/redis`: concrete providers.
+- `stores/sqlitevec`: optional extension adapter sharing SQLite's engine and format.
 - `internal/exactsearch`: shared bounded exact-search ranking for memory/SQLite.
 - `vectordata/conformance`: shared provider behavior and filter parity fixtures.
 - `samples`: runnable workflows; sample-only helpers live in `samples/internal`.
@@ -36,12 +37,22 @@ The SQLite vector design has an isolated, opt-in compatibility probe:
 
 ```sh
 CGO_ENABLED=0 go test -count=1 -v -tags=sqlitevecprobe -timeout=3m ./internal/sqlitevecprobe
+CGO_ENABLED=0 go test -count=1 -tags=sqlitevecprobe -timeout=3m ./stores/sqlitevec
+go test -race -count=1 -tags=sqlitevecprobe -run TestNativeVector ./stores/sqlite
 ```
 
 Its tagged test binary links `modernc.org/sqlite/vec`; the default provider does
 not. The probe runs a separate unextended writer and records float32 precision
 and trigger compatibility gates. Keep it independent of production capabilities;
 see [docs/sqlite-vector-design.md](docs/sqlite-vector-design.md).
+
+The production sqlite-vec adapter uses only the reviewed sequential scalar L1
+kernel for native candidates. Verify its version and absence of SIMD build flags
+before schema creation, retain the complete top+Skip distance tie group, and
+reapply exact Go ranking. Preserve canonical fallback for unsupported shapes and
+metrics; vec0 float32 KNN does not have this proof. Keep extension imports out of
+the base provider and follow [docs/sqlitevec.md](docs/sqlitevec.md) for limits and
+dependency-update review.
 
 PostgreSQL and sample recipe integration tests need Docker:
 

@@ -29,7 +29,7 @@ Acceptance: unchanged models reopen unchanged files; annotations survive every
 provider; Redis NoStem changes keyword matching and mismatched indexes fail
 closed. Unknown Redis-owned options are rejected rather than silently ignored.
 
-## 2. SQLite vector execution — packed projection foundation implemented; awaiting merge
+## 2. SQLite vector execution — scalar L1 adapter implemented; awaiting merge
 
 First investigate sqlite-vec integration and its platform/driver requirements.
 Keep the current pure-Go, extension-free provider available. Propose a separate
@@ -49,13 +49,23 @@ driver's pure-Go sqlite-vec package through a future opt-in adapter. Its executa
 probe covers extension availability, distances, filter placement and a separate
 unextended writer. Float32 rounding and mixed-writer trigger behavior require
 explicit correctness gates before native ranking ships. The foundation
-adds optional ordinary packed dense projections, explicit keyset-batched rebuild,
+in [PR #57](https://github.com/gabisonia/go-vectorstore/pull/57) merged after all 17
+CI jobs passed. It adds optional ordinary packed dense projections, explicit keyset-batched rebuild,
 transactional invalidation for unaware writers and exact Go ranking with page-only
 canonical retrieval. Shared conformance, numerical/full-sort parity, released
 fixtures, cancellation and WAL snapshot tests cover the foundation. This does not
-add extension ranking or advertise vector index capabilities. Next after merge:
-opt-in extension execution subject to the documented precision gate, then broader
-workload measurement in separate PRs.
+add extension ranking or advertise vector index capabilities.
+
+The [opt-in sqlite-vec adapter](sqlitevec.md) now uses the reviewed scalar L1 double
+kernel to select complete distance-boundary candidates, then retains exact Go
+ranking and page retrieval in the same WAL snapshot. Version/build flags are
+verified before schema creation. Other metrics, filters and dirty projections
+retain their existing paths. Conformance, bit-level numerical checks, boundary
+ties, native-key precision, concurrency, cancellation and three-OS CGo-free CI
+cover this increment. A reproducible 1k/10k L1 benchmark compares all three paths.
+Next after merge: broader workload/write/rebuild measurement; native L2/cosine
+remain gated by their separate numerical proofs. Do not expand native metric
+claims solely from extension availability.
 
 ## 3. Connector breadth: Qdrant — queued
 

@@ -9,6 +9,7 @@ The shared core and provider implementations are:
 - `vectordata`: backend-agnostic contracts and primitives
 - `stores/postgres`: PostgreSQL + pgvector implementation
 - `stores/sqlite`: durable embedded model storage with exact snapshot search
+- `stores/sqlitevec`: opt-in extension adapter sharing the SQLite implementation
 - `stores/memory`: transient exact-search model implementation
 - `stores/redis`: standalone atomic snapshots and dense Go exact search
 
@@ -357,6 +358,14 @@ snapshot. Ordinary triggers invalidate readiness; aware writers maintain affecte
 rows and restore readiness atomically only from a previously ready state. Dirty
 or absent projections require explicit rebuild and otherwise use canonical scans.
 Native values are decoded by declared type, with a separate SQL NULL marker for JSON properties. See [sqlite.md](sqlite.md) for workload limits.
+
+The optional `stores/sqlitevec` adapter selects verified non-SIMD scalar L1
+execution. SQLite materializes keys/double distances and supplies all vectors at
+the top+Skip distance boundary, including complete ties. The shared Go selector
+reapplies exact ranking, thresholds and native key order before canonical page
+retrieval in that snapshot. Other metrics/shapes keep their existing paths. The
+base provider does not link the extension; constructor checks precede schema
+creation. See [precision proof and cost](sqlitevec.md).
 
 The default Redis layout stores one versioned collection envelope per Redis string. Reads obtain a
 consistent snapshot with one GET. Writes prepare/validate records before publishing

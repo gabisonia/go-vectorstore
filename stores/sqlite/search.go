@@ -9,9 +9,9 @@ import (
 	"github.com/gabisonia/go-vectorstore/vectordata"
 )
 
-func (c *Collection) searchRecords(ctx context.Context, p vectordata.VectorProperty, top int, opts vectordata.ModelSearchOptions, measure exactsearch.Measure) ([]vectordata.ModelSearchResult, error) {
+func (c *Collection) searchRecords(ctx context.Context, p vectordata.VectorProperty, top int, opts vectordata.ModelSearchOptions, measure exactsearch.Measure, denseQuery []float32) ([]vectordata.ModelSearchResult, error) {
 	return retryBusy(ctx, func() ([]vectordata.ModelSearchResult, error) {
-		if hits, used, err := c.searchProjectedVectors(ctx, p, top, opts, measure); used || err != nil {
+		if hits, used, err := c.searchProjectedVectors(ctx, p, top, opts, measure, denseQuery); used || err != nil {
 			return hits, err
 		}
 		return exactsearch.Run(ctx, c.definition, p, top, opts, c.searchScan(ctx), measure)

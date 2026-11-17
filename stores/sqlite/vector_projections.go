@@ -170,7 +170,7 @@ func (c *Collection) vectorProjectionBatch(ctx context.Context, tx *sql.Tx, afte
 	return records, after, rows.Err()
 }
 
-func (c *Collection) searchProjectedVectors(ctx context.Context, p vectordata.VectorProperty, top int, opts vectordata.ModelSearchOptions, measure exactsearch.Measure) ([]vectordata.ModelSearchResult, bool, error) {
+func (c *Collection) searchProjectedVectors(ctx context.Context, p vectordata.VectorProperty, top int, opts vectordata.ModelSearchOptions, measure exactsearch.Measure, denseQuery []float32) ([]vectordata.ModelSearchResult, bool, error) {
 	if !c.store.vectorProjections || opts.Filter != nil || p.Kind == vectordata.VectorBinary || p.Kind == vectordata.VectorSparse {
 		return nil, false, nil
 	}
@@ -191,7 +191,11 @@ func (c *Collection) searchProjectedVectors(ctx context.Context, p vectordata.Ve
 	rankOpts := opts
 	rankOpts.IncludeVectors = false
 	d := vectordata.CollectionDefinition{Key: c.definition.Key, Vectors: []vectordata.VectorProperty{p}}
-	hits, err := exactsearch.Run(ctx, d, p, top, rankOpts, c.projectedVectorScan(ctx, tx, p), measure)
+	source := c.projectedVectorScan(ctx, tx, p)
+	if c.store.nativeVectors && p.Metric == vectordata.DistanceL1 && nativeL1Platform() && denseQuery != nil {
+		source = c.scanProjectedVectorsSQL(ctx, tx, p, nativeL1CandidatesSQL, c.name, p.Name, packVector(denseQuery), top+opts.Skip-1)
+	}
+	hits, err := exactsearch.Run(ctx, d, p, top, rankOpts, source, measure)
 	if err != nil {
 		return nil, true, err
 	}
@@ -222,8 +226,12 @@ func (c *Collection) searchProjectedVectors(ctx context.Context, p vectordata.Ve
 }
 
 func (c *Collection) projectedVectorScan(ctx context.Context, tx *sql.Tx, p vectordata.VectorProperty) iter.Seq2[vectordata.ModelRecord, error] {
+	return c.scanProjectedVectorsSQL(ctx, tx, p, `SELECT key,vector FROM __vectorstore_vector_values WHERE collection=? AND property=?`, c.name, p.Name)
+}
+
+func (c *Collection) scanProjectedVectorsSQL(ctx context.Context, tx *sql.Tx, p vectordata.VectorProperty, query string, args ...any) iter.Seq2[vectordata.ModelRecord, error] {
 	return func(yield func(vectordata.ModelRecord, error) bool) {
-		rows, err := tx.QueryContext(ctx, `SELECT key,vector FROM __vectorstore_vector_values WHERE collection=? AND property=?`, c.name, p.Name)
+		rows, err := tx.QueryContext(ctx, query, args...)
 		if err != nil {
 			yield(vectordata.ModelRecord{}, err)
 			return

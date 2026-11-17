@@ -38,8 +38,9 @@ model writes expose the portable ErrInvalidRecord sentinel and native SQLSTATE
 or exception/return-value semantics.
 
 Implementation follows the [ordered parity plan](parity-plan.md). Provider
-annotations have merged; SQLite vector projections are the current increment,
-with opt-in extension execution and Qdrant following. Embedding output types, typed property references and
+annotations and SQLite vector projections have merged; opt-in scalar L1 extension
+execution is the current increment, with broader measurements and Qdrant following.
+Embedding output types, typed property references and
 native service access are tracked separately.
 
 ## Provider matrix
@@ -75,6 +76,9 @@ Optional `VectorProjections` adds packed dense storage for unfiltered exact Go
 ranking and page-only canonical retrieval. Existing/dirty collections require
 explicit `RebuildVectorProjections`; ordinary triggers invalidate readiness for
 unaware writers. Filtered/binary/sparse searches keep their canonical scan.
+The [sqlite-vec adapter](sqlitevec.md) optionally selects complete scalar-L1
+boundary candidates and retains exact Go ranking. Other metrics/shapes keep the
+shared provider's paths; extension presence does not add vector index capability.
 See [query costs](sqlite.md#query-costs-and-provider-limits),
 [scalar measurements](performance.md#sqlite-scalar-query-verification) and
 [index verification](performance.md#sqlite-scalar-index-verification).
