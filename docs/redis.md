@@ -4,7 +4,8 @@
 uses atomic collection snapshots with exact dense search and portable filtering
 in Go. Opt-in `NativeIndexes` adds Redis Search HNSW/FLAT indexes and scalar
 filtering over immutable hash generations, plus optional string full-text indexes.
-Opt-in `StorageJSON` uses immutable RedisJSON documents with Go exact search.
+Opt-in `StorageJSON` uses immutable RedisJSON documents with Go exact search or
+native vector indexes.
 It is available on master after v0.4.1. The default encoded collection limit is
 16 MiB; writes still process the whole collection.
 
@@ -41,7 +42,7 @@ standalone address, not Redis Cluster, Sentinel or read-replica routing.
 - Local capability/identity metadata and structured operation errors.
 
 Binary/sparse vector definitions return `ErrUnsupported`. Without `NativeIndexes`,
-index hints are accepted for portability and build no indexes. Native mode honors
+index hints are accepted for portability and build no indexes. HASH native mode honors
 string full-text hints; keyword-query and hybrid APIs are unsupported. Unknown search `ProviderOptions`
 return `ErrUnsupported`. Migration planning and
 application are not advertised. Runtime embedders are never persisted or invoked
@@ -56,7 +57,8 @@ while reconstructing stored vectors.
 Existing collections keep their layout regardless of the constructor option.
 All three support the same public model calls and Go exact search.
 `NativeIndexes: true` selects `StorageHash` when `StorageMode` is unspecified;
-explicit snapshot/JSON modes with native indexing are rejected.
+explicit snapshot mode with native indexing is rejected. JSON native mode requires
+`StorageMode: StorageJSON` explicitly.
 
 ```go
 store, err := redis.New(redis.StoreOptions{
@@ -104,7 +106,7 @@ explicit rebuild. Older hash writers may leave obsolete indexes for pruning.
 ## RedisJSON storage
 
 `StorageJSON` requires the RedisJSON module, tested on standalone Redis 8.2.
-Database numbers other than zero are supported. Constructor/handle discovery is
+Database numbers other than zero are supported without native indexes. Constructor/handle discovery is
 local; creating even an empty JSON collection checks module availability before
 staging. Missing JSON commands return `ErrUnsupported` with the native Redis
 cause and leave the source collection untouched. Ordinary Redis 7.4 remains
@@ -125,11 +127,32 @@ float64 range), SQL NULL/JSON null and vector precision retain the shared codec'
 semantics. Records are not exposed as application-owned JSON documents or writable
 JSON paths; internal keys and field names are reserved.
 
-This increment provides storage with full-collection Go filtering/search. It
-creates no JSON vector, scalar or full-text indexes and advertises no new index
-capabilities. Index hints remain portable metadata. A client configured for native
-hash indexes can reopen format 3 and falls back to Go; explicitly combining
-`StorageJSON` with `NativeIndexes` in the constructor returns `ErrUnsupported`.
+Set `NativeIndexes: true` together with `StorageMode: StorageJSON` to build
+HNSW/FLAT vector indexes on database zero with Redis Search and RedisJSON. Register
+eligible vector index hints as shown below. Each wrapper then adds
+`__vs_vectors`, containing bounded FLOAT32 arrays under internal aliases (`v0`,
+`v1`, ...). Float16 models are rounded before projection; the opaque canonical
+payload remains authoritative for returned data and exact distance/score units.
+Index metadata version 3 uses a separate JSON index prefix and `ON JSON` schema,
+with paths `$.__vs_revision` and `$.__vs_vectors.vN`. Internal aliases keep logical
+property names out of JSONPath syntax. Earlier format-3 readers ignore these
+additional fields; unknown index versions fall back to the canonical Go path.
+
+JSON native mode advertises the same 16 vector tuples as HASH native mode, with
+no scalar or full-text index capabilities. Query, Count and **all filtered vector
+searches** still use full-collection Go evaluation. Unfiltered HNSW uses native
+candidates; FLAT fetches every vector-bearing wrapper and remeasures in Go for
+exact ordering, including ties and float roundoff. Missing/unready indexes,
+unsupported or unsafe vectors, and `SearchTuning{Exact: true}` use canonical Go
+search. Native KNN, readiness/physical-schema checks and `JSON.GET` for selected
+wrappers run in one Lua execution. Only wrapper metadata is parsed by Lua; the
+payload string's canonical numbers never enter Redis/Lua numeric parsing.
+
+Opening existing plain JSON storage does not build indexes. Use
+`Collection.RebuildNativeIndexes` with matching hints, or perform a native write.
+Plain JSON writers remain compatible and publish an unindexed generation; native
+readers then fall back to Go until an explicit rebuild/native write. JSON scalar
+and full-text indexes, keyword-query and hybrid APIs remain unsupported.
 
 To convert an existing snapshot or hash collection, use its unchanged registered
 definition and call:
@@ -143,8 +166,9 @@ if err := base.(*redis.Collection).MigrateToJSONStorage(ctx); err != nil {
 Conversion validates all records, stages a complete new generation and publishes
 schema/data/generated sequence in one final manifest SET. Explicit conflicts retry
 against the latest source, including concurrent writes through another client.
+Native mode builds and waits for the new JSON vector index before publication.
 Repeating conversion after success is a read-only no-op. Successful conversion
-retires previous hash documents/indexes best-effort; uncertain replies preserve
+retires previous documents/indexes best-effort; uncertain replies preserve
 possibly committed JSON data and require state reconciliation before an application
 retry. Use pruning to reclaim old auxiliary data if cleanup was interrupted.
 There is no JSON downgrade operation. This is provider storage conversion;
@@ -157,7 +181,9 @@ payload presence, removes TTLs and performs the final SET. Earlier script errors
 can leave auxiliary documents but cannot publish a partial logical batch. Reads
 verify the exact manifest and lease and fetch/validate every referenced wrapper in
 one read-only Lua execution. Changed manifests retry before returning any rows;
-missing/damaged referenced documents fail the read. Canonical decoding and caller
+missing/damaged referenced documents fail the read. Native writes build and wait
+for index readiness before the final SET, preserving uncertain publications and
+retiring old indexes only after acknowledgment. Canonical decoding and caller
 callbacks run after the client connection is released.
 
 `store.PruneJSONStorage(ctx, name)` reclaims obsolete non-expiring JSON documents
@@ -165,7 +191,7 @@ and leases, including after deletion. It guards deletion with the current manife
 protects current generations and active TTL staging, and returns a Redis-key count.
 Concurrent changes can leave work for a later pass. `DeleteCollection` attempts both
 hash and JSON cleanup after deleting the logical collection. `PruneHashStorage`
-and `PruneNativeIndexes` can reclaim obsolete hash data/indexes after a JSON
+and `PruneNativeIndexes` can reclaim obsolete data/indexes after a JSON
 conversion with a lost reply. No cleanup worker runs in the background.
 
 ## Native indexes and search
@@ -189,9 +215,10 @@ definition.Vectors[0].Index = &vectordata.VectorIndexOptions{
 Register the same definition when reopening. Enabling the store option does not
 silently convert existing storage or change its registered definition. For an
 existing format-1 collection, `MigrateToHashStorage` builds native indexes during
-conversion. For an existing hash collection with matching index hints, call
+conversion; `MigrateToJSONStorage` builds JSON vector indexes in native mode.
+For an existing hash/JSON collection with matching index hints, call
 `base.(*redis.Collection).RebuildNativeIndexes(ctx)` explicitly. Repeating the
-storage conversion on format 2 is a no-op, so it does not rebuild indexes.
+storage conversion on the target layout is a no-op, so it does not rebuild indexes.
 
 Select exhaustive native search on a new model with
 `VectorIndexOptions{Method: vectordata.IndexMethodFlat}` or the struct tag
@@ -216,7 +243,7 @@ Capabilities are local configuration metadata, not a module/permission probe:
   native path. Any unsafe stored vector omits that vector field from the entire
   generation's index; an unsafe query also uses Go exact search. The canonical
   values remain intact.
-- Keys support equality, `In`, existence and int64/uint64 ranges. Indexed string,
+- On HASH storage, keys support equality, `In`, existence and int64/uint64 ranges. Indexed string,
   int64, float64 and bool data properties support equality, `In` and existence;
   indexed int64 also supports ranges. Integer ranges retain all 64 bits through
   split fields. Literal TAG values use hex encoding, including punctuation and
@@ -227,7 +254,7 @@ Capabilities are local configuration metadata, not a module/permission probe:
   tokenization), `In` lists over 256, deep/large trees and excessive parameters
   also use Go evaluation. Native schemas allow at most 512 physical fields.
 
-Native filtered Query downloads matching canonical records, validates them and
+On HASH storage, native filtered Query downloads matching canonical records, validates them and
 sorts/pages in Go. Native Count returns the index count without decoding record
 payloads or validating their vectors. HNSW selects an enlarged candidate set,
 then recomputes distances/scores and applies thresholds, stable key ordering and
@@ -264,7 +291,7 @@ public model contract.
 
 With `NativeIndexes: true`, mark a string property with `IsFullTextIndexed` or
 `vectordata:"data,fulltext"` to create a Redis `TEXT` field. Native capability
-metadata reports `FullTextIndexing: true`; default snapshot/plain hash modes keep
+metadata for HASH reports `FullTextIndexing: true`; snapshot/plain hash/JSON modes keep
 it false. Non-string full-text definitions are rejected by model validation.
 
 ```go
@@ -389,8 +416,9 @@ Native indexes do not have TTLs. After acknowledged publication their predecesso
 are dropped best-effort, without deleting documents. Uncertain publication never
 drops the possibly current index. Call `store.PruneNativeIndexes(ctx, name)` in
 database zero to reclaim obsolete indexes, including after deletion or failed
-staging. It protects current revisions and active staging leases and returns an
-index count, separately from hash pruning's key count. Concurrent changes may
+staging in either HASH or JSON storage. It checks each layout's own lease,
+protects current revisions and active staging leases and returns an
+index count, separately from hash/JSON pruning's key count. Concurrent changes may
 leave work for a later pass. Native DeleteCollection also attempts index cleanup.
 
 ## Costs and deployment settings
@@ -415,7 +443,7 @@ filtered Query transfers matching payloads, HNSW transfers candidate payloads,
 and FLAT transfers all matching vector-bearing payloads. Unfiltered Query and Get/GetMany retain the whole-snapshot path. See
 [local read measurements](performance.md#redis-native-read-measurements).
 
-Every hash/JSON write stages a full generation; native hash mode also rebuilds its entire
+Every hash/JSON write stages a full generation; native mode also rebuilds its entire
 index before publishing. Peak Redis storage includes old and staged data/graphs
 plus obsolete generations/indexes pending cleanup. Index allocator overhead is
 outside the encoded byte budget. Concurrent writers can multiply this work through
@@ -430,7 +458,7 @@ references, which fail reads rather than returning partial records. Plain storag
 needs no Search permissions/module. Hash storage uses HSET/HMGET, PEXPIRE, PERSIST,
 PTTL, UNLINK and scripts. JSON storage uses JSON.TYPE (availability probe),
 JSON.SET and JSON.GET alongside the same lease/publication/cleanup commands; no
-Search or COMMAND permission is needed. Native hash mode additionally needs FT.CREATE, FT.INFO,
+Search or COMMAND permission is needed for plain JSON. Native HASH/JSON modes additionally need FT.CREATE, FT.INFO,
 FT.SEARCH and FT.DROPINDEX; explicit index pruning needs FT._LIST. The provider does
 not change global Search configuration.
 
@@ -460,8 +488,9 @@ Normal tests need no server. Integration tests start a disposable `redis:8.2`
 container by default; `REDIS_TEST_IMAGE` selects another image and `REDIS_TEST_ADDR`
 can point to an existing disposable standalone server. Each factory uses its own
 namespace and deletes only its collections. CI exercises Redis 7.4/8.2 on minimum
-and current Go and runs samples twice per supported layout, plus HNSW/FLAT/full-text
-and explicit JSON conversion modes on 8.2. Tests cover all three layouts with
+and current Go, separating storage and native index suites with five/ten-minute
+timeouts respectively. It runs samples twice per supported layout, plus HNSW/FLAT/full-text
+and explicit JSON conversion plus JSON-native HNSW/FLAT modes on 8.2. Tests cover all three layouts with
 the shared model, embedding
 and filter-parity contracts plus concurrent writes, integer sequence limits,
 conflicts, uncertain replies, deadlines, corruption, size limits and client reopen.
@@ -474,7 +503,9 @@ deadlines, concurrent publication, explicit rebuilds and uncertain-reply cleanup
 TEXT checks cover real tokenization/stemming, Unicode, NULL/empty/NUL values,
 independent TAG equality, updates/deletes, visible schema drift, 128 fields,
 legacy index versions, storage upgrades and generated sequences. Shared HNSW/FLAT
-lifecycle fixtures include TEXT fields.
+lifecycle fixtures include TEXT fields on HASH, and vector-only indexes on JSON.
+JSON-native checks additionally cover internal paths, full-precision canonical
+results, projection byte budgets, unknown versions and publication conflicts.
 `REDIS_REQUIRE_SEARCH=true` requires the native tests and projection proof instead
 of permitting skips on servers without Search. `REDIS_REQUIRE_JSON=true` similarly
 requires the real RedisJSON contracts. JSON tests also check extreme numeric

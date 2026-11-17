@@ -360,11 +360,12 @@ PostgreSQL float16 storage requires pgvector 0.7+ and a visible `halfvec` type.
 | `MigrationPlanning` | False | False | True, plan-only |
 | `MigrationApplication` | False | False | True, additive changes only |
 
-Default and JSON-layout Redis report the same booleans/index fields as memory and buffers
-snapshots/pages. With `NativeIndexes`, it additionally advertises HNSW and FLAT
-for four dense metrics and two precisions (16 tuples, up to 4,096 dimensions) and indexed
-string/int64/float64/bool data. `FullTextIndexing` is true in native mode for string
-properties marked `IsFullTextIndexed`/`fulltext`; hybrid/migrations remain false.
+Plain Redis layouts report the same booleans/index fields as memory and buffer
+snapshots/pages. With `NativeIndexes`, HASH and JSON advertise HNSW and FLAT
+for four dense metrics and two precisions (16 tuples, up to 4,096 dimensions).
+Only HASH native mode advertises indexed string/int64/float64/bool data and
+`FullTextIndexing` for string properties marked `IsFullTextIndexed`/`fulltext`.
+JSON scalar/full-text indexes are deferred; hybrid/migrations remain false.
 This creates Redis TEXT fields but adds no keyword-query API. `SearchText` still
 embeds its input for vector search. This is local discovery; see
 [Redis runtime limits and costs](redis.md).
@@ -652,7 +653,8 @@ collection; large offsets increase retained candidate memory. See the
 
 Native Redis FLAT retrieves all matching vector-bearing payloads and remeasures
 in Go before exact selection, preserving roundoff-sensitive ordering and native
-key ties. It avoids unrelated records with eligible indexed filters but remains
+key ties. HASH avoids unrelated records with eligible indexed filters; JSON keeps
+filtered searches in Go and supports native unfiltered HNSW/FLAT. FLAT remains
 an exhaustive scan. `redis.SearchTuning{EFRuntime: ...}` applies only to HNSW;
 `Exact: true` uses the full-snapshot Go reference for either index method.
 

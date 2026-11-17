@@ -38,10 +38,10 @@ type StoreOptions struct {
 	// layouts are preserved; explicit MigrateToHashStorage/MigrateToJSONStorage
 	// operations convert supported existing layouts.
 	StorageMode StorageMode
-	// NativeIndexes enables generation-scoped Redis Search indexes on hash
+	// NativeIndexes enables generation-scoped Redis Search indexes on hash/JSON
 	// collections in database zero. An unspecified StorageMode becomes StorageHash.
 	// Discovery is local; creation requires the Search module. Writes rebuild the
-	// entire generation's index; existing hash collections need an explicit rebuild.
+	// entire generation's index; existing collections need an explicit rebuild.
 	NativeIndexes      bool
 	Embedder           vectordata.Embedder
 	InputEmbedder      vectordata.InputEmbedder
@@ -71,8 +71,8 @@ func New(opts StoreOptions) (*Store, error) {
 			opts.StorageMode = StorageHash
 		}
 	}
-	if opts.NativeIndexes && opts.StorageMode != StorageHash {
-		return nil, fmt.Errorf("%w: native Redis indexes require hash storage", vectordata.ErrUnsupported)
+	if opts.NativeIndexes && opts.StorageMode != StorageHash && opts.StorageMode != StorageJSON {
+		return nil, fmt.Errorf("%w: native Redis indexes require hash or JSON storage", vectordata.ErrUnsupported)
 	}
 	if opts.NativeIndexes && opts.DB != 0 {
 		return nil, fmt.Errorf("%w: Redis Search requires database zero", vectordata.ErrUnsupported)
@@ -213,6 +213,9 @@ func (s *Store) GetModelCollection(name string, d vectordata.CollectionDefinitio
 	c := &Collection{store: s, name: name, definition: d, registration: string(raw), options: opts}
 	if s.nativeIndexes {
 		m := hashManifest{IndexVersion: c.nativeIndexVersion()}
+		if s.storageMode == StorageJSON {
+			m.Format, m.IndexVersion = 3, 3
+		}
 		for _, p := range d.Vectors {
 			if nativeVectorProperty(p) {
 				m.IndexVectors = append(m.IndexVectors, p.Name)

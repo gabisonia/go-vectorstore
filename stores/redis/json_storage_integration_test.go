@@ -229,6 +229,13 @@ func TestIntegrationJSONModuleUnavailableDoesNotPublish(t *testing.T) {
 	if len(info) > 0 && info[0] != nil {
 		t.Skip("requires standalone Redis without RedisJSON")
 	}
+	native := integrationStore(t, StoreOptions{StorageMode: StorageJSON, NativeIndexes: true})
+	if _, err := native.EnsureModelCollection(ctx, "unsupported", vectordata.CollectionDefinition{Key: vectordata.KeyProperty{Name: "ID"}}, vectordata.ModelCollectionOptions{}); !errors.Is(err, vectordata.ErrUnsupported) {
+		t.Fatalf("missing JSON module in native mode: %v", err)
+	}
+	if n, err := native.client.Exists(ctx, native.key("unsupported")).Result(); err != nil || n != 0 {
+		t.Fatalf("native missing-module creation published: %d %v", n, err)
+	}
 	d := vectordata.CollectionDefinition{Key: vectordata.KeyProperty{Name: "ID"}}
 	if _, err := s.EnsureModelCollection(ctx, "unsupported", d, vectordata.ModelCollectionOptions{}); !errors.Is(err, vectordata.ErrUnsupported) || !strings.Contains(strings.ToLower(err.Error()), "unknown command") {
 		t.Fatalf("missing JSON module: %v", err)
@@ -517,8 +524,17 @@ func TestIntegrationJSONMigrationLostReplyAndNativeFallback(t *testing.T) {
 	if _, err := c.Insert(ctx, nativeLifecycleRows("retained")); err != nil {
 		t.Fatal(err)
 	}
+	plain, err := New(StoreOptions{Addr: integrationAddr, Namespace: s.metadata.Namespace})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer plain.Close()
+	base, err := plain.GetModelCollection(c.name, c.definition, vectordata.ModelCollectionOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
 	calls := 0
-	s.client.AddHook(hashFailureHook{process: func(ctx context.Context, cmd goredis.Cmder, next goredis.ProcessHook) error {
+	plain.client.AddHook(hashFailureHook{process: func(ctx context.Context, cmd goredis.Cmder, next goredis.ProcessHook) error {
 		err := next(ctx, cmd)
 		if scriptIs(cmd, publishJSON) {
 			calls++
@@ -528,7 +544,7 @@ func TestIntegrationJSONMigrationLostReplyAndNativeFallback(t *testing.T) {
 		}
 		return err
 	}})
-	if err := c.MigrateToJSONStorage(ctx); !errors.Is(err, context.DeadlineExceeded) || calls != 1 {
+	if err := base.(*Collection).MigrateToJSONStorage(ctx); !errors.Is(err, context.DeadlineExceeded) || calls != 1 {
 		t.Fatalf("uncertain conversion replayed: %v calls=%d", err, calls)
 	}
 	assertPersistentJSON(t, c)
@@ -544,7 +560,11 @@ func TestIntegrationJSONMigrationLostReplyAndNativeFallback(t *testing.T) {
 	if count, err := s.PruneJSONStorage(ctx, c.name); err != nil || count != 0 {
 		t.Fatalf("current JSON generation was pruned: %d %v", count, err)
 	}
-	if err := c.RebuildNativeIndexes(ctx); !errors.Is(err, vectordata.ErrUnsupported) {
-		t.Fatalf("JSON native rebuild accepted: %v", err)
+	if err := c.RebuildNativeIndexes(ctx); err != nil {
+		t.Fatal(err)
+	}
+	m, _ := currentJSONManifest(t, c)
+	if m.IndexVersion != 3 || m.Index == "" {
+		t.Fatal("explicit rebuild did not index JSON")
 	}
 }

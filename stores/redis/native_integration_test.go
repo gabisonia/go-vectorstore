@@ -38,21 +38,33 @@ func requireNativeSearch(t *testing.T) {
 }
 
 func TestIntegrationNativeModelContract(t *testing.T) {
+	runNativeStorage(t, testIntegrationNativeModelContractStorage)
+}
+
+func testIntegrationNativeModelContractStorage(t *testing.T, mode StorageMode) {
 	requireNativeSearch(t)
 	conformance.Run(t, func(t *testing.T) vectordata.ModelStore {
-		return integrationStore(t, StoreOptions{NativeIndexes: true})
+		return integrationStore(t, StoreOptions{NativeIndexes: true, StorageMode: mode})
 	})
 }
 func TestIntegrationNativeEmbeddingConfiguration(t *testing.T) {
+	runNativeStorage(t, testIntegrationNativeEmbeddingConfigurationStorage)
+}
+
+func testIntegrationNativeEmbeddingConfigurationStorage(t *testing.T, mode StorageMode) {
 	requireNativeSearch(t)
 	conformance.RunEmbeddingConfiguration(t, func(t *testing.T, o vectordata.ModelCollectionOptions) vectordata.ModelStore {
-		return integrationStore(t, StoreOptions{NativeIndexes: true, Embedder: o.Embedder, InputEmbedder: o.InputEmbedder, EmbeddingBatchSize: o.EmbeddingBatchSize})
+		return integrationStore(t, StoreOptions{NativeIndexes: true, StorageMode: mode, Embedder: o.Embedder, InputEmbedder: o.InputEmbedder, EmbeddingBatchSize: o.EmbeddingBatchSize})
 	})
 }
 func TestIntegrationNativeFilterParity(t *testing.T) {
+	runNativeStorage(t, testIntegrationNativeFilterParityStorage)
+}
+
+func testIntegrationNativeFilterParityStorage(t *testing.T, mode StorageMode) {
 	requireNativeSearch(t)
 	conformance.RunFilterParity(t, func(t *testing.T) vectordata.ModelStore { return memory.New() }, func(t *testing.T) vectordata.ModelStore {
-		return integrationStore(t, StoreOptions{NativeIndexes: true})
+		return integrationStore(t, StoreOptions{NativeIndexes: true, StorageMode: mode})
 	})
 }
 
@@ -127,12 +139,16 @@ func TestIntegrationNativeScalarPrecisionAndNulls(t *testing.T) {
 }
 
 func TestIntegrationNativeHNSWRecallAndMetrics(t *testing.T) {
+	runNativeStorage(t, testIntegrationNativeHNSWRecallAndMetricsStorage)
+}
+
+func testIntegrationNativeHNSWRecallAndMetricsStorage(t *testing.T, mode StorageMode) {
 	requireNativeSearch(t)
 	ctx := context.Background()
 	for _, metric := range []vectordata.DistanceMetric{vectordata.DistanceCosine, vectordata.DistanceL2, vectordata.DistanceL2Squared, vectordata.DistanceInnerProduct} {
 		for _, precision := range []vectordata.VectorPrecision{vectordata.VectorFloat32, vectordata.VectorFloat16} {
 			t.Run(string(metric)+"/"+string(precision), func(t *testing.T) {
-				s := integrationStore(t, StoreOptions{NativeIndexes: true})
+				s := integrationStore(t, StoreOptions{NativeIndexes: true, StorageMode: mode})
 				d := vectordata.CollectionDefinition{Key: vectordata.KeyProperty{Name: "ID", Type: vectordata.KeyInt64}, Data: []vectordata.DataProperty{{Name: "Group", Type: vectordata.TypeString, IsIndexed: true}}, Vectors: []vectordata.VectorProperty{{Name: "Vector", Dimensions: 16, Metric: metric, Precision: precision, Index: &vectordata.VectorIndexOptions{Method: vectordata.IndexMethodHNSW}}}}
 				base, err := s.EnsureModelCollection(ctx, "recall", d, vectordata.ModelCollectionOptions{})
 				if err != nil {
@@ -155,6 +171,13 @@ func TestIntegrationNativeHNSWRecallAndMetrics(t *testing.T) {
 				if _, err = c.Insert(ctx, rows); err != nil {
 					t.Fatal(err)
 				}
+				nativeCalls := 0
+				s.client.AddHook(processHook{run: func(ctx context.Context, cmd goredis.Cmder, next goredis.ProcessHook) error {
+					if scriptIs(cmd, nativeSearchScript(mode)) {
+						nativeCalls++
+					}
+					return next(ctx, cmd)
+				}})
 				hits, total := 0, 0
 				for qi := range 6 {
 					q := rows[qi*7].Vectors["Vector"]
@@ -189,6 +212,9 @@ func TestIntegrationNativeHNSWRecallAndMetrics(t *testing.T) {
 					t.Fatalf("recall@10 %.3f", recall)
 				} else {
 					t.Logf("recall@10 %.3f", recall)
+				}
+				if nativeCalls < 6 {
+					t.Fatalf("recall fixture bypassed KNN: %d", nativeCalls)
 				}
 				q := rows[0].Vectors["Vector"]
 				filter := vectordata.Eq(vectordata.Column("Group"), "selected")
@@ -229,9 +255,13 @@ func nativeLifecycleRows(value string) []vectordata.ModelRecord {
 }
 
 func TestIntegrationNativeFallbacksAndOptionalVectors(t *testing.T) {
+	runNativeStorage(t, testIntegrationNativeFallbacksAndOptionalVectorsStorage)
+}
+
+func testIntegrationNativeFallbacksAndOptionalVectorsStorage(t *testing.T, mode StorageMode) {
 	requireNativeSearch(t)
 	ctx := context.Background()
-	s := integrationStore(t, StoreOptions{NativeIndexes: true})
+	s := integrationStore(t, StoreOptions{NativeIndexes: true, StorageMode: mode})
 	c := nativeLifecycleCollection(t, s)
 	rows := nativeLifecycleRows("kept")
 	rows = append(rows, vectordata.ModelRecord{Key: int64(3), Data: map[string]any{"Value": "kept"}})
@@ -270,9 +300,13 @@ func TestIntegrationNativeFallbacksAndOptionalVectors(t *testing.T) {
 }
 
 func TestIntegrationNativeTiesExpandCandidates(t *testing.T) {
+	runNativeStorage(t, testIntegrationNativeTiesExpandCandidatesStorage)
+}
+
+func testIntegrationNativeTiesExpandCandidatesStorage(t *testing.T, mode StorageMode) {
 	requireNativeSearch(t)
 	ctx := context.Background()
-	s := integrationStore(t, StoreOptions{NativeIndexes: true})
+	s := integrationStore(t, StoreOptions{NativeIndexes: true, StorageMode: mode})
 	c := nativeLifecycleCollection(t, s)
 	rows := make([]vectordata.ModelRecord, 200)
 	for i := range rows {
@@ -288,23 +322,27 @@ func TestIntegrationNativeTiesExpandCandidates(t *testing.T) {
 }
 
 func TestIntegrationNativeReadsRemainOnOneGeneration(t *testing.T) {
+	runNativeStorage(t, testIntegrationNativeReadsRemainOnOneGenerationStorage)
+}
+
+func testIntegrationNativeReadsRemainOnOneGenerationStorage(t *testing.T, mode StorageMode) {
 	for _, method := range []vectordata.IndexMethod{vectordata.IndexMethodHNSW, vectordata.IndexMethodFlat} {
-		t.Run(string(method), func(t *testing.T) { testNativeReadsRemainOnOneGeneration(t, method) })
+		t.Run(string(method), func(t *testing.T) { testNativeReadsRemainOnOneGeneration(t, method, mode) })
 	}
 }
 
-func testNativeReadsRemainOnOneGeneration(t *testing.T, method vectordata.IndexMethod) {
+func testNativeReadsRemainOnOneGeneration(t *testing.T, method vectordata.IndexMethod, mode StorageMode) {
 	requireNativeSearch(t)
 	for _, operation := range []string{"query", "count", "search"} {
 		for _, when := range []string{"before", "after"} {
 			t.Run(operation+"/"+when, func(t *testing.T) {
 				ctx := context.Background()
-				s := integrationStore(t, StoreOptions{NativeIndexes: true})
+				s := integrationStore(t, StoreOptions{NativeIndexes: true, StorageMode: mode})
 				c := nativeLifecycleCollection(t, s, method)
 				if _, err := c.Insert(ctx, nativeLifecycleRows("before")); err != nil {
 					t.Fatal(err)
 				}
-				other, err := New(StoreOptions{Addr: integrationAddr, Namespace: s.metadata.Namespace, NativeIndexes: true})
+				other, err := New(StoreOptions{Addr: integrationAddr, Namespace: s.metadata.Namespace, NativeIndexes: true, StorageMode: mode})
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -313,9 +351,13 @@ func testNativeReadsRemainOnOneGeneration(t *testing.T, method vectordata.IndexM
 				if err != nil {
 					t.Fatal(err)
 				}
+				readScript := nativeSearchScript(mode)
+				if mode == StorageJSON && operation != "search" {
+					readScript = readJSON
+				}
 				changed := false
 				s.client.AddHook(hashFailureHook{process: func(ctx context.Context, cmd goredis.Cmder, next goredis.ProcessHook) error {
-					if !scriptIs(cmd, nativeExecute) || changed {
+					if !scriptIs(cmd, readScript) || changed {
 						return next(ctx, cmd)
 					}
 					changed = true
@@ -352,7 +394,12 @@ func testNativeReadsRemainOnOneGeneration(t *testing.T, method vectordata.IndexM
 						t.Fatalf("mixed query: %+v %v", rows, err)
 					}
 				case "search":
-					hits, err := c.Search(ctx, []float32{1, 0}, 1, vectordata.ModelSearchOptions{Filter: filter})
+					hits, err := c.Search(ctx, []float32{1, 0}, 1, vectordata.ModelSearchOptions{Filter: func() vectordata.Filter {
+						if mode == StorageJSON {
+							return nil
+						}
+						return filter
+					}()})
 					if err != nil || len(hits) != 1 || hits[0].Record.Data["Value"] != want {
 						t.Fatalf("mixed search: %+v %v", hits, err)
 					}
@@ -437,20 +484,24 @@ func TestIntegrationNativeIndexDriftAndReadiness(t *testing.T) {
 }
 
 func TestIntegrationNativeUnknownPublicationReplyAndPruning(t *testing.T) {
+	runNativeStorage(t, testIntegrationNativeUnknownPublicationReplyAndPruningStorage)
+}
+
+func testIntegrationNativeUnknownPublicationReplyAndPruningStorage(t *testing.T, mode StorageMode) {
 	for _, method := range []vectordata.IndexMethod{vectordata.IndexMethodHNSW, vectordata.IndexMethodFlat} {
-		t.Run(string(method), func(t *testing.T) { testNativeUnknownPublicationReplyAndPruning(t, method) })
+		t.Run(string(method), func(t *testing.T) { testNativeUnknownPublicationReplyAndPruning(t, method, mode) })
 	}
 }
 
-func testNativeUnknownPublicationReplyAndPruning(t *testing.T, method vectordata.IndexMethod) {
+func testNativeUnknownPublicationReplyAndPruning(t *testing.T, method vectordata.IndexMethod, mode StorageMode) {
 	requireNativeSearch(t)
 	ctx := context.Background()
-	s := integrationStore(t, StoreOptions{NativeIndexes: true})
+	s := integrationStore(t, StoreOptions{NativeIndexes: true, StorageMode: mode})
 	c := nativeLifecycleCollection(t, s, method)
 	calls := 0
 	s.client.AddHook(hashFailureHook{process: func(ctx context.Context, cmd goredis.Cmder, next goredis.ProcessHook) error {
 		err := next(ctx, cmd)
-		if scriptIs(cmd, publishHash) {
+		if scriptIs(cmd, nativePublishScript(mode)) {
 			calls++
 			if err == nil {
 				return context.DeadlineExceeded
@@ -470,20 +521,35 @@ func testNativeUnknownPublicationReplyAndPruning(t *testing.T, method vectordata
 	if n, err := c.Count(ctx, nil); err != nil || n != 1 {
 		t.Fatalf("prune removed current index: %d %v", n, err)
 	}
+	m, raw := currentManifest(t, c)
+	plan, ok, err := c.compileNativeFilter(nil)
+	if err != nil || !ok {
+		t.Fatalf("native plan: %v", err)
+	}
+	// Check the current physical index after pruning rather than relying on an
+	// exact fallback that could hide accidental deletion of the current index.
+	if _, used, err := c.nativeReply(ctx, m, raw, plan, 1, "v0", []byte{0, 0, 128, 63, 0, 0, 0, 0}, 0); err != nil || !used {
+		t.Fatalf("possibly committed index was removed: used=%v %v", used, err)
+	}
+
 }
 
 func TestIntegrationNativePruningProtectsActiveStaging(t *testing.T) {
+	runNativeStorage(t, testIntegrationNativePruningProtectsActiveStagingStorage)
+}
+
+func testIntegrationNativePruningProtectsActiveStagingStorage(t *testing.T, mode StorageMode) {
 	requireNativeSearch(t)
 	ctx := context.Background()
-	s := integrationStore(t, StoreOptions{NativeIndexes: true})
+	s := integrationStore(t, StoreOptions{NativeIndexes: true, StorageMode: mode})
 	c := nativeLifecycleCollection(t, s)
 	m, raw := currentManifest(t, c)
 	revision, err := vectordata.NewUUIDKey()
 	if err != nil {
 		t.Fatal(err)
 	}
-	m.Revision, m.Index, m.IndexVectors, m.Tokens = revision, c.indexName(revision), nil, []string{}
-	lease := c.generationPrefix(revision) + "lease"
+	m.Revision, m.Index, m.IndexVectors, m.Tokens = revision, c.nativeIndexName(m.Format, revision), nil, []string{}
+	lease := c.nativeGenerationPrefix(m) + "lease"
 	if err := s.client.Set(ctx, lease, revision, time.Hour).Err(); err != nil {
 		t.Fatal(err)
 	}
@@ -509,15 +575,19 @@ func TestIntegrationNativePruningProtectsActiveStaging(t *testing.T) {
 }
 
 func TestIntegrationNativeBuildFailureDoesNotPublish(t *testing.T) {
+	runNativeStorage(t, testIntegrationNativeBuildFailureDoesNotPublishStorage)
+}
+
+func testIntegrationNativeBuildFailureDoesNotPublishStorage(t *testing.T, mode StorageMode) {
 	for _, method := range []vectordata.IndexMethod{vectordata.IndexMethodHNSW, vectordata.IndexMethodFlat} {
-		t.Run(string(method), func(t *testing.T) { testNativeBuildFailureDoesNotPublish(t, method) })
+		t.Run(string(method), func(t *testing.T) { testNativeBuildFailureDoesNotPublish(t, method, mode) })
 	}
 }
 
-func testNativeBuildFailureDoesNotPublish(t *testing.T, method vectordata.IndexMethod) {
+func testNativeBuildFailureDoesNotPublish(t *testing.T, method vectordata.IndexMethod, mode StorageMode) {
 	requireNativeSearch(t)
 	ctx := context.Background()
-	s := integrationStore(t, StoreOptions{NativeIndexes: true})
+	s := integrationStore(t, StoreOptions{NativeIndexes: true, StorageMode: mode})
 	c := nativeLifecycleCollection(t, s, method)
 	_, before := currentManifest(t, c)
 	s.client.AddHook(hashFailureHook{process: func(ctx context.Context, cmd goredis.Cmder, next goredis.ProcessHook) error {
@@ -536,9 +606,13 @@ func testNativeBuildFailureDoesNotPublish(t *testing.T, method vectordata.IndexM
 }
 
 func TestIntegrationNativeExistingHashClientsAndExplicitRebuild(t *testing.T) {
+	runNativeStorage(t, testIntegrationNativeExistingHashClientsAndExplicitRebuildStorage)
+}
+
+func testIntegrationNativeExistingHashClientsAndExplicitRebuildStorage(t *testing.T, mode StorageMode) {
 	requireNativeSearch(t)
 	ctx := context.Background()
-	plain := integrationStore(t, StoreOptions{StorageMode: StorageHash})
+	plain := integrationStore(t, StoreOptions{StorageMode: mode})
 	c := nativeLifecycleCollection(t, plain)
 	if _, err := c.Insert(ctx, nativeLifecycleRows("plain")); err != nil {
 		t.Fatal(err)
@@ -547,7 +621,7 @@ func TestIntegrationNativeExistingHashClientsAndExplicitRebuild(t *testing.T) {
 	if m.Index != "" {
 		t.Fatal("default hash mode created a native index")
 	}
-	native, err := New(StoreOptions{Addr: integrationAddr, Namespace: plain.metadata.Namespace, NativeIndexes: true})
+	native, err := New(StoreOptions{Addr: integrationAddr, Namespace: plain.metadata.Namespace, NativeIndexes: true, StorageMode: mode})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -599,15 +673,19 @@ func TestIntegrationNativeUnavailableModuleDoesNotPublish(t *testing.T) {
 }
 
 func TestIntegrationNativeReadinessWaitDoesNotPublish(t *testing.T) {
+	runNativeStorage(t, testIntegrationNativeReadinessWaitDoesNotPublishStorage)
+}
+
+func testIntegrationNativeReadinessWaitDoesNotPublishStorage(t *testing.T, mode StorageMode) {
 	for _, method := range []vectordata.IndexMethod{vectordata.IndexMethodHNSW, vectordata.IndexMethodFlat} {
-		t.Run(string(method), func(t *testing.T) { testNativeReadinessWaitDoesNotPublish(t, method) })
+		t.Run(string(method), func(t *testing.T) { testNativeReadinessWaitDoesNotPublish(t, method, mode) })
 	}
 }
 
-func testNativeReadinessWaitDoesNotPublish(t *testing.T, method vectordata.IndexMethod) {
+func testNativeReadinessWaitDoesNotPublish(t *testing.T, method vectordata.IndexMethod, mode StorageMode) {
 	requireNativeSearch(t)
 	ctx := context.Background()
-	s := integrationStore(t, StoreOptions{NativeIndexes: true})
+	s := integrationStore(t, StoreOptions{NativeIndexes: true, StorageMode: mode})
 	c := nativeLifecycleCollection(t, s, method)
 	_, before := currentManifest(t, c)
 	waited := 0
@@ -629,8 +707,12 @@ func testNativeReadinessWaitDoesNotPublish(t *testing.T, method vectordata.Index
 		t.Fatal("unready index was published")
 	}
 	m, _ := currentManifest(t, c)
-	for _, key := range auxiliaryKeys(t, s, c.name) {
-		if !strings.HasPrefix(key, c.generationPrefix(m.Revision)) {
+	keys := auxiliaryKeys(t, s, c.name)
+	if mode == StorageJSON {
+		keys = jsonAuxiliaryKeys(t, c)
+	}
+	for _, key := range keys {
+		if !strings.HasPrefix(key, c.nativeGenerationPrefix(m)) {
 			if err := s.client.Unlink(ctx, key).Err(); err != nil {
 				t.Fatal(err)
 			}
@@ -642,11 +724,15 @@ func testNativeReadinessWaitDoesNotPublish(t *testing.T, method vectordata.Index
 }
 
 func TestIntegrationNativeCleanupCannotDropAnotherNamespaceIndex(t *testing.T) {
+	runNativeStorage(t, testIntegrationNativeCleanupCannotDropAnotherNamespaceIndexStorage)
+}
+
+func testIntegrationNativeCleanupCannotDropAnotherNamespaceIndexStorage(t *testing.T, mode StorageMode) {
 	requireNativeSearch(t)
 	ctx := context.Background()
-	first := integrationStore(t, StoreOptions{NativeIndexes: true})
+	first := integrationStore(t, StoreOptions{NativeIndexes: true, StorageMode: mode})
 	a := nativeLifecycleCollection(t, first)
-	second := integrationStore(t, StoreOptions{NativeIndexes: true})
+	second := integrationStore(t, StoreOptions{NativeIndexes: true, StorageMode: mode})
 	b := nativeLifecycleCollection(t, second)
 	if _, err := a.Insert(ctx, nativeLifecycleRows("first")); err != nil {
 		t.Fatal(err)
@@ -744,4 +830,34 @@ func TestIntegrationNativeSmoke(t *testing.T) {
 	if found != 1 {
 		t.Fatalf("current native index count %d", found)
 	}
+}
+
+func runNativeStorage(t *testing.T, run func(*testing.T, StorageMode)) {
+	t.Helper()
+	for _, mode := range []StorageMode{StorageHash, StorageJSON} {
+		t.Run(string(mode), func(t *testing.T) {
+			if mode == StorageJSON {
+				requireRedisJSON(t)
+			}
+			run(t, mode)
+		})
+	}
+}
+func nativeReadScript(mode StorageMode) string {
+	if mode == StorageJSON {
+		return readJSON
+	}
+	return readHash
+}
+func nativeSearchScript(mode StorageMode) string {
+	if mode == StorageJSON {
+		return nativeJSONExecute
+	}
+	return nativeExecute
+}
+func nativePublishScript(mode StorageMode) string {
+	if mode == StorageJSON {
+		return publishJSON
+	}
+	return publishHash
 }

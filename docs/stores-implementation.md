@@ -290,3 +290,11 @@ hashes explicitly; acknowledged conversion retires prior hashes/native indexes.
 Shared pruning validates known manifest formats and protects the current layout's
 generation and active staging. JSON queries/searches retain the Go engine and do
 not advertise physical JSON indexes.
+
+RedisJSON native mode uses the same prepublication index readiness and atomic
+query guard, with format-3/index-version-3 metadata and its own index prefix.
+Canonical payload strings remain opaque; bounded FLOAT32 vectors project to
+internal JSON paths. Unfiltered HNSW/FLAT read selected wrappers inside the guarded
+Lua execution. JSON Query/Count and filtered search keep exact Go evaluation;
+scalar/full-text JSON indexing remains deferred. Cleanup protects JSON leases and
+current generations, including uncertain writes. See [RedisJSON storage](redis.md#redisjson-storage).

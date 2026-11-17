@@ -2,13 +2,19 @@
 
 ## Unreleased
 
+- Add opt-in RedisJSON native HNSW/FLAT vector indexes with canonical precision,
+  prepublication readiness, atomic KNN/wrapper reads, explicit rebuild and safe
+  index pruning. Cover both native layouts with contracts, recall/exact-reference
+  and failure tests; add rerunnable JSON native samples and CI. JSON scalar and
+  full-text indexes remain deferred.
+
 - Add opt-in RedisJSON storage with immutable format-3 document generations,
   atomic manifest publication/reads and explicit snapshot/hash conversion.
   Preserve canonical key/data/JSON precision through opaque payload strings,
   generated sequences, cancellation and uncertain-reply guarantees. Add guarded
   JSON pruning, cross-layout cleanup, real RedisJSON contracts/failure tests,
-  a persistent sample and Redis 8.2 CI coverage. JSON-native indexes remain
-  unsupported; default snapshot and existing hash formats stay compatible.
+  a persistent sample and Redis 8.2 CI coverage. Default snapshot and existing hash
+  formats stay compatible.
 
 - Honor string `IsFullTextIndexed` hints with Redis TEXT indexes in native mode,
   independent of scalar TAG filtering. Add observable schema validation and

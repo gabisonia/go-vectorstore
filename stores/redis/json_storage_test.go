@@ -12,12 +12,22 @@ import (
 )
 
 func TestJSONConfigurationAndCanonicalProjection(t *testing.T) {
-	if s, err := New(StoreOptions{StorageMode: StorageJSON, NativeIndexes: true}); !errors.Is(err, vectordata.ErrUnsupported) {
+	native, err := New(StoreOptions{StorageMode: StorageJSON, NativeIndexes: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer native.Close()
+	capsNative := native.Capabilities()
+	if len(capsNative.VectorIndexCapabilities) != 16 || len(capsNative.IndexedDataTypes) != 0 || capsNative.FullTextIndexing {
+		t.Fatalf("JSON vector capabilities: %+v", capsNative)
+	}
+	if s, err := New(StoreOptions{StorageMode: StorageJSON, NativeIndexes: true, DB: 1}); !errors.Is(err, vectordata.ErrUnsupported) {
 		if s != nil {
 			s.Close()
 		}
-		t.Fatalf("native JSON indexes accepted: %v", err)
+		t.Fatalf("nonzero native DB accepted: %v", err)
 	}
+
 	s, err := New(StoreOptions{StorageMode: StorageJSON, DB: 1})
 	if err != nil {
 		t.Fatal(err)

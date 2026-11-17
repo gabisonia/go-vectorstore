@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/gabisonia/go-vectorstore/vectordata"
@@ -15,18 +16,13 @@ import (
 // Format 3 uses RedisJSON documents, with the same opaque canonical record
 // encoding as other layouts. Only wrapper metadata is parsed in Lua/RedisJSON;
 // canonical uint64, decimal and JSON numbers never enter their numeric parsers.
-type jsonManifest struct {
-	Format     int
-	Definition string
-	Revision   string
-	Next       int64
-	Tokens     []string
-}
+type jsonManifest = hashManifest
 
 type jsonDocument struct {
-	Revision string `json:"__vs_revision"`
-	Token    string `json:"__vs_token"`
-	Payload  string `json:"__vs_payload"`
+	Revision string               `json:"__vs_revision"`
+	Token    string               `json:"__vs_token"`
+	Payload  string               `json:"__vs_payload"`
+	Vectors  map[string][]float32 `json:"__vs_vectors,omitempty"`
 }
 
 type jsonRecord struct{ key, document string }
@@ -95,11 +91,19 @@ func (c *Collection) jsonKeys(m jsonManifest) []string {
 
 func (c *Collection) projectJSON(ctx context.Context, state snapshot) (jsonManifest, []byte, []jsonRecord, error) {
 	m := jsonManifest{Format: 3, Definition: state.Definition, Revision: state.Revision, Next: state.Next, Tokens: make([]string, 0, len(state.Records))}
-	if _, err := c.decode(ctx, state, nil); err != nil {
+	records, err := c.decode(ctx, state, nil)
+	if err != nil {
 		return m, nil, nil, err
 	}
-	for t := range state.Records {
+	byToken := map[string]vectordata.ModelRecord{}
+	for _, r := range records {
+		t := token(r.Key)
 		m.Tokens = append(m.Tokens, t)
+		byToken[t] = r
+	}
+	if c.store.nativeIndexes {
+		m.Index, m.IndexVersion = c.nativeIndexName(3, m.Revision), 3
+		m.IndexVectors = c.nativeVectors(records)
 	}
 	sort.Strings(m.Tokens)
 	raw, err := json.Marshal(m)
@@ -113,7 +117,18 @@ func (c *Collection) projectJSON(ctx context.Context, state snapshot) (jsonManif
 		if err := ctx.Err(); err != nil {
 			return m, nil, nil, err
 		}
-		encoded, err := json.Marshal(jsonDocument{Revision: m.Revision, Token: t, Payload: string(state.Records[t])})
+		doc := jsonDocument{Revision: m.Revision, Token: t, Payload: string(state.Records[t])}
+		for i, p := range c.definition.Vectors {
+			for _, name := range m.IndexVectors {
+				if name == p.Name && byToken[t].Vectors[name] != nil {
+					if doc.Vectors == nil {
+						doc.Vectors = map[string][]float32{}
+					}
+					doc.Vectors["v"+strconv.Itoa(i)] = byToken[t].Vectors[name]
+				}
+			}
+		}
+		encoded, err := json.Marshal(doc)
 		if err != nil {
 			return m, nil, nil, err
 		}
@@ -237,6 +252,13 @@ func (c *Collection) publishJSON(ctx context.Context, mode string, old []byte, s
 			return false, err
 		}
 	}
+	if m.Index != "" {
+		if err := c.createNativeIndex(ctx, m); err != nil {
+			c.dropNativeIndex(ctx, m.Index)
+			c.unlinkGeneration(ctx, keys[1:])
+			return false, err
+		}
+	}
 	args := []any{mode, old, raw, m.Revision}
 	for _, t := range m.Tokens {
 		args = append(args, t)
@@ -246,6 +268,7 @@ func (c *Collection) publishJSON(ctx context.Context, mode string, old []byte, s
 		return false, err
 	}
 	if n == 0 {
+		c.dropNativeIndex(ctx, m.Index)
 		c.unlinkGeneration(ctx, keys[1:])
 		return false, nil
 	}
@@ -256,13 +279,11 @@ func (c *Collection) publishJSON(ctx context.Context, mode string, old []byte, s
 	if json.Unmarshal(old, &previous) == nil {
 		switch previous.Format {
 		case 2:
-			var hashes hashManifest
-			if json.Unmarshal(old, &hashes) == nil {
-				c.unlinkGeneration(ctx, c.hashKeys(hashes)[1:])
-				c.dropNativeIndex(ctx, hashes.Index)
-			}
+			c.unlinkGeneration(ctx, c.hashKeys(previous)[1:])
+			c.dropNativeIndex(ctx, previous.Index)
 		case 3:
 			c.unlinkGeneration(ctx, c.jsonKeys(previous)[1:])
+			c.dropNativeIndex(ctx, previous.Index)
 		}
 	}
 	return true, nil
@@ -270,7 +291,7 @@ func (c *Collection) publishJSON(ctx context.Context, mode string, old []byte, s
 
 // MigrateToJSONStorage explicitly converts snapshots or hashes to format 3.
 // Schema, canonical records and generated sequence publish atomically. Repeating
-// it on JSON storage is a read-only no-op. No native JSON indexes are created.
+// it on JSON storage is a read-only no-op. Native mode builds vector indexes.
 func (c *Collection) MigrateToJSONStorage(ctx context.Context) (err error) {
 	defer func() { err = c.operation(ctx, "migrate_json_storage", err) }()
 	return c.mutate(ctx, func(state *snapshot) error {

@@ -59,6 +59,26 @@ if type(status)=='table' and status.err then return status end
 if status~=1 then return {status} end
 return {1,redis.call('FT.SEARCH',KEYS[3],unpack(ARGV,6))}`
 
+// RedisJSON RETURN values use JSON encoding. Fetch wrappers after NOCONTENT in
+// the same execution instead, preserving the opaque canonical payload string.
+const nativeJSONExecute = nativeReadyLua + `
+if redis.call('GET',KEYS[1])~=ARGV[1] then return {0} end
+if redis.call('GET',KEYS[2])~=ARGV[2] then return {-1} end
+local status=ready(KEYS[3],ARGV[3],ARGV[4],ARGV[5],'JSON')
+if status~=1 then return {status} end
+local found=redis.call('FT.SEARCH',KEYS[3],unpack(ARGV,6))
+local result={found[1]}
+for i=2,#found do
+ local key=text(found[i])
+ local raw=redis.call('JSON.GET',key)
+ if not raw then return {-1} end
+ local ok,row=pcall(cjson.decode,raw)
+ if not ok or type(row)~='table' or row.__vs_revision~=ARGV[2] or type(row.__vs_token)~='string' or type(row.__vs_payload)~='string' then return {-1} end
+ result[#result+1]=key
+ result[#result+1]={'__vs_payload',row.__vs_payload,'__vs_token',row.__vs_token,'__vs_revision',row.__vs_revision}
+end
+return {1,result}`
+
 func (c *Collection) nativeManifest(ctx context.Context) (hashManifest, []byte, bool, error) {
 	if err := ctx.Err(); err != nil {
 		return hashManifest{}, nil, false, err
@@ -80,7 +100,7 @@ func (c *Collection) nativeManifest(ctx context.Context) (hashManifest, []byte, 
 	if m.Definition != c.registration || (m.Format != 1 && m.Format != 2 && m.Format != 3) {
 		return m, nil, false, vectordata.ErrSchemaMismatch
 	}
-	if m.Format != 2 {
+	if m.Format == 1 {
 		return m, raw, false, nil
 	}
 	if !validRevision(m.Revision) || m.Next < 0 || m.Tokens == nil {
@@ -93,10 +113,10 @@ func (c *Collection) nativeManifest(ctx context.Context) (hashManifest, []byte, 
 		}
 		seen[t] = true
 	}
-	if m.Index == "" || (m.IndexVersion != 1 && m.IndexVersion != 2) || len(m.Tokens) > nativeMaxDocuments {
+	if m.Index == "" || ((m.Format == 2 && m.IndexVersion != 1 && m.IndexVersion != 2) || (m.Format == 3 && m.IndexVersion != 3)) || len(m.Tokens) > nativeMaxDocuments {
 		return m, raw, false, nil
 	}
-	if m.Index != c.indexName(m.Revision) {
+	if m.Index != c.nativeIndexName(m.Format, m.Revision) {
 		return m, nil, false, vectordata.ErrSchemaMismatch
 	}
 	if _, err = c.nativeFields(m); err != nil {
@@ -122,7 +142,7 @@ func (c *Collection) nativeReply(ctx context.Context, m hashManifest, raw []byte
 		}
 		query += " AS __vs_distance]"
 	}
-	args := []any{raw, m.Revision, c.generationPrefix(m.Revision), string(schema), len(m.Tokens), query}
+	args := []any{raw, m.Revision, c.nativeGenerationPrefix(m), string(schema), len(m.Tokens), query}
 	if len(params) > 0 {
 		args = append(args, "PARAMS", len(params))
 		args = append(args, params...)
@@ -130,8 +150,15 @@ func (c *Collection) nativeReply(ctx context.Context, m hashManifest, raw []byte
 	if knn != "" {
 		args = append(args, "SORTBY", "__vs_distance", "ASC")
 	}
-	args = append(args, "RETURN", 3, "__vs_payload", "__vs_token", "__vs_revision", "LIMIT", 0, limit, "DIALECT", 2, "TIMEOUT", 0)
-	result, err := c.store.client.Eval(ctx, nativeExecute, []string{c.store.key(c.name), c.generationPrefix(m.Revision) + "lease", m.Index}, args...).Slice()
+	script := nativeExecute
+	if m.Format == 3 {
+		script = nativeJSONExecute
+		args = append(args, "NOCONTENT")
+	} else {
+		args = append(args, "RETURN", 3, "__vs_payload", "__vs_token", "__vs_revision")
+	}
+	args = append(args, "LIMIT", 0, limit, "DIALECT", 2, "TIMEOUT", 0)
+	result, err := c.store.client.Eval(ctx, script, []string{c.store.key(c.name), c.nativeGenerationPrefix(m) + "lease", m.Index}, args...).Slice()
 	if err != nil {
 		return nil, false, err
 	}
@@ -199,7 +226,7 @@ func (c *Collection) nativeRecords(ctx context.Context, m hashManifest, reply []
 			values[name] = value
 		}
 		t := values["__vs_token"]
-		if !members[t] || values["__vs_revision"] != m.Revision || key != c.generationPrefix(m.Revision)+"r:"+encodeName(t) || values["__vs_payload"] == "" {
+		if !members[t] || values["__vs_revision"] != m.Revision || key != c.nativeGenerationPrefix(m)+"r:"+encodeName(t) || values["__vs_payload"] == "" {
 			return nil, vectordata.ErrInvalidRecord
 		}
 		if _, exists := state.Records[t]; exists {
@@ -222,6 +249,9 @@ func (c *Collection) nativeQuery(ctx context.Context, filter vectordata.Filter, 
 		m, raw, indexed, err := c.nativeManifest(ctx)
 		if err != nil || !indexed {
 			return nil, 0, false, err
+		}
+		if m.Format == 3 {
+			return nil, 0, false, nil
 		}
 		limit := len(m.Tokens)
 		if count {
@@ -301,6 +331,9 @@ func (c *Collection) nativeSearch(ctx context.Context, vector []float32, p vecto
 		m, raw, indexed, err := c.nativeManifest(ctx)
 		if err != nil || !indexed {
 			return nil, false, err
+		}
+		if m.Format == 3 && opts.Filter != nil {
+			return nil, false, nil
 		}
 		available := false
 		for _, name := range m.IndexVectors {
