@@ -198,11 +198,11 @@ def main():
     if any(path.exists() for path in paths):
         raise FileExistsError("summary output must be new")
     text = render(env, fixtures, rows, args.random, ties, diagnostic)
-    with paths[0].open("x", encoding="utf-8") as output:
+    with paths[0].open("x", encoding="utf-8", newline="\n") as output:
         output.write(text)
     if args.csv:
         with Path(args.csv).open("x", newline="", encoding="utf-8") as output:
-            writer = csv.DictWriter(output, fieldnames=list(rows[0]))
+            writer = csv.DictWriter(output, fieldnames=list(rows[0]), lineterminator="\n")
             writer.writeheader()
             writer.writerows(rows + (summaries(ties[1]) if ties else []))
 
