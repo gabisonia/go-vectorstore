@@ -210,7 +210,7 @@ func (s *Store) GetModelCollection(name string, d vectordata.CollectionDefinitio
 	}
 	c := &Collection{store: s, name: name, definition: d, registration: string(raw), options: opts}
 	if s.nativeIndexes {
-		m := hashManifest{}
+		m := hashManifest{IndexVersion: c.nativeIndexVersion()}
 		for _, p := range d.Vectors {
 			if nativeVectorProperty(p) {
 				m.IndexVectors = append(m.IndexVectors, p.Name)

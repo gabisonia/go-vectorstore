@@ -102,6 +102,8 @@ jobs:
           go run ./samples/redis-store -namespace redis_native_demo -native
           go run ./samples/redis-store -namespace redis_flat_demo -native -index flat
           go run ./samples/redis-store -namespace redis_flat_demo -native -index flat
+          go run ./samples/redis-store -namespace redis_text_demo -native -fulltext
+          go run ./samples/redis-store -namespace redis_text_demo -native -fulltext
 
   local-doc-agent:
     name: Local doc agent (Go ${{ matrix.go }})

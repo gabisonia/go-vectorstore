@@ -360,8 +360,11 @@ PostgreSQL float16 storage requires pgvector 0.7+ and a visible `halfvec` type.
 Default Redis reports the same booleans/index fields as memory and buffers
 snapshots/pages. With `NativeIndexes`, it additionally advertises HNSW and FLAT
 for four dense metrics and two precisions (16 tuples, up to 4,096 dimensions) and indexed
-string/int64/float64/bool data. Full-text/hybrid/migrations remain false. This is
-local discovery; see [Redis runtime limits and costs](redis.md).
+string/int64/float64/bool data. `FullTextIndexing` is true in native mode for string
+properties marked `IsFullTextIndexed`/`fulltext`; hybrid/migrations remain false.
+This creates Redis TEXT fields but adds no keyword-query API. `SearchText` still
+embeds its input for vector search. This is local discovery; see
+[Redis runtime limits and costs](redis.md).
 `IndexMethodFlat` is exhaustive and distinct from approximate `IndexMethodIVFFlat`.
 It accepts no HNSW/IVFFlat construction parameters. Memory/SQLite treat it as a
 portable hint; PostgreSQL rejects physical FLAT index definitions locally.

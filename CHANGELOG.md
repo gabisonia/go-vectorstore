@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Honor string `IsFullTextIndexed` hints with Redis TEXT indexes in native mode,
+  independent of scalar TAG filtering. Add observable schema validation and
+  full-text capability discovery while keeping keyword/hybrid APIs unsupported.
+  Index metadata version 2 preserves legacy scalar/vector-only reads and explicit
+  rebuilds without changing storage/registrations. Cover real tokenization,
+  Unicode/NULL values, upgrades, drift and atomic lifecycle behavior; add a
+  rerunnable full-text sample and CI coverage.
+
 - Add native Redis FLAT indexes with `IndexMethodFlat`, eight additional dense
   metric/precision tuples and algorithm drift detection. Exhaustively remeasure
   matching vectors in Go to preserve exact ordering, ties, thresholds and paging;

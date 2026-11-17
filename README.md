@@ -27,7 +27,7 @@ require it. Use current stable Go for up-to-date standard-library security fixes
 - Go 1.25+
 - PostgreSQL provider: PostgreSQL 16+ with `pgvector` extension
 - SQLite provider: a writable database file; no database server or C toolchain required
-- Redis provider: standalone snapshots with Go exact search; opt-in HNSW/FLAT and scalar indexes ([limits](docs/redis.md))
+- Redis provider: standalone snapshots with Go exact search; opt-in HNSW/FLAT, scalar and string full-text indexes ([limits](docs/redis.md))
 - Docker (optional, for integration tests and sample compose flows)
 
 ## Project layout
@@ -416,7 +416,8 @@ git push origin "v${RELEASE_VERSION}"
 
 Redis defaults to compatible snapshot storage. Opt-in native indexing uses immutable
 hash generations for HNSW/FLAT vector search and scalar-filter acceleration, preserving atomic batches.
-It requires Redis Search and database zero; writes rebuild the generation's index.
+String full-text hints create TEXT fields; keyword/hybrid APIs remain unsupported.
+Native indexing requires Redis Search and database zero; writes rebuild the generation's index.
 See [native support and fallback rules](docs/redis.md#native-indexes-and-search).
 
 ## License

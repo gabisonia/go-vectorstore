@@ -62,6 +62,23 @@ requires `-native`. Each method is part of the registered model definition, so
 changing it within an existing namespace returns a schema mismatch. Rebuilds
 retain the registered method.
 
+Create a native TEXT index on Title with a separate namespace:
+
+```sh
+go run ./samples/redis-store -addr localhost:63799 -namespace redis_text_demo -native -fulltext
+go run ./samples/redis-store -addr localhost:63799 -namespace redis_text_demo -native -fulltext
+```
+
+`-fulltext` requires `-native`; it sets `IsFullTextIndexed` on Title and can also
+be combined with `-index flat` in its own namespace. Both runs retain the same
+three output lines. Creation and the reopened native Count validate the TEXT
+schema/readiness while ordinary filtered vector search remains available.
+This demonstrates indexing, not a public keyword-query API: SearchText still
+creates embeddings and hybrid search remains unsupported. TEXT uses English
+stemming, default Redis stopwords and weight 1. Existing definitions with the
+same full-text hint can gain TEXT via `RebuildNativeIndexes`; adding the hint to
+an existing unmarked definition is a separate model-schema change.
+
 Records remain in Redis. To clean up only this fixture, call
 `store.DeleteCollection(ctx, "documents")` using its configured namespace/database.
 `docker compose stop redis` stops the local server; its volume retains data.
