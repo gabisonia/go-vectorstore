@@ -34,6 +34,11 @@ func TestModelContract(t *testing.T) {
 		return openStore(t, filepath.Join(t.TempDir(), "vectors.db"), sqlite.StoreOptions{})
 	})
 }
+func TestNativeScalarModelContract(t *testing.T) {
+	conformance.Run(t, func(t *testing.T) vectordata.ModelStore {
+		return openStore(t, filepath.Join(t.TempDir(), "vectors.db"), sqlite.StoreOptions{NativeIndexes: true})
+	})
+}
 func TestEmbeddingConfiguration(t *testing.T) {
 	conformance.RunEmbeddingConfiguration(t, func(t *testing.T, o vectordata.ModelCollectionOptions) vectordata.ModelStore {
 		return openStore(t, ":memory:", sqlite.StoreOptions{Embedder: o.Embedder, InputEmbedder: o.InputEmbedder, EmbeddingBatchSize: o.EmbeddingBatchSize})

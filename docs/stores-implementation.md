@@ -223,7 +223,8 @@ commit records and generated-key sequences together. Reads check registration an
 load records with one consistent SQL snapshot. Get selects a single key directly;
 GetMany uses indexed, bounded key batches in a deferred read transaction.
 Unfiltered Count uses a schema-checked SQL count without decoding payloads.
-Query and filtered Count replay the whole collection through the memory engine.
+Supported scalar Query/filtered Count predicates and ordering run in SQL;
+unsupported combinations replay a snapshot through the memory engine.
 Exact search instead streams and validates payloads in a deferred read transaction
 through `internal/exactsearch`, shared with memory. That selector keeps a max-heap
 of at most top + Skip candidates, orders by distance/native key, and clones only
@@ -232,12 +233,18 @@ so caller codecs run outside the connection. Memory scans a shallow snapshot of
 immutable records after releasing its mutex. SQLite clears runtime embedding
 sources during stored reads. All SQL resources close before application iteration.
 
-Query/filtered Count snapshot replay costs O(collection size) memory and scan work.
+Fallback Query/filtered Count snapshot replay costs O(collection size) memory and scan work.
 Exact search still scans all records; SQLite still allocates to decode/normalize
 every payload. Memory allocates O(collection size) shallow record headers, while
-candidate retention in both providers grows with top + Skip. Index hints are
-accepted for portability; SQLite advertises no physical property/vector indexes,
-full-text/hybrid search or migrations. See [SQLite storage and limits](sqlite.md).
+candidate retention in both providers grows with top + Skip. SQLite opt-in
+NativeIndexes advertises indexed string/int64/float64/bool data. Generic projection
+rows and a covering B-tree select candidate keys for eligible scalar SQL predicates;
+the canonical SQL predicate remains as a residual. Registry, projection rows and
+canonical data share the read transaction. Database triggers maintain projections
+for every writer, including older/non-native handles. Creation and explicit backfill
+are atomic; existing format-1 payloads/registrations stay unchanged. Unsupported
+filters keep their existing paths. Vector indexes, full-text/hybrid and migrations
+remain unadvertised. See [SQLite storage and limits](sqlite.md).
 
 ## Redis storage boundary
 

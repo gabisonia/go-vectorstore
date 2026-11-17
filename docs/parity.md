@@ -35,7 +35,7 @@ It is a workflow comparison, not a claim of API or feature equivalence with ever
 | Binary/sparse vectors | Yes | Yes | Yes | No |
 | Exact search | Yes | Yes, snapshot scan | Yes, snapshot scan | Yes, Go snapshot scan |
 | Physical vector indexes | HNSW/IVFFlat, supported tuples | No | No | Opt-in HNSW/FLAT, 16 dense tuples |
-| Native data indexes | B-tree/GIN by property type | No | No | Opt-in HASH/JSON scalar TAG / split-integer NUMERIC |
+| Native data indexes | B-tree/GIN by property type | Opt-in scalar B-tree | No | Opt-in HASH/JSON scalar TAG / split-integer NUMERIC |
 | Full-text indexing | Yes | No | No | Opt-in HASH/JSON TEXT for strings |
 | Hybrid search | Yes | No | No | Native dense/string/list keywords, HASH/JSON |
 | Migration planning/application | Yes, additive subset | No | No | No |
@@ -50,9 +50,13 @@ limits. See [model API](model-api.md), [SQLite costs](sqlite.md), and
 SQLite uses its existing primary key index for top-level key equality/`In`
 queries and counts, with one read snapshot across batches. Supported scalar
 filters, ordering and paging also run in SQL over payload JSON; unsupported
-combinations retain full-snapshot evaluation. Accepted index hints do not add
-property or ANN indexes. See [query costs](sqlite.md#query-costs-and-provider-limits)
-and [scalar measurements](performance.md#sqlite-scalar-query-verification).
+combinations retain full-snapshot evaluation. Opt-in `NativeIndexes` adds scalar
+B-tree projections for indexed string/int64/float64/bool fields. New collections
+build transactionally; existing collections require explicit `RebuildScalarIndexes`.
+Triggers preserve compatibility with older writers. Vector indexes remain absent.
+See [query costs](sqlite.md#query-costs-and-provider-limits),
+[scalar measurements](performance.md#sqlite-scalar-query-verification) and
+[index verification](performance.md#sqlite-scalar-index-verification).
 
 Redis is available on master after v0.4.1. Default snapshot storage transfers the
 whole collection and runs exact dense search/filtering in Go. Its encoded size

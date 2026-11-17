@@ -340,7 +340,12 @@ write transactions make batch changes atomic across handles. WAL and FULL
 synchronization are configured on each connection. GetMany performs indexed key
 lookups within one deferred read snapshot, and unfiltered Count uses SQL counting
 without decoding payloads. Key filters use the primary index; supported scalar
-queries/counts run in SQL. Other query/count combinations load a snapshot, release
+queries/counts run in SQL. Opt-in scalar projections use a covering B-tree for
+positive indexed predicates, retaining canonical SQL residuals and NULL truth.
+Triggers maintain projections across native/older writers. New collections build
+atomically; existing collections require explicit backfill. Projection readiness
+and payload reads share one WAL snapshot, preserving format-1 compatibility.
+Other query/count combinations load a snapshot, release
 the connection, then use the memory engine. Exact search streams a deferred read
 snapshot through the shared `internal/exactsearch` top-K selector, retaining only
 `top + Skip` candidates. Memory uses that selector over a shallow snapshot of

@@ -11,8 +11,10 @@ import (
 )
 
 type scalarQueryPlan struct {
-	sql  string
-	args []any
+	sql      string
+	args     []any
+	filter   vectordata.Filter
+	whereEnd int
 }
 
 type scalarQueryCompiler struct {
@@ -36,6 +38,7 @@ func (c *Collection) scalarPlan(filter vectordata.Filter, top int, opts vectorda
 		return scalarQueryPlan{}, false, err
 	}
 	query := "SELECT count(*) FROM __vectorstore_records r WHERE r.collection=?1 AND (" + where + ")"
+	whereEnd := len(query)
 	if !count {
 		if len(opts.OrderBy) > 64 {
 			return scalarQueryPlan{}, false, nil
@@ -50,12 +53,14 @@ func (c *Collection) scalarPlan(filter vectordata.Filter, top int, opts vectorda
 		}
 		keyOrder, _ := compiler.order(c.definition.Key.Name, false)
 		order = append(order, keyOrder...)
-		query = "SELECT r.payload FROM __vectorstore_records r WHERE r.collection=?1 AND (" + where + ") ORDER BY " + strings.Join(order, ",") + " LIMIT " + compiler.bind(top) + " OFFSET " + compiler.bind(opts.Skip)
+		query = "SELECT r.payload FROM __vectorstore_records r WHERE r.collection=?1 AND (" + where + ")"
+		whereEnd = len(query)
+		query += " ORDER BY " + strings.Join(order, ",") + " LIMIT " + compiler.bind(top) + " OFFSET " + compiler.bind(opts.Skip)
 	}
 	if len(compiler.args) > 900 {
 		return scalarQueryPlan{}, false, nil
 	}
-	return scalarQueryPlan{sql: query, args: compiler.args}, true, nil
+	return scalarQueryPlan{sql: query, args: compiler.args, filter: filter, whereEnd: whereEnd}, true, nil
 }
 
 func (c *scalarQueryCompiler) field(name string) (string, vectordata.DataProperty, bool) {
@@ -244,6 +249,10 @@ func (c *Collection) scalarRead(ctx context.Context, plan scalarQueryPlan) ([]ve
 	if _, err := c.metadata(ctx, tx); err != nil {
 		return nil, err
 	}
+	plan, err = c.indexedScalarPlan(ctx, tx, plan)
+	if err != nil {
+		return nil, err
+	}
 	rows, err := tx.QueryContext(ctx, plan.sql, plan.args...)
 	if err != nil {
 		return nil, err
@@ -283,6 +292,10 @@ func (c *Collection) scalarCount(ctx context.Context, plan scalarQueryPlan) (int
 	}
 	defer tx.Rollback()
 	if _, err := c.metadata(ctx, tx); err != nil {
+		return 0, err
+	}
+	plan, err = c.indexedScalarPlan(ctx, tx, plan)
+	if err != nil {
 		return 0, err
 	}
 	var count int64

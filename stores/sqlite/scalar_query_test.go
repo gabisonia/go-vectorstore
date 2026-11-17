@@ -87,6 +87,15 @@ func TestScalarQueryValidatesOnlyReturnedPageAndDiscardsPartialResults(t *testin
 }
 
 func TestScalarQueriesMatchSnapshotEvaluation(t *testing.T) {
+	for _, native := range []bool{false, true} {
+		name := "plain"
+		if native {
+			name = "indexed"
+		}
+		t.Run(name, func(t *testing.T) { testScalarQueriesMatchSnapshotEvaluation(t, native) })
+	}
+}
+func testScalarQueriesMatchSnapshotEvaluation(t *testing.T, native bool) {
 	ctx := context.Background()
 	for _, tt := range []struct {
 		kind vectordata.KeyType
@@ -103,7 +112,10 @@ func TestScalarQueriesMatchSnapshotEvaluation(t *testing.T) {
 				{Name: "Number", Type: vectordata.TypeInt64, Optional: true}, {Name: "Amount", Type: vectordata.TypeFloat64, Optional: true}, {Name: "Active", Type: vectordata.TypeBool, Optional: true},
 				{Name: "JSON", Type: vectordata.TypeJSON, Optional: true}, {Name: "Decimal", Type: vectordata.TypeDecimal, Optional: true},
 			}, Vectors: []vectordata.VectorProperty{{Name: "Vector", Dimensions: 2, Precision: vectordata.VectorFloat16, Optional: true}}}
-			_, c := lookupFixture(t, d)
+			for i := range d.Data {
+				d.Data[i].IsIndexed = d.Data[i].Type != vectordata.TypeJSON
+			}
+			_, c := scalarIndexFixture(t, d, native)
 			texts := []any{nil, "2", "10", "a\x00z", "雪", "quote'--", "", "a"}
 			numbers := []any{nil, int64(math.MinInt64), int64(-9007199254740993), int64(0), int64(2), int64(10), int64(9007199254740993), int64(math.MaxInt64)}
 			amounts := []any{nil, -math.MaxFloat64, -1.0, 0.0, math.SmallestNonzeroFloat64, 1.0, math.Nextafter(1, 2), math.MaxFloat64}

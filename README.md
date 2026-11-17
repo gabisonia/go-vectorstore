@@ -34,7 +34,7 @@ require it. Use current stable Go for up-to-date standard-library security fixes
 
 - `vectordata`: backend-agnostic core interfaces, record model, filters, typed wrapper
 - `stores/postgres`: Postgres implementation with `pgxpool`
-- `stores/sqlite`: durable SQLite model collections with exact search
+- `stores/sqlite`: durable SQLite model collections with exact search and opt-in scalar indexes
 - `stores/redis`: atomic snapshots/hash generations, dense exact search and opt-in HNSW/FLAT
 - `stores/memory`: transient model collections for development and contract tests
 - `samples`: runnable demos (see `samples/README.md`)

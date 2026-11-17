@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Add opt-in SQLite scalar indexes for indexed string/int64/float64/bool fields.
+  Build new collections atomically and explicitly backfill existing format-1
+  collections without changing payloads or registrations. Triggers maintain all
+  writers; eligible Query/Count predicates use indexed candidate keys with exact
+  SQL residuals and one WAL snapshot. Cover conformance, real index plans,
+  precision, legacy writers, failure rollback, samples and capability discovery.
+
 - Add native Redis hybrid KeywordTerms lists for HASH/JSON with OR between
   plain-text AND groups, literal bound tokens, validation before embedding and
   caller-owned list snapshots. Enable capability discovery, shared typed/input/

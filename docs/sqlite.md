@@ -34,6 +34,65 @@ embedders are never serialized; configure them again when reopening a store.
 `:memory:`). Collection metadata adds the handle name. Discovery works after
 close and does not inspect registrations; see [metadata discovery](model-api.md#store-and-collection-metadata).
 
+## Opt-in scalar indexes
+
+Set `sqlite.StoreOptions{NativeIndexes: true}` to honor `IsIndexed` (or the `index`
+struct tag) on string, int64, float64 and bool data properties. Native mode
+advertises those four `IndexedDataTypes`; other valid data/index hints retain
+existing behavior. Discovery reflects configuration, not collection readiness.
+This does not add vector indexes or change exact vector search.
+
+New collections build indexes in the same transaction as creation. Opening a
+store or calling EnsureExists on an existing collection does not backfill it.
+Its queries/counts retain the existing path until explicit backfill:
+
+```go
+store, err := sqlite.Open(ctx, "vectors.db", sqlite.StoreOptions{NativeIndexes: true})
+if err != nil {
+    return err
+}
+defer store.Close()
+// definition must be the unchanged registered model, including IsIndexed hints.
+base, err := store.GetModelCollection("documents", definition, vectordata.ModelCollectionOptions{})
+if err != nil {
+    return err
+}
+if err := base.(*sqlite.Collection).RebuildScalarIndexes(ctx); err != nil {
+    return err
+}
+```
+
+Rebuild validates stored records, backfills indexed scalar values, and publishes
+readiness in one immediate transaction. It uses bounded decoded record memory,
+scans canonical payloads, emits one projection row per indexed field, and holds
+the writer lock until completion. Cancellation/failure rolls back the rebuild and preserves any
+previous ready index. Rebuild requires native mode. Changing registered model
+hints is still a schema change; this API does not migrate definitions.
+
+A shared B-tree covers collection, property, typed value and canonical key.
+Eligible positive `Eq` (including NULL), `In`, ranges and `Exists` predicates
+select candidate keys, followed by the complete canonical SQL predicate and
+existing ordering/paging. AND can use indexed conjuncts; OR restricts candidates
+only when every branch is indexable. NOT retains the existing SQL path to preserve
+NULL truth. Unsupported filter/sort combinations retain their existing fallback.
+Sorts may still require temporary space. These indexes accelerate eligible Query/
+QueryIter and filtered Count calls; vector searches still scan all payloads.
+
+Format-1 payloads, registrations and generated sequences remain unchanged.
+Additional tables/triggers store one projection row per record/indexed field,
+including NULL fields. Insert/upsert/delete, projections and sequence changes
+commit or roll back together. Triggers maintain indexes for older binaries and
+non-native handles too; non-native handles still use their ordinary read paths.
+Collection deletion cascades index registration and projection cleanup. Older
+collections can coexist with indexed collections in one file. Do not manually
+modify the provider tables or disable foreign keys/triggers.
+
+Index metadata and canonical results are read in the same deferred WAL snapshot.
+A conflicting index registration returns `ErrSchemaMismatch` until an explicit
+rebuild. Indexes add storage and write work; benchmark realistic selectivity and
+field counts. See [index verification](performance.md#sqlite-scalar-index-verification)
+and the rerunnable [sample](../samples/sqlite-store/README.md).
+
 ## Durability and concurrency
 
 Open configures WAL mode, FULL synchronization and foreign keys on every
@@ -131,8 +190,8 @@ page. Scalar counts evaluate the relevant JSON fields without decoding vectors
 or validating every model field; malformed JSON can still fail SQL evaluation.
 Metadata and results share one deferred WAL read snapshot, including empty pages.
 Errors discard the whole page, and the connection is released before application
-codecs run. These paths add no physical property indexes: SQLite still scans the
-collection's payload JSON and may use temporary sorting space. Go result memory
+codecs run. Without an available opt-in scalar index, SQLite scans the collection's
+payload JSON and may use temporary sorting space. Go result memory
 follows the page, but SQL work and sorting costs can grow with collection size.
 No schema migration or storage format change is needed. See
 [scalar query verification](performance.md#sqlite-scalar-query-verification).
@@ -158,9 +217,9 @@ realistic sizes before selecting the provider for large collections or concurren
 query services. See the [read benchmarks](performance.md#sqlite-batch-lookup-and-count-verification)
 and [exact-search benchmarks](performance.md#exact-search-selection-and-copying).
 
-Index flags are accepted as portability hints; no physical property/vector
-indexes, ANN acceleration, full-text search, hybrid search, PostgreSQL tuning,
-or migration planning/application are advertised. Unknown ProviderOptions return
+Without `NativeIndexes`, index flags are portability hints. Opt-in scalar
+indexes are described below. Vector indexes, ANN acceleration, full-text search,
+hybrid search, PostgreSQL tuning and migration planning/application are not advertised. Unknown ProviderOptions return
 ErrUnsupported. Use PostgreSQL when those capabilities are needed.
 
 Examples:
