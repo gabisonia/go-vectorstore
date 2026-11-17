@@ -234,8 +234,13 @@ immutable records after releasing its mutex. SQLite clears runtime embedding
 sources during stored reads. All SQL resources close before application iteration.
 
 Fallback Query/filtered Count snapshot replay costs O(collection size) memory and scan work.
-Exact search still scans all records; SQLite still allocates to decode/normalize
-every payload. Memory allocates O(collection size) shallow record headers, while
+Default exact search still scans all records; SQLite allocates to decode/normalize
+every payload. Optional VectorProjections scans packed dense vectors for
+unfiltered searches, retains exact Go ranking, and fetches only the selected page's
+canonical payloads within the same WAL snapshot. Its ordinary triggers invalidate
+readiness for all writers. Aware writes restore readiness only from a previously
+ready state; dirty projections fall back until explicit rebuild. Binary/sparse
+and filtered searches retain the canonical path. Memory allocates O(collection size) shallow record headers, while
 candidate retention in both providers grows with top + Skip. SQLite opt-in
 NativeIndexes advertises indexed string/int64/float64/bool data. Generic projection
 rows and a covering B-tree select candidate keys for eligible scalar SQL predicates;

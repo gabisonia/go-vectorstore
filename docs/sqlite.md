@@ -6,7 +6,8 @@ server, extension, C compiler, or API key.
 
 The next optional vector execution path is described in the
 [SQLite vector design](sqlite-vector-design.md), with a reproducible driver probe.
-It is not yet a provider feature; current vector searches use the Go exact engine.
+Extension-based ranking is not yet a provider feature. Current vector searches
+use the Go exact engine, optionally reading packed projections as described below.
 
 ```go
 store, err := sqlite.Open(ctx, "/var/lib/myapp/vectors.db", sqlite.StoreOptions{})
@@ -96,6 +97,64 @@ A conflicting index registration returns `ErrSchemaMismatch` until an explicit
 rebuild. Indexes add storage and write work; benchmark realistic selectivity and
 field counts. See [index verification](performance.md#sqlite-scalar-index-verification)
 and the rerunnable [sample](../samples/sqlite-store/README.md).
+
+## Opt-in dense vector projections
+
+Set `sqlite.StoreOptions{VectorProjections: true}` to build little-endian packed float32 BLOBs
+for dense properties in new collections. Float16 properties use their canonical
+rounded float32 values. This option is independent of `NativeIndexes`, needs no
+extension/C compiler, and does not advertise a vector index or ANN capability.
+
+An unfiltered dense search scans only native keys and the selected packed vector,
+ranks with the existing float64 Go distance calculations and bounded top-K heap,
+then retrieves/validates the selected canonical payloads in batches of at most
+500 keys. Readiness, ranking and every payload batch share one deferred WAL
+snapshot. Distances, scores, thresholds, Skip, native key ties, IncludeVectors and
+caller ownership keep their existing semantics. The returned page includes every
+requested data/vector property, not only the ranked property. All SQL resources
+close before typed codecs or application iteration run.
+
+Searches with any filter, binary/sparse searches, and collections whose projection
+is absent/dirty/incompatible use the existing canonical scan. No native distance
+rounding, candidate truncation or implicit rebuild is introduced. A ready scan
+validates projected vectors and returned payloads; it does not decode off-page
+canonical payloads. Direct modification of private projection tables is unsupported.
+
+Existing collections require explicit backfill with the unchanged definition:
+
+```go
+base, err := store.GetModelCollection("documents", definition, vectordata.ModelCollectionOptions{})
+if err != nil {
+    return err
+}
+if err := base.(*sqlite.Collection).RebuildVectorProjections(ctx); err != nil {
+    return err
+}
+```
+
+The Store must have `VectorProjections` enabled. Rebuild validates canonical
+records with embedding callbacks disabled, scans in keyset batches of at most
+128 decoded records, and publishes all projections/readiness in one immediate
+transaction. It holds the writer lock until completion. Cancellation/errors roll
+back the entire rebuild, retaining the preceding projection state. Opening a
+file, EnsureExists on an existing collection, reads and ordinary writes never
+backfill it automatically. A stale collection definition is still a schema error.
+
+Canonical payloads, registrations and generated-key sequences retain format 1.
+Ordinary SQL triggers invalidate readiness on canonical inserts/updates/deletes.
+Projection-aware writes maintain affected vectors and restore readiness within
+the same transaction only if the collection was ready beforehand. Deletions
+cascade projection rows. An older binary or a handle with the option disabled
+can still write the file; it leaves readiness dirty, so later projection-enabled
+reads fall back until explicit rebuild. Updating one row cannot repair an already
+dirty collection. Collection deletion removes projection rows and metadata.
+
+Projections duplicate dense vector storage and add write/rebuild work. Scans
+remain O(collection size); retained candidates grow with `top + Skip`. For a small
+page they avoid decoding full payloads outside that page, while cumulative vector
+decoding allocations still grow with the scanned vectors. See the reproducible
+[projection checks and benchmark](performance.md#sqlite-vector-projection-verification)
+and [sample](../samples/sqlite-store/README.md).
 
 ## Durability and concurrency
 
@@ -200,7 +259,7 @@ follows the page, but SQL work and sorting costs can grow with collection size.
 No schema migration or storage format change is needed. See
 [scalar query verification](performance.md#sqlite-scalar-query-verification).
 
-Exact search streams and validates every payload through one deferred read
+The default exact search streams and validates every payload through one deferred read
 transaction, retaining at most `top + Skip` candidates in a heap. Only the returned
 page is copied for projection. Ranking uses distance, then native key for ties;
 filters, thresholds and missing-vector exclusion apply before paging. Search still
@@ -208,7 +267,9 @@ scans and decodes the entire collection: cumulative decoding allocations grow wi
 collection size, while retained candidate records grow with `top + Skip`.
 Large offsets therefore increase memory use. WAL permits other connections to
 write during the scan; the Store's own connection remains occupied until it ends.
-Filter operands are normalized before acquiring the connection.
+Filter operands are normalized before acquiring the connection. Ready optional
+dense projections avoid full payload decoding for unfiltered searches as described
+above; filtered/binary/sparse searches retain the default scan.
 
 Queries/counts with unsupported filter or sort operations load the whole collection
 into the memory engine, using O(collection size) memory and scan work. This includes

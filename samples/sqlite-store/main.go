@@ -22,11 +22,16 @@ func run() error {
 	path := flag.String("db", "vectors.db", "SQLite database filename")
 	native := flag.Bool("native", false, "Use scalar indexes in a separate indexed_documents collection")
 	rebuild := flag.Bool("rebuild-indexes", false, "Explicitly backfill scalar indexes; implies -native")
+	vectors := flag.Bool("vector-projections", false, "Use optional packed dense vector projections")
+	rebuildVectors := flag.Bool("rebuild-vectors", false, "Explicitly backfill vector projections; implies -vector-projections")
 	flag.Parse()
 	if *rebuild {
 		*native = true
 	}
-	options := sqlite.StoreOptions{NativeIndexes: *native}
+	if *rebuildVectors {
+		*vectors = true
+	}
+	options := sqlite.StoreOptions{NativeIndexes: *native, VectorProjections: *vectors}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	store, err := sqlite.Open(ctx, *path, options)
@@ -55,13 +60,20 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	if *rebuild {
+	if *rebuild || *rebuildVectors {
 		base, err := store.GetModelCollection(name, definition, vectordata.ModelCollectionOptions{})
 		if err != nil {
 			return err
 		}
-		if err := base.(*sqlite.Collection).RebuildScalarIndexes(ctx); err != nil {
-			return err
+		if *rebuild {
+			if err := base.(*sqlite.Collection).RebuildScalarIndexes(ctx); err != nil {
+				return err
+			}
+		}
+		if *rebuildVectors {
+			if err := base.(*sqlite.Collection).RebuildVectorProjections(ctx); err != nil {
+				return err
+			}
 		}
 	}
 	if _, err = docs.Upsert(ctx, []Document{
@@ -88,6 +100,15 @@ func run() error {
 	}
 	for _, hit := range hits {
 		fmt.Printf("Search: %s (score %.3f)\n", hit.Item.Title, hit.Score)
+	}
+	if *vectors {
+		// Unfiltered dense searches can use ready projections. The filtered search
+		// above intentionally exercises the canonical fallback in this increment.
+		packedHits, err := docs.Search(ctx, []float32{1, 0}, 10, vectordata.ModelSearchOptions{})
+		if err != nil {
+			return err
+		}
+		fmt.Printf("Unfiltered dense matches: %d\n", len(packedHits))
 	}
 	if err = store.Close(); err != nil {
 		return err

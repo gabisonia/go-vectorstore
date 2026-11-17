@@ -24,7 +24,12 @@ func stores(t *testing.T) map[string]vectordata.ModelStore {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { s.Close() })
-	return map[string]vectordata.ModelStore{"memory": memory.New(), "sqlite": s}
+	projected, err := sqlite.Open(context.Background(), filepath.Join(t.TempDir(), "projected.db"), sqlite.StoreOptions{VectorProjections: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { projected.Close() })
+	return map[string]vectordata.ModelStore{"memory": memory.New(), "sqlite": s, "sqlite_projected": projected}
 }
 func denseValues(r vectordata.ModelRecord, p vectordata.VectorProperty) []float32 {
 	if p.Kind != vectordata.VectorSparse {

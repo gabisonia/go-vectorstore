@@ -24,6 +24,48 @@ SQLite fallback queries materialize the whole collection; exact searches stream 
 scan. These checks establish correctness, not an ANN throughput claim. See
 [SQLite costs](sqlite.md#query-costs-and-provider-limits).
 
+## SQLite vector projection verification
+
+```sh
+go test -race -run 'TestVectorProjection|TestReleasedFormat1Compatibility' ./stores/sqlite
+CGO_ENABLED=0 go test -run 'TestVectorProjection|TestReleasedFormat1Compatibility' ./stores/sqlite
+go test -race -run TestProvidersMatchFullSort ./internal/exactsearch
+go test -run '^$' -bench BenchmarkSQLiteVectorProjections -benchmem -benchtime=100ms -count=3 ./stores/sqlite
+```
+
+Shared conformance runs with both scalar indexes and vector projections enabled.
+The independent full-sort oracle covers default/projected SQLite and memory,
+including dense float32/float16, binary/sparse fallback, all metrics, thresholds,
+filter fallback, large offsets and returned-record ownership. Focused tests cover
+generated/native keys, float32 near-tie boundaries, optional/named vectors,
+keyset backfill, rollback/cancellation, dirty mixed-writer fallback and immutable
+released format fixtures. A concurrent writer commits between projection readiness
+and scanning; all vector ranking and multi-batch payload fetches must retain the
+original WAL snapshot. Query interception verifies one packed scan and only
+bounded canonical page lookups.
+
+The benchmark uses the same persisted collection through default and projection
+handles: 1k/10k records, one 128-dimensional vector, a 4 KiB string, unfiltered L2,
+top 10, no offset. Fixture creation and writes are outside the measured region;
+reads are warm, and canonical/projected pages are compared before timing.
+Report allocs and timings with machine/toolchain details. This fixture does not
+measure cold I/O, rebuild/write cost or filtered workloads; broader workload
+measurement remains a separate parity-plan increment.
+
+Local Go 1.26.1, darwin/arm64, Apple M3 Pro, three 100 ms benchmark samples:
+
+| Records | Canonical B/op (approximately) | Packed B/op (approximately) | Canonical allocs/op | Packed allocs/op |
+| --- | --- | --- | --- | --- |
+| 1,000 | 24,123,000 | 2,449,000 | 46,861 | 14,414 |
+| 10,000 | 241,131,000 | 22,177,000 | 469,861 | 140,415 |
+
+These are cumulative allocations per warm search, not retained heap sizes or
+throughput guarantees. Short canonical samples execute only one to three searches;
+timing conclusions need longer isolated runs and broader workloads. A separate
+process pinned to published v0.4.0 also verified an update and generated-key insert
+into a projected file, followed by current-reader invalidation/fallback, explicit
+rebuild and exact projected search. The immutable release fixture is checked in CI.
+
 ## SQLite batch lookup and count verification
 
 ```sh

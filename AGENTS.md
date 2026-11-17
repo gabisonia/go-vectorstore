@@ -121,6 +121,12 @@ ten-minute timeout, while storage checks retain five minutes.
   and verify real value-index/key-lookup query plans. Retry only
   transaction acquisition/side-effect-free reads; never replay write statements
   or commits after an uncertain result.
+- Optional SQLite dense vector projections retain exact Go ranking. Canonical
+  triggers must use ordinary SQL to invalidate readiness for unaware writers;
+  only aware writes from an already-ready state may maintain and republish it.
+  Keep rebuild explicit, keyset-batched and atomic. Rank packed vectors and fetch
+  the selected payload page in one deferred WAL snapshot; filtered/binary/sparse
+  searches retain canonical fallback. Do not infer native vector index support.
 - PostgreSQL migrations separate read-only planning from explicit application.
   Preserve review/staleness validation and additive-application limits.
 - ProviderAnnotations are immutable JSON values. Omit empty values and preserve

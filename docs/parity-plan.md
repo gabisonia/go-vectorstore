@@ -29,7 +29,7 @@ Acceptance: unchanged models reopen unchanged files; annotations survive every
 provider; Redis NoStem changes keyword matching and mismatched indexes fail
 closed. Unknown Redis-owned options are rejected rather than silently ignored.
 
-## 2. SQLite vector execution — design and probe implemented; awaiting merge
+## 2. SQLite vector execution — packed projection foundation implemented; awaiting merge
 
 First investigate sqlite-vec integration and its platform/driver requirements.
 Keep the current pure-Go, extension-free provider available. Propose a separate
@@ -43,13 +43,19 @@ Acceptance: a documented compatibility/design decision followed by independently
 reviewable implementation PRs; no silent file conversion or new default native
 dependency. Do not call sqlite-vec exact search ANN acceleration.
 
-The [SQLite vector design](sqlite-vector-design.md) selects the already-pinned
+[PR #56](https://github.com/gabisonia/go-vectorstore/pull/56) merged after all 17 CI
+jobs passed. The [SQLite vector design](sqlite-vector-design.md) selects the already-pinned
 driver's pure-Go sqlite-vec package through a future opt-in adapter. Its executable
 probe covers extension availability, distances, filter placement and a separate
 unextended writer. Float32 rounding and mixed-writer trigger behavior require
-explicit correctness gates before native ranking ships. Next: ordinary vector
-projections and transactional invalidation, then native execution and measurement
-in separate PRs. This design/probe increment changes no production capabilities.
+explicit correctness gates before native ranking ships. The foundation
+adds optional ordinary packed dense projections, explicit keyset-batched rebuild,
+transactional invalidation for unaware writers and exact Go ranking with page-only
+canonical retrieval. Shared conformance, numerical/full-sort parity, released
+fixtures, cancellation and WAL snapshot tests cover the foundation. This does not
+add extension ranking or advertise vector index capabilities. Next after merge:
+opt-in extension execution subject to the documented precision gate, then broader
+workload measurement in separate PRs.
 
 ## 3. Connector breadth: Qdrant — queued
 
