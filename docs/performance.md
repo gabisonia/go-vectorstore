@@ -168,9 +168,22 @@ Snapshot/hash/JSON storage conversions preserve generated sequences and plain-re
 compatibility. Shared HASH/JSON
 HNSW/FLAT lifecycle fixtures include TEXT, covering publication conflicts, readiness
 failures, uncertain replies and retirement. These checks establish index behavior;
-no keyword/hybrid public API or text-query throughput claim is added. Existing
+These checks make no text-query throughput claim. Existing
 read benchmarks below have no full-text-marked properties and do not measure text
 index build/allocator costs.
+
+Native Redis hybrid verification checks independent RRF contributions, candidate
+limits, both-list native/Go filtering, optional-vector exclusion, score/distance
+thresholds, paging, literal keyword parsing, key precision and tie fallback. A
+512-vector, 16-dimensional seeded L2 fixture compares three top-10 HNSW hybrid
+queries (EF_RUNTIME 200, no keyword matches) with exact Go ranking, asserting the
+native KNN path without full-scan fallback. A local run achieved recall@10 1.000
+on both HASH and JSON; this small fixture does not predict production recall.
+Concurrent publication tests verify complete old/new generations and one embedding
+call across retries. Shared contracts exercise typed and lazy input/hybrid reads.
+These are correctness checks, not hybrid latency/throughput measurements. Hybrid
+reads fetch all keyword matches and may read a complete canonical generation;
+existing ordinary-read benchmarks do not measure these costs.
 
 ## Redis native read measurements
 

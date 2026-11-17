@@ -374,7 +374,7 @@ it reduces payload transfer only when filters or optional vectors exclude rows.
 Native full-text hints add TEXT fields over existing raw string projections.
 Index metadata version 2 preserves version-1 scalar/vector-only reads until a
 rebuild or native write; the storage format and registrations are unchanged.
-Public keyword-query/hybrid APIs remain unsupported.
+Dense RRF hybrid search uses these indexes; standalone keyword queries remain unsupported.
 
 Redis format 3 applies the same leased generation/final-SET publication model to
 RedisJSON objects. Each wrapper holds revision/token/canonical-payload strings;
@@ -396,5 +396,13 @@ version 4 or 5. JSON full-text hints select version 5, adding raw strings under
 separate internal TEXT paths, with the same English/default tokenizer settings
 and observable schema validation as HASH. Version-4 scalar/vector indexes remain
 readable and gain TEXT only after explicit rebuild/native writes. Canonical payloads
-and registrations remain unchanged. Plain layouts remain the defaults; public
-keyword-query/hybrid APIs remain absent.
+and registrations remain unchanged. Plain layouts remain the defaults. Native
+hybrid reads execute vector/keyword searches and canonical union fetches inside
+one manifest/readiness Lua guard. Go applies canonical filters and selected-vector
+eligibility before candidate limits, ranks keyword BM25/vector distances with
+native-key ties, fuses with RRF, then thresholds/pages. HNSW can be approximate;
+FLAT, exact tuning, unsupported filters/vectors and unresolved ties use exact Go
+vector ranking over the guarded generation. Keyword matches are retrieved fully
+for filtering/ties. Embedding forms validate/preflight before callbacks, freeze
+operands and embed once across retries. Plain/old/missing TEXT indexes return
+unsupported rather than an incomplete vector-only hybrid result.

@@ -253,7 +253,7 @@ Queries and dense search materialize a memory collection, clearing runtime
 embedders before inserting stored records. Get/GetMany decode selected records;
 all still transfer the entire envelope. The configurable snapshot limit defaults
 to 16 MiB. Redis SCAN listing is deduplicated/sorted but not a namespace snapshot.
-Metadata is local; hybrid/migrations are unadvertised, and server
+Metadata is local; plain Redis hybrid and all migrations are unadvertised, and server
 persistence/eviction policy determines durability. See [Redis limits](redis.md).
 
 `StorageHash` creates new collections with a format-2 manifest and immutable HASH
@@ -276,7 +276,8 @@ including roundoff-sensitive distances and ties; HNSW retains approximate recall
 Full-text string hints add TEXT aliases over raw projections in index metadata
 version 2. Version 1 retains its original physical schema, including previously
 ignored hints; explicit rebuild/native writes add TEXT. Validate observable TEXT
-options along with scalar/vector fields. Keyword-query/hybrid APIs remain absent.
+options along with scalar/vector fields. Native dense hybrid uses the TEXT fields;
+standalone keyword-query APIs remain absent.
 Writes rebuild the full index. Index cleanup separately protects current revisions
 and active leases; unknown publication results never drop a possibly current index.
 
@@ -301,5 +302,16 @@ implicit rebuild; an explicit rebuild/native write adds scalar fields. Full-text
 hints select version 5 with a separate raw-string JSON map and safe TEXT aliases.
 Version-4 scalar/vector fields stay unchanged until explicit rebuild/native writes;
 TEXT uses the same tokenizer/observable schema checks as HASH. Canonical payloads
-stay opaque. Keyword/hybrid APIs remain absent. Cleanup protects JSON leases and
+stay opaque. Native dense hybrid supports plain string keywords; KeywordTerms
+lists and standalone keyword queries remain absent. Cleanup protects JSON leases and
 current generations, including uncertain writes. See [RedisJSON storage](redis.md#redisjson-storage).
+
+Redis hybrid executes vector search, BM25 keyword search and canonical union
+fetching in one guarded Lua execution. Unsupported filters or vector-index cases
+and HNSW tie/underfill fallback scan all manifest records in that same complete
+read. Go filters both lists, excludes missing selected vectors, ranks with native
+key ties, limits candidates, adds reciprocal-rank contributions, then applies
+thresholds/paging. Keyword results are complete before limiting. Validate and
+freeze options before I/O/embedding; preflight TEXT readiness before callbacks.
+Missing/legacy TEXT indexes return unsupported without rebuilding or partial
+vector-only results. Iterators buffer pages and release connections before yields.

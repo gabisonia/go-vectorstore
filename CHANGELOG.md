@@ -2,13 +2,21 @@
 
 ## Unreleased
 
+- Add native dense Redis hybrid search for HASH/JSON TEXT generations, combining
+  plain keyword BM25 ranks and canonical vector ranks with RRF. Read both lists
+  and payloads under one manifest/readiness guard; preserve filters, optional
+  vectors, exact key ties, thresholds, paging and guarded exact fallbacks. Add
+  text/custom-input forms, lazy iterators, local validation before embedding,
+  compatibility/readiness errors and native hybrid capability discovery. Cover
+  contracts, RRF/reference cases, recall and generation consistency; add rerunnable
+  samples and CI. KeywordTerms lists and standalone keyword queries remain absent.
+
 - Honor string full-text hints in native RedisJSON mode with separate raw TEXT
   projections, capability discovery and index metadata version 5. Preserve legacy
   vector/scalar schemas until explicit rebuild/native writes and keep canonical
   payloads/registrations unchanged. Cover tokenization, NULL/Unicode fidelity,
   schema drift, field limits, storage conversion and atomic lifecycle on both
-  layouts; add a rerunnable JSON full-text sample and CI coverage. Public keyword/
-  hybrid APIs remain unsupported.
+  layouts; add a rerunnable JSON full-text sample and CI coverage.
 
 - Add native RedisJSON scalar filtering for indexed strings, int64, float64 and
   bool values plus keys, accelerating filtered Query/Count and HNSW/FLAT search.
