@@ -157,6 +157,12 @@ decoding allocations still grow with the scanned vectors. See the reproducible
 [projection checks and benchmark](performance.md#sqlite-vector-projection-verification)
 and [sample](../samples/sqlite-store/README.md).
 
+Per-record projection cleanup requires its existing collection/key index. This
+avoids a collection-only scan that SQLite can otherwise choose without statistics,
+particularly costly for wide vectors. No layout conversion or backfill is needed
+for that correction. See the [larger workload/write/rebuild measurements](benchmarks/sqlite-workload/README.md)
+for the observed cost, storage and fallback limits.
+
 ## Durability and concurrency
 
 Open configures WAL mode, FULL synchronization and foreign keys on every

@@ -23,7 +23,7 @@ other benchmarks/tests competing for CPU or disk:
 
 ```sh
 go build -o /tmp/sqlite-workload ./samples/sqlite-workload
-/tmp/sqlite-workload -records 10000,100000 -dimensions 128,768 -tops 10,100 -samples 3 -machine 'describe CPU and RAM' -output random.jsonl
+/tmp/sqlite-workload -records 10000,100000 -dimensions 128,768 -tops 10,100 -samples 3 -timeout 90m -machine 'describe CPU and RAM' -output random.jsonl
 /tmp/sqlite-workload -records 10000 -dimensions 128 -tops 10,100 -samples 3 -distribution ties -machine 'describe CPU and RAM' -output ties.jsonl
 ```
 
@@ -62,6 +62,22 @@ the input. A SHA-256 digest records keys/distances/scores for cross-path compari
 All generation uses bounded batches, and the reference retains only the largest
 requested page. Timing/allocation counters enclose API calls only. Cumulative Go
 allocations exclude retained heap/RSS and SQLite temporary-storage requirements.
+
+Regenerate summaries with the standard-library-only validator/renderer:
+
+```sh
+python3 samples/sqlite-workload/summarize.py random.jsonl --ties ties.jsonl --output report.md --csv summary.csv
+```
+
+It requires complete fixture/sample coverage, matching page digests across all
+modes/cache conditions, and a final completion event. Summary outputs must be new
+files. CSV retains sample counts, minima/maxima and allocation counters. An optional
+`--diagnostic` input may contain completed fixture records from an interrupted
+earlier run; those are labeled incomplete diagnostic evidence and excluded from
+the final comparison matrix. Small CI runs exercise rejection of incomplete,
+missing-sample and mismatched-digest reports. Keep all measured outliers.
+Cases follow the requested top order, and cache/runtime history carries between
+them. Nonmonotonic timings do not prove that larger pages are intrinsically faster.
 
 Longer runs and additional datasets are needed for general capacity or throughput
 claims. Native scalar L1 still scans all vectors, and complete ties can return all

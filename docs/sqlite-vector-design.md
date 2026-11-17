@@ -174,6 +174,14 @@ mere presence of an extension. vec0 remains a later optimization.
 
 ### C. Measurement and operational documentation
 
+Implemented in the [workload harness and published evidence](benchmarks/sqlite-workload/README.md).
+Complete random/tied runs verify 360 timed pages, include write/rebuild/storage
+costs and explicitly distinguish reopened handles from cold OS I/O. The observed
+per-record collection scan is corrected with the existing point index. Results
+retain outliers, raw artifacts and source/toolchain conditions; additional native
+metrics still need separate proofs. The criteria below remain the scope for
+future workload expansion, including controlled cold I/O and concurrent services.
+
 Compare default canonical scanning, packed projections with Go ranking and any
 approved extension path at 10k/100k records, 128/768 dimensions, top 10/100, and
 unfiltered/1%/10% eligible workloads. State payload size, machine, versions,

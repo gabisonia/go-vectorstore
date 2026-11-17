@@ -29,7 +29,7 @@ Acceptance: unchanged models reopen unchanged files; annotations survive every
 provider; Redis NoStem changes keyword matching and mismatched indexes fail
 closed. Unknown Redis-owned options are rejected rather than silently ignored.
 
-## 2. SQLite vector execution — workload measurements in progress
+## 2. SQLite vector execution — workload evidence and write fix implemented; awaiting merge
 
 First investigate sqlite-vec integration and its platform/driver requirements.
 Keep the current pure-Go, extension-free provider available. Propose a separate
@@ -65,13 +65,19 @@ verified before schema creation. Other metrics, filters and dirty projections
 retain their existing paths. Conformance, bit-level numerical checks, boundary
 ties, native-key precision, concurrency, cancellation and three-OS CGo-free CI
 cover this increment. A reproducible 1k/10k L1 benchmark compares all three paths.
-The current [workload harness](../samples/sqlite-workload/README.md) adds independent
+The [workload harness](../samples/sqlite-workload/README.md) adds independent
 page verification, random/tied profiles, 1%/10% eligibility, top 10/100, warm/reopened
 queries, durable batch writes, explicit rebuild and storage observations. Full
 10k/100k by 128/768 measurements run outside CI; small correctness/cleanup profiles
-run on all three OSes. Publish raw artifacts and conditions before recommendations.
+run on all three OSes. The [published evidence](benchmarks/sqlite-workload/README.md)
+contains complete random/tied runs and all 360 timed page checks, raw JSONL,
+checksums and reproducible summaries. Measurement found and corrected a collection
+scan per projected record write by requiring the existing key index; regression
+tests check actual plans without timing thresholds. The interrupted diagnostic is
+labeled separately and excluded from final matrix results. Reopened samples do
+not claim cold-disk behavior, and outliers/tied/filtered limits are retained.
 Native L2/cosine remain gated by separate numerical proofs; extension availability
-alone must not expand native metric claims. Qdrant follows this measurement increment.
+alone must not expand native metric claims. Qdrant follows after this increment merges.
 
 ## 3. Connector breadth: Qdrant — queued
 
