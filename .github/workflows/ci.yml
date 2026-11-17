@@ -69,6 +69,33 @@ jobs:
       - name: Vet probe
         run: go vet -tags=sqlitevecprobe ./internal/sqlitevecprobe ./stores/sqlitevec
 
+  qdrant-probe:
+    name: Qdrant 1.20.2 probe (Go ${{ matrix.go }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        go: ['1.25.x', stable]
+    services:
+      qdrant:
+        image: qdrant/qdrant:v1.20.2
+        ports:
+          - 6333:6333
+        env:
+          QDRANT__TELEMETRY_DISABLED: 'true'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go }}
+          cache: true
+      - name: Verify real Qdrant compatibility gates
+        env:
+          QDRANT_TEST_URL: http://localhost:6333
+        run: go test -count=1 -race -v -tags=qdrantprobe -timeout=3m ./internal/qdrantprobe
+      - name: Vet probe
+        run: go vet -tags=qdrantprobe ./internal/qdrantprobe
+
   integration-postgres:
     name: Postgres ${{ matrix.postgres }} (Go ${{ matrix.go }})
     runs-on: ubuntu-latest

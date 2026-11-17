@@ -24,6 +24,7 @@ indexes or hybrid support. Deterministic sample embeddings are instructional.
 
 - [Model API](https://raw.githubusercontent.com/gabisonia/go-vectorstore/master/docs/model-api.md): Tags, schemas, filters, embeddings, search, vectors, native values and iterators.
 - [Provider matrix](https://raw.githubusercontent.com/gabisonia/go-vectorstore/master/docs/parity.md): Backend capabilities and .NET workflow comparison.
+- [Qdrant design](https://raw.githubusercontent.com/gabisonia/go-vectorstore/master/docs/qdrant-design.md): Real-server compatibility probe and publication/snapshot gates; public connector pending.
 - [SQLite](https://raw.githubusercontent.com/gabisonia/go-vectorstore/master/docs/sqlite.md): Durability, concurrency and exact-scan costs.
 - [SQLite-vec](https://raw.githubusercontent.com/gabisonia/go-vectorstore/master/docs/sqlitevec.md): Optional exact scalar L1 candidates, numerical proof and fallback.
 - [Redis](https://raw.githubusercontent.com/gabisonia/go-vectorstore/master/docs/redis.md): Standalone atomic snapshot/hash/RedisJSON generations, optional HNSW/FLAT, scalar and string full-text indexes, exact fallback and size/write limits; master after v0.4.1.

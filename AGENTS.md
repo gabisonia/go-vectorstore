@@ -9,6 +9,7 @@ This file describes contributing to this repository.
 - `stores/memory`, `stores/sqlite`, `stores/postgres`, `stores/redis`: concrete providers.
 - `stores/sqlitevec`: optional extension adapter sharing SQLite's engine and format.
 - `internal/exactsearch`: shared bounded exact-search ranking for memory/SQLite.
+- `internal/qdrantprobe`: opt-in pinned real-server contract probe; no public provider.
 - `vectordata/conformance`: shared provider behavior and filter parity fixtures.
 - `samples`: runnable workflows; sample-only helpers live in `samples/internal`.
 - `samples/sqlite-workload`: opt-in sequential measurement harness; generated JSONL and fixture limits are documented in its README.
@@ -61,6 +62,17 @@ generation/validation outside API timers, require a final JSONL completion event
 and preserve owned-fixture cleanup on cancellation. Reopened handles do not imply
 cold OS caches. Record source revision/toolchain/hardware and avoid competing
 tests while measuring. See [samples/sqlite-workload](samples/sqlite-workload/README.md).
+
+The Qdrant design has an isolated real-server probe. It starts/removes a pinned
+Qdrant 1.20.2 container unless `QDRANT_TEST_URL` supplies a disposable server;
+`QDRANT_TEST_API_KEY` is optional. It creates/removes only uniquely owned collections
+and aliases. Run `go test -count=1 -race -v -tags=qdrantprobe -timeout=3m ./internal/qdrantprobe`
+and `go vet -tags=qdrantprobe ./internal/qdrantprobe`. Default tests need no Qdrant.
+See [docs/qdrant-design.md](docs/qdrant-design.md). Preserve canonical envelopes,
+portable duplicate/batch/snapshot/filter/distance semantics and explicit unknown
+write outcomes. Native `insert_only`, scroll offsets and atomic alias lists do
+not by themselves provide those guarantees. Conditional manifest publication is
+still a design gate; do not advertise a production connector before proving it.
 
 PostgreSQL and sample recipe integration tests need Docker:
 

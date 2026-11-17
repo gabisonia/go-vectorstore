@@ -38,8 +38,10 @@ model writes expose the portable ErrInvalidRecord sentinel and native SQLSTATE
 or exception/return-value semantics.
 
 Implementation follows the [ordered parity plan](parity-plan.md). Provider
-annotations and SQLite vector projections have merged; opt-in scalar L1 extension
-execution is the current increment, with broader measurements and Qdrant following.
+annotations, SQLite vector projections, opt-in scalar L1 execution and broader
+workload evidence have merged. The current increment is the
+[Qdrant compatibility probe/design](qdrant-design.md); a public connector remains
+gated on its publication/snapshot protocol and shared conformance.
 Embedding output types, typed property references and
 native service access are tracked separately.
 
