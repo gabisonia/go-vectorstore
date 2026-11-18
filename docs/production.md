@@ -4,7 +4,9 @@ The providers support different workloads. PostgreSQL provides server storage an
 ANN/full-text/hybrid capabilities; SQLite provides durable local exact scans;
 memory is transient. Redis offers bounded snapshots or opt-in native vector,
 scalar and TEXT indexes, rebuilding a complete generation on writes; see
-[Redis limits](redis.md). Use [capabilities](parity.md) and deployment-specific tests to
+[Redis limits](redis.md). Qdrant's [standalone foundation](qdrant.md) provides
+bounded canonical snapshots and exact Go search, with finite retained receipts
+and no native indexes or distributed support. Use [capabilities](parity.md) and deployment-specific tests to
 choose. The verification below establishes specific failure/compatibility
 behavior, not a universal latency, recall or durability guarantee.
 

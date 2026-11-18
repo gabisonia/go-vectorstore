@@ -89,6 +89,7 @@ part of CI. Replace panic with returned/handled errors in application code.
 | Persistent embedded data | [sqlite-store](../samples/sqlite-store/main.go), [SQLite example](../stores/sqlite/example_test.go) | sqlite.Open, GetTypedModelCollection, Get |
 | Redis collection snapshots | [redis-store](../samples/redis-store/README.md) | redis.New, exact dense search in Go; whole-collection transfers; master after v0.4.1 |
 | Automatic embeddings and filtered retrieval | [typed-search](../samples/typed-search/main.go), [model and adapters](../samples/internal/demo/demo.go) | source tag, Embedder, SearchText, Column |
+| Bounded standalone Qdrant models | [Qdrant sample](../samples/qdrant-store/README.md) | Exact Go search; finite snapshot/receipt limits |
 | Local agent with model-selected tools | [Aspire demo](../samples/local-doc-agent/README.md) | Agent Framework function tools, SQLite, Ollama |
 | Custom/multimodal embedding inputs | [input-embeddings](../samples/input-embeddings/main.go) | InputEmbeddingFunc, vector,input tag, SearchInput; master after v0.4.1 |
 | Retrieve sources for generation | [typed-rag](../samples/typed-rag/main.go) | SearchText, TypedModelSearchResult.Item |

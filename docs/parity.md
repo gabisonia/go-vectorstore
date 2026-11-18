@@ -23,7 +23,7 @@ It is a workflow comparison, not a claim of API or feature equivalence with ever
 | Store/collection metadata | Optional metadata interfaces and helpers report system, database, namespace and collection identity; typed wrappers forward discovery | All providers; local configuration snapshots |
 | Error diagnostics | OperationError preserves error chains and embeds configured store identity for structured diagnostics | PostgreSQL/SQLite/Redis model wrappers and PostgreSQL migrations; wrapping is optional |
 | Schema evolution | Read-only plans, drift detection, explicit reviewed additive application | PostgreSQL |
-| Durable provider portability | PostgreSQL, embedded SQLite and Redis snapshots | Implemented; Redis durability depends on server policy; memory is transient |
+| Durable provider portability | PostgreSQL, embedded SQLite, Redis and bounded Qdrant snapshots | Implemented with provider-specific durability/lifetime limits; memory is transient |
 
 The 2026-11-17 API audit checked the current Microsoft single-record
 [upsert/delete/get workflows](https://learn.microsoft.com/en-us/dotnet/ai/vector-stores/manage-data).
@@ -40,27 +40,29 @@ or exception/return-value semantics.
 Implementation follows the [ordered parity plan](parity-plan.md). Provider
 annotations, SQLite vector projections, opt-in scalar L1 execution and broader
 workload evidence have merged. The Qdrant compatibility probe/design has merged;
-the current increment is the bounded [publication protocol proof](qdrant-publication-proof.md).
-A public connector remains gated on provider integration, practical limits,
-reopen/restart checks and shared conformance.
+the bounded [publication protocol proof](qdrant-publication-proof.md) also merged.
+The [Qdrant provider foundation](qdrant.md) implements bounded standalone canonical
+snapshots with exact dense ranking, portable CRUD/filters/embeddings, metadata,
+shared conformance and process-restart checks. Native execution and distributed
+support remain separate gates.
 Embedding output types, typed property references and
 native service access are tracked separately.
 
 ## Provider matrix
 
-| Capability | PostgreSQL | SQLite | Memory | Redis |
-| --- | --- | --- | --- | --- |
-| Persistence | Server tables | Local database file | Process lifetime | Server persistence policy |
-| Model keys, all portable data types | Yes | Yes | Yes | Yes, canonical JSON |
-| Dense/float16 and optional vectors | Yes | Yes | Yes | Yes |
-| Binary/sparse vectors | Yes | Yes | Yes | No |
-| Exact search | Yes | Yes, canonical/optional packed scan | Yes, snapshot scan | Yes, Go snapshot scan |
-| Physical vector indexes | HNSW/IVFFlat, supported tuples | No | No | Opt-in HNSW/FLAT, 16 dense tuples |
-| Native data indexes | B-tree/GIN by property type | Opt-in scalar B-tree | No | Opt-in HASH/JSON scalar TAG / split-integer NUMERIC |
-| Full-text indexing | Yes | No | No | Opt-in HASH/JSON TEXT for strings |
-| Hybrid search | Yes | No | No | Native dense/string/list keywords, HASH/JSON |
-| Migration planning/application | Yes, additive subset | No | No | No |
-| Original Record API | Yes | No | No | No |
+| Capability | PostgreSQL | SQLite | Memory | Redis | Qdrant foundation |
+| --- | --- | --- | --- | --- | --- |
+| Persistence | Server tables | Local database file | Process lifetime | Server persistence policy | Standalone bounded snapshots |
+| Model keys, all portable data types | Yes | Yes | Yes | Yes, canonical JSON | Yes, canonical JSON |
+| Dense/float16 and optional vectors | Yes | Yes | Yes | Yes | Yes |
+| Binary/sparse vectors | Yes | Yes | Yes | No | No |
+| Exact search | Yes | Yes, canonical/optional packed scan | Yes, snapshot scan | Yes, Go snapshot scan | Yes, Go snapshot scan |
+| Physical vector indexes | HNSW/IVFFlat, supported tuples | No | No | Opt-in HNSW/FLAT, 16 dense tuples | No |
+| Native data indexes | B-tree/GIN by property type | Opt-in scalar B-tree | No | Opt-in HASH/JSON scalar TAG / split-integer NUMERIC | No |
+| Full-text indexing | Yes | No | No | Opt-in HASH/JSON TEXT for strings | No |
+| Hybrid search | Yes | No | No | Native dense/string/list keywords, HASH/JSON | No |
+| Migration planning/application | Yes, additive subset | No | No | No | No |
+| Original Record API | Yes | No | No | No | No |
 
 Use Capabilities on the concrete store and optional interface assertions at
 runtime; do not infer ANN/index support from accepted schema hints. PostgreSQL

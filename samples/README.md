@@ -10,6 +10,7 @@ model sample; then select SQLite or PostgreSQL when persistence is needed.
 | Custom inputs, image/audio bytes and direct string vector fields | [input-embeddings](input-embeddings/README.md) | None; deterministic fixture |
 | Durable records, optional vectors, array filters | [sqlite-store](sqlite-store/README.md) | Writable SQLite file |
 | Redis model snapshots and dense exact search | [redis-store](redis-store/README.md) | Standalone Redis; available on master after v0.4.1 |
+| Bounded Qdrant snapshots and exact search | [qdrant-store](qdrant-store/README.md) | Standalone Qdrant 1.20.2; default Aspire services |
 | Typed filtered text retrieval | [typed-search](typed-search/README.md) | None in fixture mode; optional OpenAI |
 | Typed retrieval and cited context for generation | [typed-rag](typed-rag/README.md) | None in fixture mode; optional OpenAI |
 | Named vectors, scalar/key filters, squared distance, iterators, metadata, capabilities, hybrid, migration preview | [recipes](recipes/README.md) | None for portable recipes; PostgreSQL for hybrid/migration |

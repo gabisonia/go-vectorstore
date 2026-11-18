@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Add a bounded standalone Qdrant 1.20.2 model provider with canonical snapshots,
+  typed/dynamic CRUD, exact dense ranking, filters, embeddings and metadata.
+  Preserve unknown-write receipts, generated sequences and logical epochs; fail
+  closed on configurable record/byte/receipt bounds. Add real shared conformance,
+  delayed-request and process-restart checks, a rerunnable typed sample and Aspire
+  service. Native indexes, distributed topologies and online reclamation remain
+  unsupported.
+
 - Move all sample service orchestration to isolated Aspire 17 Go AppHosts,
   including PostgreSQL, Redis JSON/Search, OpenAI examples and the local Ollama
   agent. Add a browser vector/hybrid search playground with OTLP telemetry,
