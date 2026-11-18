@@ -31,6 +31,7 @@ func RunEmbeddingConfiguration(t *testing.T, factory func(*testing.T, vectordata
 	probe := factory(t, vectordata.ModelCollectionOptions{})
 	if caps, ok := probe.(vectordata.CapabilityProvider); ok && caps.Capabilities().InputEmbedding {
 		t.Run("input_embeddings", func(t *testing.T) { runInputEmbeddings(t, factory) })
+		t.Run("output_representations", func(t *testing.T) { runOutputEmbeddings(t, factory) })
 	}
 	for _, tt := range []struct {
 		name                                 string

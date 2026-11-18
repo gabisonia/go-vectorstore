@@ -15,7 +15,7 @@ It is a workflow comparison, not a claim of API or feature equivalence with ever
 | Vector selection and retrieval | Multiple named properties, optional projection, nullable vectors | Implemented |
 | Dense, half, binary, sparse search | Search/SearchBinary/SearchSparse; explicit metric, thresholds and paging | Implemented; index support varies |
 | Squared Euclidean distance | DistanceL2Squared (`l2_squared`), squared-distance thresholds and reciprocal similarity scores | Dense float32/float16 on all providers; sparse on memory/SQLite/PostgreSQL |
-| Automatic embeddings | Text/custom-input embedders, direct input fields, store/collection/property overrides, bounded batches, SearchText/SearchInput | Implemented for dense outputs |
+| Automatic embeddings | Text/custom-input embedders, typed float32/float16-output adapter, direct input fields, overrides, bounded batches, SearchText/SearchInput | Implemented for dense outputs |
 | Filtered retrieval/search | Portable AST, JSON paths, native arrays, Contains/ContainsAny/ContainsAll | Implemented |
 | Read iteration and cancellation | Listing, batch reads, text/custom-input and every supported hybrid variant use iter.Seq2/context.Context | Implemented; PostgreSQL cursor enumeration, memory/SQLite/Redis snapshots/pages; compatibility fallbacks buffer slices |
 | Hybrid keyword/vector search | Optional HybridSearcher and binary/sparse variants, RRF; string queries or plain-text KeywordTerms lists | PostgreSQL and native Redis dense hybrid with string/list keywords; inspect HybridKeywordTerms capability |
@@ -45,8 +45,9 @@ The [Qdrant provider foundation](qdrant.md) implements bounded standalone canoni
 snapshots with exact dense ranking, portable CRUD/filters/embeddings, metadata,
 shared conformance and process-restart checks. Native execution and distributed
 support remain separate gates.
-Embedding output types, typed property references and
-native service access are tracked separately.
+The [typed output adapter](embedding-outputs.md) adds float32/float16 generator
+representations while retaining the existing dense boundary. Typed property
+references and native service access are tracked separately.
 
 ## Provider matrix
 
@@ -119,7 +120,8 @@ Go uses interfaces, generics, tags, explicit filter nodes, iterators and context
 in place of .NET abstract classes, attributes, expression trees, async enumerables
 and cancellation tokens. Native key/data support is a defined portable subset.
 Embedding input supports text, media bytes and custom values through application
-adapters; output is dense []float32. Provider-side generation and automatic
+adapters; typed float32 or IEEE float16 generator outputs adapt to canonical
+dense []float32. Stored precision remains separate. Provider-side generation and automatic
 binary/sparse embedding outputs remain outside the current contract.
 Runtime service discovery comparable to
 [VectorStore.GetService](https://learn.microsoft.com/en-us/dotnet/api/microsoft.extensions.vectordata.vectorstore)

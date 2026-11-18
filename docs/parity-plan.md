@@ -83,7 +83,7 @@ jobs passed. Its existing-index cleanup fix, full raw evidence and reproducible
 summaries are on master. Controlled cold I/O, concurrency measurements and other
 native metrics remain future optimizations rather than prerequisites for Qdrant.
 
-## 3. Connector breadth: Qdrant — compatibility/publication proofs merged; bounded foundation implemented
+## 3. Connector breadth: Qdrant — bounded foundation merged
 
 Add one connector at a time, starting with Qdrant. Begin with collection lifecycle,
 typed/dynamic CRUD, dense vectors, filtering, metadata and shared conformance on a
@@ -120,7 +120,12 @@ typed sample uses the shared Aspire services. Native candidate acceleration,
 online reclamation, distributed topologies and sparse/hybrid remain later increments;
 the foundation is explicitly unsuitable for indefinite unbounded writes.
 
-## 4. Embedding output flexibility — queued
+[PR #63](https://github.com/gabisonia/go-vectorstore/pull/63) merged the foundation
+after all 21 CI checks passed, including minimum/current-Go shared conformance,
+owned-server restart cases and both Aspire sample jobs. Master includes its
+provider, immutable capacity/receipt limits, usage/outcome diagnostics and sample.
+
+## 4. Embedding output flexibility — typed adapter and first representation implemented
 
 Design an additive contract alongside the existing float32 embedders, informed by
 Microsoft's EmbeddingType. Separate input conversion, output representation and
@@ -128,6 +133,17 @@ storage precision. Specify conversions and provider support before implementing
 the first additional representation; preserve existing explicit binary/sparse
 search and float32/float16 behavior. Avoid claiming every .NET connector supports
 every output type.
+
+The [output contract](embedding-outputs.md) separates typed inputs, generated
+representation and stored precision. `OutputEmbedder`/`OutputEmbeddingFunc` and
+`AdaptOutputEmbedder` add typed float32 and explicit IEEE `Float16Bits` outputs
+through the existing `InputEmbedder` boundary. Finite half values widen exactly;
+existing property normalization applies storage precision independently. Runtime
+adapters add no persisted fields or provider interface changes. Exhaustive bit
+conversion checks, shared provider conformance, later-batch atomicity, buffer and
+context checks, byte-identical SQLite reopen and a credential-free sample cover
+the increment. Float64, quantized integer, automatic binary/sparse outputs remain
+separate future conversion decisions.
 
 ## 5. Typed filter/order references — queued
 
