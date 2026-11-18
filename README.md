@@ -28,7 +28,8 @@ require it. Use current stable Go for up-to-date standard-library security fixes
 - PostgreSQL provider: PostgreSQL 16+ with `pgvector` extension
 - SQLite provider: a writable database file; no database server or C toolchain required
 - Redis provider: standalone snapshots with Go exact search; opt-in HNSW/FLAT, scalar and string full-text indexes ([limits](docs/redis.md))
-- Docker (optional, for integration tests and sample compose flows)
+- Docker (optional, for integration tests and Aspire sample services)
+- Aspire CLI 17.0.0 and Go 1.26+ for sample orchestration
 
 ## Project layout
 
@@ -78,7 +79,8 @@ For the PostgreSQL semantic-search example:
 1. Start local Postgres + `pgvector` from the repository root:
 
 ```bash
-docker compose up -d postgres
+aspire start --apphost samples/aspire-services/apphost.go
+aspire wait postgres --apphost samples/aspire-services/apphost.go
 ```
 
 2. Export your OpenAI key and run the semantic sample:
@@ -91,7 +93,7 @@ go run ./samples/semantic-search -q "how can I reduce cloud costs?"
 3. Stop local services when done:
 
 ```bash
-docker compose down
+aspire stop --apphost samples/aspire-services/apphost.go --force
 ```
 
 ## Model-driven API
@@ -345,14 +347,19 @@ Notes:
 - Optional override: set `PGVECTOR_TEST_DSN` to use an existing Postgres instance instead of starting a container
 - Set `PGVECTOR_TEST_IMAGE=pgvector/pgvector:pg18` to test a different PostgreSQL image (the default is `pgvector/pgvector:pg16`)
 
-## Docker Compose (optional)
+## Aspire local development (optional)
 
-`docker-compose.yml` at the repository root is kept for manual local runs.
+The [shared Go AppHost](samples/aspire-services/README.md) manages persistent local
+PostgreSQL and Redis services, the semantic-search/RAG examples, and the local
+documentation agent. Aspire owns readiness, dependency ordering, logs and terminals.
 
-- Use root `docker-compose.yml` when you want a persistent local Postgres+pgvector instance outside tests
-- Use Testcontainers (`go test -tags=integration ./...`) for integration tests
-- Sample apps have their own compose files at `samples/semantic-search/docker-compose.yml` and `samples/ragrimosa/docker-compose.yml`
-- Sample Dockerfiles build with `golang:1.27-alpine`; the library minimum is Go 1.25
+Use Aspire CLI 17.0.0, Go 1.26+ and Docker. The root library remains Go 1.25+;
+AppHosts and their generated SDKs live in isolated modules. Ordinary AppHost stops
+retain persistent services; `--force` removes those containers while preserving
+data volumes. Integration tests still use Testcontainers for disposable databases.
+
+For a browser-based vector/hybrid search demo with traces, logs and metrics, run
+the separate [Aspire vector-search sample](samples/aspire-vector-search/README.md).
 
 ## Release Automation
 
@@ -385,7 +392,7 @@ git push origin "v${RELEASE_VERSION}"
 ## Samples
 
 - Overview and entry points: [`samples/README.md`](samples/README.md)
-- Local agent with Ollama and SQLite: [`local-doc-agent`](samples/local-doc-agent/README.md) (Docker Compose, separate module)
+- Local agent with Ollama and SQLite: [`local-doc-agent`](samples/local-doc-agent/README.md) (Aspire, separate module)
 - Redis model snapshots and exact retrieval: [`redis-store`](samples/redis-store/README.md)
 - Typed semantic search and RAG: [`typed-search`](samples/typed-search/README.md), [`typed-rag`](samples/typed-rag/README.md)
 - Focused model workflows: [`recipes`](samples/recipes/README.md)

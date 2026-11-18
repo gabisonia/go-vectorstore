@@ -22,7 +22,8 @@ Use a persistent SQLite file or PostgreSQL:
 
 ```sh
 go run ./samples/typed-search -sqlite /tmp/typed-search.db
-docker compose up -d postgres
+aspire start --apphost samples/aspire-services/apphost.go
+aspire wait postgres --apphost samples/aspire-services/apphost.go
 go run ./samples/typed-search -dsn 'postgres://postgres:postgres@localhost:54329/vectorstore_test?sslmode=disable'
 ```
 
@@ -49,8 +50,9 @@ separate collection for each embedding model/mode/dimension: matching dimensions
 do not make different embedding models compatible. The sample does not detect a
 change of embedding model identity. To clean up, remove the closed sample SQLite
 file (including any WAL/SHM sidecars), or explicitly delete just the dedicated
-PostgreSQL collection through `DeleteCollection`; `docker compose down` stops the
-local service without deleting its volume.
+PostgreSQL collection through `DeleteCollection`. Stop the local services with
+`aspire stop --apphost samples/aspire-services/apphost.go --force`; data volumes
+remain. See [shared services](../aspire-services/README.md) for prerequisites.
 
 [Tests](main_test.go) run memory and SQLite workflows, filtering, reruns and
 cancellation without credentials. The adapter and RAG HTTP path are tested with

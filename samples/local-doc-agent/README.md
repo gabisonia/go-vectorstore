@@ -5,12 +5,11 @@ Microsoft Agent Framework Go v0.2.0, go-vectorstore v0.4.1, SQLite, and Ollama.
 There is no cloud account or paid API key in the default configuration.
 
 This is an isolated Go 1.26+ module. The main library keeps its own dependencies
-and Go minimum. The sample is available in this repository checkout; run commands
-from this directory.
+and Go minimum. Run the Aspire commands below from the repository root.
 
-## Run with Docker Compose
+## Run with Aspire
 
-Docker with Compose v2 is the only requirement. The default models are
+Aspire CLI 17.0.0, Go 1.26+, and Docker are required. The default models are
 [Qwen3 4B Instruct](https://ollama.com/library/qwen3:4b-instruct) (approximately
 2.5 GB of weights) and [all-MiniLM 22M](https://ollama.com/library/all-minilm)
 (approximately 46 MB). Allow several GB of disk and enough available RAM for the
@@ -21,25 +20,37 @@ responses can take minutes; the default deadline per turn is five minutes.
 From the repository root:
 
 ```sh
-cd samples/local-doc-agent
-docker compose run --build --rm agent
+VECTORSTORE_SAMPLE=local-doc-agent \
+  aspire run --apphost samples/aspire-services/apphost.go
 ```
 
-Compose starts Ollama, waits for health, downloads missing models into a persistent
-volume, builds the Go application, indexes the bundled documents, and asks:
+Aspire starts Ollama, waits for health, initializes missing models in a persistent
+volume, builds/runs the agent Dockerfile after successful setup, indexes the
+bundled documents, and asks:
 
 > Can SQLite do hybrid search? What should I use instead? Cite the documentation.
 
-The terminal shows actual tool invocations, then the model's answer and checked
+The agent's **Console logs** show actual tool invocations, then the model's answer and checked
 source IDs. Expected factual content: SQLite lacks hybrid search and PostgreSQL
 with pgvector provides it. Wording/tool order vary; the application rejects an
 answer that does not inspect a section or includes unverified citation IDs.
 
-Ask another question or start a conversation:
+Stop the shared AppHost before changing mode/arguments. Ask another question:
 
 ```sh
-docker compose run --rm -T agent ask 'How should I back up SQLite safely?'
-docker compose run --rm agent chat
+aspire stop --apphost samples/aspire-services/apphost.go
+VECTORSTORE_SAMPLE=local-doc-agent QUERY='How should I back up SQLite safely?' \
+  aspire run --apphost samples/aspire-services/apphost.go
+```
+
+For interactive conversation, start chat and attach its Aspire terminal:
+
+```sh
+aspire stop --apphost samples/aspire-services/apphost.go
+VECTORSTORE_SAMPLE=local-doc-agent AGENT_COMMAND=chat \
+  aspire run --apphost samples/aspire-services/apphost.go
+# In another terminal (or use the dashboard's Terminals view):
+aspire terminal attach agent --apphost samples/aspire-services/apphost.go
 ```
 
 Try follow-ups such as “What are its limits?” or “How does PostgreSQL differ?”
@@ -48,9 +59,11 @@ it is not saved across CLI restarts. Type `reset` to start a fresh conversation
 when changing topics or nearing the small model's context budget. The document
 index does persist.
 
-`docker compose up --build` also runs the default one-shot question. The agent
-container exits after answering, while Ollama remains available. Prefer the
-`compose run` commands for interactive use. After the first setup, existing model
+The one-shot agent container exits after answering, while persistent Ollama remains
+available. `WithTerminal()` enables chat input in the dashboard/CLI; `Ctrl+B D`
+detaches without ending the conversation. A newly attached container terminal may
+not replay the initial prompt; type a question and press Enter to begin. Answers
+also appear in the resource's Console logs. After the first setup, existing model
 weights are reused without pulling their manifests again; inference is local.
 Initial image/model downloads require internet access.
 
@@ -86,7 +99,9 @@ into sections and small chunks, upserts new/changed records, and removes stale
 records. Unchanged documents are not embedded again. `ingest` updates just the index:
 
 ```sh
-docker compose run --rm -T agent ingest
+# Stop a previously running shared AppHost first.
+VECTORSTORE_SAMPLE=local-doc-agent AGENT_COMMAND=ingest \
+  aspire run --apphost samples/aspire-services/apphost.go
 ```
 
 This parser handles ordinary Markdown headings/fenced code, not every Markdown
@@ -112,21 +127,23 @@ registry. Use a fresh index when changing embedding weights/configuration.
 | `MODEL_THREADS` | `4` | CPU threads for the local chat-model alias |
 | `EMBED_MODEL` | `all-minilm:22m` | Local embedding model |
 | `EMBED_DIMENSIONS` | `384` | Must match embedding model output |
-| `DEMO_SUBNET` | `10.254.249.0/24` | Dedicated Compose subnet; override if it overlaps your VPN/Docker networks |
-| `OLLAMA_URL` | `http://ollama:11434` in Compose | Local inference endpoint |
-| `DOCS_DIR` | `/docs` in Compose | Mounted Markdown corpus |
-| `DATABASE_PATH` | `/data/documents.db` in Compose | Persistent SQLite file |
+| `AGENT_COMMAND` | `ask` | Aspire resource command: ask, ingest or chat |
+| `QUERY` | Bundled SQLite/hybrid question | One-shot ask argument |
+| `OLLAMA_URL` | Injected Aspire endpoint | Local inference endpoint; direct native runs can override it |
+| `DOCS_DIR` | `/docs` in the agent container | Mounted Markdown corpus |
+| `DATABASE_PATH` | `/data/documents.db` in the agent container | Persistent SQLite file |
 | `REQUEST_TIMEOUT` | `5m` | Deadline for indexing and each question |
 
-Compose creates the local `doc-agent-chat` alias from CHAT_MODEL with a bounded
+The Aspire model-setup resource creates the local `doc-agent-chat` alias from CHAT_MODEL with a bounded
 context/token budget and MODEL_THREADS (default four). The alias shares its source
 model weights. Lower thread counts can improve CPU performance on oversubscribed
 laptops.
 
-Model/subnet overrides can be supplied as Compose environment variables:
+Model overrides are passed to the AppHost as environment variables:
 
 ```sh
-CHAT_MODEL=qwen3:1.7b docker compose run --build --rm agent
+VECTORSTORE_SAMPLE=local-doc-agent CHAT_MODEL=qwen3:1.7b \
+  aspire run --apphost samples/aspire-services/apphost.go
 ```
 
 The smaller alternative uses less memory but tool use/citations may be less
@@ -138,17 +155,18 @@ Docker-on-macOS uses CPU here. See [Ollama Docker guidance](https://docs.ollama.
 Stop the sample while retaining downloads/index, or explicitly reset its volumes:
 
 ```sh
-docker compose down
-# Deletes this Compose project's model downloads AND indexed documents:
-docker compose down -v
+aspire stop --apphost samples/aspire-services/apphost.go
+# Also stop/remove this AppHost's persistent resources, retaining volumes:
+aspire stop --apphost samples/aspire-services/apphost.go --force
+# Explicitly deletes its model downloads AND indexed documents:
+aspire stop --apphost samples/aspire-services/apphost.go --force --volumes
 ```
 
 ## Verification
 
 ```sh
-go test -race -timeout=2m ./...
-go vet ./...
-bash smoke.sh
+(cd samples/local-doc-agent && go test -race -timeout=2m ./... && go vet ./...)
+bash samples/local-doc-agent/smoke.sh
 ```
 
 Go checks need Go 1.26+ but no models, network service, or API key. Tests run the
@@ -156,8 +174,11 @@ real Agent Framework tool loop against a local HTTP stand-in and real temporary
 SQLite storage, including reopens, document updates/removals, model identity,
 source-ID validation, embedding failures and cancellation.
 
-`smoke.sh` uses the real Compose services/models and can download several GB on
+`smoke.sh` uses the real Aspire resources/models and can download several GB on
 its first run. It checks actual search/read tool calls, cited output, persistent
 index reuse and a follow-up conversation. It leaves the cached models/index
-available for further exploration. This sample uses a preview framework with
+available for further exploration. It refuses to replace an already-running
+shared AppHost, starts/stops only its own test run, and uses Aspire terminal tape
+playback for a real two-turn conversation. Existing `vector-doc-agent_models`
+and `vector-doc-agent_index` volumes are reused by name. This sample uses a preview framework with
 pinned versions; it is a local learning project, not a production service.

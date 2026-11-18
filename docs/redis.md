@@ -610,7 +610,7 @@ FT.SEARCH and FT.DROPINDEX; explicit index pruning needs FT._LIST. The provider 
 not change global Search configuration.
 
 Durability, replication and failover depend on Redis configuration. The local
-Compose service enables AOF with `appendfsync everysec`, a persistent volume and
+Aspire Redis resource enables AOF with `appendfsync everysec`, a persistent volume and
 `noeviction`; it can still lose recent acknowledged writes on a crash. Configure
 and verify backups/durability for the deployment. This provider does not configure
 server persistence or provide failover acknowledgments. See Redis

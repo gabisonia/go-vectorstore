@@ -13,39 +13,43 @@ When you ask a question, the app:
 2. Sends only retrieved context to OpenAI chat completion
 3. Prints the grounded answer
 
-## Run With Docker Compose (app in container)
+## Run with Aspire
 
 ```bash
-cd samples/ragrimosa
-cp .env.example .env
-# edit .env and set OPENAI_API_KEY
+# From the repository root; requires Aspire 17, Go 1.26+ and Docker.
+export OPENAI_API_KEY=your_key_here
+VECTORSTORE_SAMPLE=ragrimosa QUERY='What happened to Rex in his final period?' TOP_K=4 \
+  aspire run --apphost samples/aspire-services/apphost.go
+```
 
-docker compose up -d postgres
-docker compose --profile app run --rm app
-# or override question
-docker compose --profile app run --rm app -q "What happened to Rex in his final period?" -topk 4
+After pgvector is healthy, deliberately start **ragrimosa** in the dashboard or
+from another terminal. Explicit start prevents cloud calls merely from launching
+the AppHost:
+
+```sh
+aspire resource ragrimosa start --apphost samples/aspire-services/apphost.go
+aspire logs ragrimosa --apphost samples/aspire-services/apphost.go
 ```
 
 Shutdown:
 
 ```bash
-docker compose down
+aspire stop --apphost samples/aspire-services/apphost.go
 ```
 
 ## Run On Host (go run)
 
 ```bash
-cd samples/ragrimosa
 export OPENAI_API_KEY=your_key_here
-
-docker compose up -d postgres
-go run . -q "How did Lacrimosa and Rex build trust?" -topk 4
+aspire start --apphost samples/aspire-services/apphost.go
+aspire wait postgres --apphost samples/aspire-services/apphost.go
+go run ./samples/ragrimosa -q "How did Lacrimosa and Rex build trust?" -topk 4
 ```
 
 When running on host, default `PG_DSN` is:
 
 ```text
-postgres://postgres:postgres@localhost:54330/vectorstore_test?sslmode=disable
+postgres://postgres:postgres@localhost:54329/vectorstore_test?sslmode=disable
 ```
 
 ## CLI flags
@@ -60,7 +64,14 @@ postgres://postgres:postgres@localhost:54330/vectorstore_test?sslmode=disable
 - `OPENAI_EMBEDDING_MODEL` (optional, default `text-embedding-3-small`)
 - `OPENAI_CHAT_MODEL` (optional, default `gpt-4o-mini`)
 - `OPENAI_BASE_URL` (optional, default `https://api.openai.com/v1`)
-- `PG_DSN` (optional; defaults to local compose Postgres on port `54330`)
+- `PG_DSN` (optional explicit DSN; otherwise pgx reads Aspire's PG variables, or defaults to the local development database on `54329`)
+- `QUERY` / `TOP_K` configure the managed Aspire resource's CLI arguments
+
+Stop the shared AppHost before switching its mode or changing managed arguments.
+See [shared Aspire workflows](../aspire-services/README.md) for credentials,
+persistence, resource inspection and cleanup. Native execution remains Go 1.25+;
+Go AppHost orchestration needs Go 1.26+. OpenAI requests require explicit
+credentials and can incur charges.
 
 ## What it does
 

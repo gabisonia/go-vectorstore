@@ -4,7 +4,8 @@ Run from the repository root with Go 1.25+ and a standalone Redis server. This
 sample is on master after v0.4.1 and needs no model download or cloud API key.
 
 ```sh
-docker compose up -d redis
+aspire start --apphost samples/aspire-services/apphost.go
+aspire wait redis --apphost samples/aspire-services/apphost.go
 go run ./samples/redis-store -addr localhost:63799
 go run ./samples/redis-store -addr localhost:63799
 ```
@@ -165,7 +166,9 @@ the complete generation. These examples make no hybrid throughput claim.
 
 Records remain in Redis. To clean up only this fixture, call
 `store.DeleteCollection(ctx, "documents")` using its configured namespace/database.
-`docker compose stop redis` stops the local server; its volume retains data.
+`aspire resource redis stop --apphost samples/aspire-services/apphost.go` stops the
+local server; its volume retains data. See [shared services](../aspire-services/README.md)
+for prerequisites and stopping all development services.
 Hash deletion cleans up best-effort. Use `store.PruneHashStorage(ctx, "documents")`
 to reclaim obsolete non-expiring hashes if cleanup was interrupted; active staging
 is protected and expires within one hour.

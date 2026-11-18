@@ -120,7 +120,7 @@ Adapt the second command to the provider and its integration requirements.
 Update the root README, docs index, architecture/store design, provider matrix,
 model capabilities, runnable samples and performance/verification commands.
 Add dependencies to go.mod/go.sum and the required checks to CI. Add Docker
-Compose or Make targets only if the new provider needs them.
+Aspire resources or Make targets only if the new provider needs them.
 
 ## 9) Contract checks
 

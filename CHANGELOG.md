@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Move all sample service orchestration to isolated Aspire 17 Go AppHosts,
+  including PostgreSQL, Redis JSON/Search, OpenAI examples and the local Ollama
+  agent. Add a browser vector/hybrid search playground with OTLP telemetry,
+  persistent notes and credential-free fixture embeddings. Update local runbooks,
+  agent terminal smoke checks and CI validation; keep Testcontainers integration
+  tests and the root library's Go 1.25 minimum.
+
 - Add a test-only Qdrant immutable-generation publication proof with guarded
   manifests, retained receipts and read-only recovery, logical epoch fencing,
   validated snapshot reads and finite staging/history limits. Verify concurrency,
@@ -150,7 +157,7 @@
   retry only explicit CAS conflicts; add Docker conformance/CI and a persistent
   sample. Default storage creates no property/vector/full-text indexes.
 - Add an isolated local documentation-agent sample using Microsoft Agent Framework
-  Go, go-vectorstore v0.4.1, SQLite and Ollama. Compose initializes local models;
+  Go, go-vectorstore v0.4.1, SQLite and Ollama. Aspire initializes local models;
   typed search/read tools and source-ID checks demonstrate agent-driven retrieval
   without cloud credentials. Add dedicated module CI and live smoke commands.
 - Push supported SQLite scalar filtering, ordering and paging into SQL, decoding
