@@ -8,6 +8,7 @@ model sample; then select SQLite or PostgreSQL when persistence is needed.
 | Typed CRUD, generated keys, automatic embeddings | [model-store](model-store/README.md) | None; optional SQLite/PostgreSQL |
 | Exact uint64 keys and generated UUIDs | [native-keys](native-keys/README.md) | None |
 | Custom inputs, image/audio bytes and direct string vector fields | [input-embeddings](input-embeddings/README.md) | None; deterministic fixture |
+| Typed float16 generator outputs with unchanged dense model storage | [output-embeddings](output-embeddings/README.md) | None; deterministic fixture |
 | Durable records, optional vectors, array filters | [sqlite-store](sqlite-store/README.md) | Writable SQLite file |
 | Redis model snapshots and dense exact search | [redis-store](redis-store/README.md) | Standalone Redis; available on master after v0.4.1 |
 | Bounded Qdrant snapshots and exact search | [qdrant-store](qdrant-store/README.md) | Standalone Qdrant 1.20.2; default Aspire services |

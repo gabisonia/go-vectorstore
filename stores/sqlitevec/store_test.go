@@ -36,6 +36,17 @@ func TestModelContract(t *testing.T) {
 	})
 }
 
+func TestEmbeddingConfiguration(t *testing.T) {
+	conformance.RunEmbeddingConfiguration(t, func(t *testing.T, opts vectordata.ModelCollectionOptions) vectordata.ModelStore {
+		s, err := sqlitevec.Open(t.Context(), filepath.Join(t.TempDir(), "outputs.db"), sqlitevec.StoreOptions{InputEmbedder: opts.InputEmbedder, Embedder: opts.Embedder, EmbeddingBatchSize: opts.EmbeddingBatchSize})
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Cleanup(func() { s.Close() })
+		return s
+	})
+}
+
 // Raw scalar calls consume host-order blobs. Persisted provider projections use
 // little-endian storage; production native execution is gated to little-endian.
 func nativePacked(vector []float32) []byte {

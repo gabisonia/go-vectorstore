@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add typed embedding-output adapters for float32 and explicit IEEE binary16
+  bits. Widen finite half values exactly into the existing dense input boundary,
+  keeping storage precision, provider interfaces and registrations unchanged.
+  Check output counts, ownership, cancellation, all half bit patterns, provider
+  conformance, failed-batch atomicity and SQLite reopen; add a runnable fixture.
+
 - Add a bounded standalone Qdrant 1.20.2 model provider with canonical snapshots,
   typed/dynamic CRUD, exact dense ranking, filters, embeddings and metadata.
   Preserve unknown-write receipts, generated sequences and logical epochs; fail

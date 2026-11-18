@@ -865,6 +865,22 @@ input regardless of batch size.
 Callers must use compatible embedding models for ingestion and queries;
 embedders must honor cancellation and be safe for concurrent use.
 
+### Typed generated outputs
+
+`OutputEmbedder[TInput, TElement]` and `OutputEmbeddingFunc[TInput, TElement]`
+support float32 values (including named aliases) and explicit IEEE binary16
+`Float16Bits`. `AdaptOutputEmbedder` validates and converts them into the existing
+`InputEmbedder` boundary. Configure the result in one store, collection or
+vector-property `InputEmbedder` slot; the existing precedence and batching apply.
+
+Keep model vector fields as `[]float32`. Generator output representation is
+independent of `VectorProperty.Precision`: finite half bits widen exactly, while
+stored half precision still uses the existing normalization. Runtime adapters
+introduce no persisted definition fields or format changes. Unsupported numeric,
+binary and sparse output types are not inferred or silently converted. See the
+[output conversion contract](embedding-outputs.md), executable adapter example
+and [runnable fixture](../samples/output-embeddings/README.md).
+
 ### Custom and multimodal inputs
 
 `InputEmbedder.EmbedInputs(ctx, inputs []any) ([][]float32, error)` accepts text,

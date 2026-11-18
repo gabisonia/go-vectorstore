@@ -7,6 +7,7 @@ trap 'rm -rf "$sample_tmp"' EXIT
 
 go run ./samples/model-store
 go run ./samples/input-embeddings
+go run ./samples/output-embeddings
 go run ./samples/native-keys
 go run ./samples/model-store -sqlite "$sample_tmp/models.db"
 go run ./samples/sqlite-store -db "$sample_tmp/documents.db"
