@@ -17,6 +17,7 @@ It is a workflow comparison, not a claim of API or feature equivalence with ever
 | Squared Euclidean distance | DistanceL2Squared (`l2_squared`), squared-distance thresholds and reciprocal similarity scores | Dense float32/float16 on all providers; sparse on memory/SQLite/PostgreSQL |
 | Automatic embeddings | Text/custom-input embedders, typed float32/float16-output adapter, direct input fields, overrides, bounded batches, SearchText/SearchInput | Implemented for dense outputs |
 | Filtered retrieval/search | Portable AST, JSON paths, native arrays, Contains/ContainsAny/ContainsAll | Implemented |
+| Typed filter/order references | Optional vectordata-gen emits typed tagged-model operands over the same AST | Implemented; JSON paths and dynamic references remain runtime validated |
 | Read iteration and cancellation | Listing, batch reads, text/custom-input and every supported hybrid variant use iter.Seq2/context.Context | Implemented; PostgreSQL cursor enumeration, memory/SQLite/Redis snapshots/pages; compatibility fallbacks buffer slices |
 | Hybrid keyword/vector search | Optional HybridSearcher and binary/sparse variants, RRF; string queries or plain-text KeywordTerms lists | PostgreSQL and native Redis dense hybrid with string/list keywords; inspect HybridKeywordTerms capability |
 | Provider discovery | CapabilityProvider reports keys, types, vector kinds, physical index tuples and optional workflows | Implemented |
@@ -46,8 +47,10 @@ snapshots with exact dense ranking, portable CRUD/filters/embeddings, metadata,
 shared conformance and process-restart checks. Native execution and distributed
 support remain separate gates.
 The [typed output adapter](embedding-outputs.md) adds float32/float16 generator
-representations while retaining the existing dense boundary. Typed property
-references and native service access are tracked separately.
+representations while retaining the existing dense boundary. Optional
+[typed property references](typed-fields.md) add compile-checked model fields and
+operands over the portable AST. Native service access remains deferred pending a
+concrete consumer.
 
 ## Provider matrix
 

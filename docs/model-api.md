@@ -57,6 +57,10 @@ type parameters. Both struct values and pointers to structs are supported.
 Reflection mappings are resolved once when constructing a `StructCodec[T]`.
 Custom `ModelCodec[T]` implementations can provide their own mappings.
 
+For compile-checked filter operands and ordering on tagged structs, use the
+optional [typed property generator](typed-fields.md). It builds the same filter
+AST and sort values; dynamic `Column`/`DataPath` expressions remain available.
+
 ## Schema definitions and tags
 
 The equivalent explicit `CollectionDefinition` has one `KeyProperty`, a list of

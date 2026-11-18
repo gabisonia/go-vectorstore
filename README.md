@@ -398,6 +398,7 @@ git push origin "v${RELEASE_VERSION}"
 - Redis model snapshots and exact retrieval: [`redis-store`](samples/redis-store/README.md)
 - Typed semantic search and RAG: [`typed-search`](samples/typed-search/README.md), [`typed-rag`](samples/typed-rag/README.md)
 - Focused model workflows: [`recipes`](samples/recipes/README.md)
+- Generated typed filters and ordering: [`typed-fields`](samples/typed-fields/README.md)
 - Model-driven collections (no API key): [`samples/model-store`](samples/model-store/README.md)
 - Persistent SQLite and optional vectors (no API key): [`samples/sqlite-store`](samples/sqlite-store/README.md)
 - Optional SQLite scalar L1 execution: [`samples/sqlitevec-store`](samples/sqlitevec-store/README.md)

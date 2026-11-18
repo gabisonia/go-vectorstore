@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add optional vectordata-gen for typed filter/order references over the existing
+  AST. Generate from tagged model source without executing package initialization;
+  check field/operand errors at compilation and generated freshness in CI.
+  Preserve dynamic filters, model interfaces and stored formats. Add compiler
+  contract tests and rerunnable memory/SQLite/PostgreSQL examples.
+
 - Add typed embedding-output adapters for float32 and explicit IEEE binary16
   bits. Widen finite half values exactly into the existing dense input boundary,
   keeping storage precision, provider interfaces and registrations unchanged.

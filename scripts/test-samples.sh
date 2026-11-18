@@ -8,6 +8,13 @@ trap 'rm -rf "$sample_tmp"' EXIT
 go run ./samples/model-store
 go run ./samples/input-embeddings
 go run ./samples/output-embeddings
+(
+  cd samples/typed-fields
+  go run ../../cmd/vectordata-gen -type Article -check
+)
+go run ./samples/typed-fields
+go run ./samples/typed-fields -sqlite "$sample_tmp/fields.db"
+go run ./samples/typed-fields -sqlite "$sample_tmp/fields.db"
 go run ./samples/native-keys
 go run ./samples/model-store -sqlite "$sample_tmp/models.db"
 go run ./samples/sqlite-store -db "$sample_tmp/documents.db"
