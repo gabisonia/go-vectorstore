@@ -20,6 +20,11 @@ race detection. The tests assert observable server behavior, including differenc
 that an adapter must handle; passing them does not mean a provider is implemented
 or that distributed correctness, restart durability or performance is established.
 
+The follow-up [publication protocol proof](qdrant-publication-proof.md) exercises
+immutable generations, retained receipts, epoch fencing, uncertain outcomes and
+reader retention with explicit standalone topology and finite resource bounds.
+Its code is test-only; it does not expose a provider or online reclamation.
+
 CI repeats them on Linux with minimum/current Go. Normal `go test ./...` does not
 start Docker or connect to Qdrant. The probe uses the existing Testcontainers
 dependency and standard-library HTTP/JSON; it adds no SDK dependency. Revisit the
@@ -71,8 +76,9 @@ can combine states. A process-local mutex would not protect another client.
 Atomic alias replacement also permits lost updates. Do not weaken the portable
 Insert, schema, snapshot or exact-distance contracts to accommodate those paths.
 
-The next implementation increment should prove an **immutable generation plus
-revision-guarded manifest** protocol, before implementing the public provider:
+The [publication experiment](qdrant-publication-proof.md) implements a bounded
+**immutable generation plus revision-guarded manifest** protocol for the topology
+it checks. The following requirements still govern any provider implementation:
 
 1. Keep the definition, generated-key state and canonical records authoritative.
    Prepare/validate a whole logical mutation using existing model preparation and
@@ -108,11 +114,14 @@ capability checkbox. Do not silently introduce one in the connector.
 
 ## Ordered implementation gates
 
-1. **This PR:** pinned real-server compatibility probe, design and CI.
-2. **Next PR:** executable manifest/generation protocol with independent clients,
-   concurrency, stale revisions, delete/recreate, uncertain outcomes, reader
-   retention and cleanup tests. Decide supported topology and resource bounds.
-3. **Provider foundation:** expose collection lifecycle, typed/dynamic CRUD,
+1. **Merged [PR #60](https://github.com/gabisonia/go-vectorstore/pull/60):** pinned
+   real-server compatibility probe, design and CI; all 19 jobs passed.
+2. **Publication proof implemented, awaiting merge:** executable manifest/generation
+   protocol with independent clients, concurrency, stale revisions, logical
+   delete/recreate, uncertain outcomes, read-only recovery and reader retention.
+   One standalone auto shard/replica; finite lifetime slots/receipts; no online
+   reclamation. Physical reset with active clients remains outside its contract.
+3. **Next, provider foundation:** expose collection lifecycle, typed/dynamic CRUD,
    dense exact scanning/filtering, embeddings and metadata only after the storage
    protocol passes. Reuse `vectordata` contracts/codecs and run shared conformance
    and filter parity against the real server. Publish accurate capabilities,

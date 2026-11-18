@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Add a test-only Qdrant immutable-generation publication proof with guarded
+  manifests, retained receipts and read-only recovery, logical epoch fencing,
+  validated snapshot reads and finite staging/history limits. Verify concurrency,
+  dropped/delayed outcomes, partial staging and reader retention on real Qdrant.
+  Keep public connector support, production limits and reclamation separate.
+
 - Add an opt-in real Qdrant 1.20.2 compatibility probe and connector design.
   Verify canonical payloads, IDs, metadata and named vectors; preserve measured
   duplicate-insert, conditional-publication, snapshot, filter-truth and distance

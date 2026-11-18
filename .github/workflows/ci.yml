@@ -89,7 +89,7 @@ jobs:
         with:
           go-version: ${{ matrix.go }}
           cache: true
-      - name: Verify real Qdrant compatibility gates
+      - name: Verify real Qdrant compatibility and publication gates
         env:
           QDRANT_TEST_URL: http://localhost:6333
         run: go test -count=1 -race -v -tags=qdrantprobe -timeout=3m ./internal/qdrantprobe

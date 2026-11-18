@@ -39,9 +39,10 @@ or exception/return-value semantics.
 
 Implementation follows the [ordered parity plan](parity-plan.md). Provider
 annotations, SQLite vector projections, opt-in scalar L1 execution and broader
-workload evidence have merged. The current increment is the
-[Qdrant compatibility probe/design](qdrant-design.md); a public connector remains
-gated on its publication/snapshot protocol and shared conformance.
+workload evidence have merged. The Qdrant compatibility probe/design has merged;
+the current increment is the bounded [publication protocol proof](qdrant-publication-proof.md).
+A public connector remains gated on provider integration, practical limits,
+reopen/restart checks and shared conformance.
 Embedding output types, typed property references and
 native service access are tracked separately.
 

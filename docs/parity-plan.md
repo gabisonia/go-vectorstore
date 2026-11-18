@@ -83,7 +83,7 @@ jobs passed. Its existing-index cleanup fix, full raw evidence and reproducible
 summaries are on master. Controlled cold I/O, concurrency measurements and other
 native metrics remain future optimizations rather than prerequisites for Qdrant.
 
-## 3. Connector breadth: Qdrant — compatibility probe/design implemented; awaiting merge
+## 3. Connector breadth: Qdrant — compatibility merged; publication proof implemented, awaiting merge
 
 Add one connector at a time, starting with Qdrant. Begin with collection lifecycle,
 typed/dynamic CRUD, dense vectors, filtering, metadata and shared conformance on a
@@ -101,10 +101,18 @@ matching/skipped writes both return completed. This increment adds no public
 provider or advertised capabilities. Linux minimum/current-Go CI verifies the
 probe without changing default test/server requirements.
 
-Next prove immutable generation publication, conflict/unknown-outcome handling,
-reader retention, topology and resource limits in a focused PR. Only then expose
-the provider foundation and run shared conformance on a real server. Native
-candidate acceleration and sparse/hybrid remain later increments.
+[PR #60](https://github.com/gabisonia/go-vectorstore/pull/60) merged after all 19 CI
+jobs passed. The follow-up [publication proof](qdrant-publication-proof.md) adds
+fourteen real-server cases for independent-client publication, read-only recovery,
+unknown/delayed outcomes, slot ownership, logical epoch fencing, consistent readers
+and fail-closed resource limits. It retains all old/uncertain slots and receipts;
+online reclamation is unsupported. Its one-node/one-auto-shard/one-replica scope
+does not establish distributed correctness or physical reset with active clients.
+
+Next implement the provider foundation with practical explicit bounds, lifecycle
+ownership, reopen/restart validation and outcome diagnostics; run shared
+conformance and filter parity on a real server before exposing support. Native
+candidate acceleration, reclamation and sparse/hybrid remain later increments.
 
 ## 4. Embedding output flexibility — queued
 
