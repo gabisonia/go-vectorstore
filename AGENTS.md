@@ -73,6 +73,12 @@ portable duplicate/batch/snapshot/filter/distance semantics and explicit unknown
 write outcomes. Native `insert_only`, scroll offsets and atomic alias lists do
 not by themselves provide those guarantees. Conditional manifest publication is
 still a design gate; do not advertise a production connector before proving it.
+The [publication experiment](docs/qdrant-publication-proof.md) is tagged test code
+with fixed lifetime slots/receipts, logical epoch fencing and no online cleanup.
+Preserve positive receipt evidence across superseding writes; absent receipts do
+not settle requests still in flight. Never stage an uncertain reservation until
+its exact slot descriptor is confirmed. Do not generalize the standalone proof
+to replicated topologies, physical reset with active clients or production limits.
 
 PostgreSQL and sample recipe integration tests need Docker:
 

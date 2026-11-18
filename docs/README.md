@@ -29,4 +29,5 @@ Redis and memory, plus the original PostgreSQL Record API.
 - [Store implementation](stores-implementation.md): provider responsibilities, storage boundaries and invariants
 - [Connector development](connector-development.md): implementing and verifying a provider
 - [Qdrant design and probe](qdrant-design.md): pinned real-server behavior and publication/snapshot gates before a public connector
+- [Qdrant publication proof](qdrant-publication-proof.md): bounded manifest/generation experiment, read-only recovery, epoch fencing and retained readers
 - [Performance and verification](performance.md): test commands, measured allocations and index/recall checks
