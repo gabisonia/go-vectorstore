@@ -218,11 +218,59 @@ jobs:
         run: go test -race -timeout=2m ./...
       - name: Vet
         run: go vet ./...
-      - name: Validate Compose configuration
-        run: docker compose config --quiet
       - name: Scan isolated demo dependencies
         if: matrix.go == 'stable'
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 -test ./...
+
+  aspire:
+    name: Aspire samples (Go ${{ matrix.go }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        go: ['1.26.x', stable]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go }}
+          cache-dependency-path: |
+            go.sum
+            samples/aspire-vector-search/api/go.sum
+      - name: Install pinned Aspire CLI
+        shell: bash
+        run: |
+          set -euo pipefail
+          asset=aspire-cli-linux-x64-17.0.0.tar.gz
+          release=https://github.com/microsoft/aspire/releases/download/v17.0.0
+          cli_dir="$RUNNER_TEMP/aspire-cli"
+          mkdir -p "$cli_dir"
+          curl --fail --location --retry 3 "$release/$asset" -o "$cli_dir/$asset"
+          curl --fail --location --retry 3 "$release/$asset.sha512" -o "$cli_dir/$asset.sha512"
+          python3 - "$cli_dir/$asset" <<'PY'
+          import hashlib, pathlib, sys
+          archive = pathlib.Path(sys.argv[1])
+          expected = pathlib.Path(str(archive) + ".sha512").read_text().split()[0].lower()
+          actual = hashlib.sha512(archive.read_bytes()).hexdigest()
+          if actual != expected:
+              raise SystemExit("Aspire CLI SHA-512 mismatch")
+          PY
+          tar -xzf "$cli_dir/$asset" -C "$cli_dir"
+          echo "$cli_dir" >> "$GITHUB_PATH"
+      - name: Restore and verify isolated Go AppHosts and API
+        run: bash scripts/verify-aspire.sh
+      - name: Start and check Aspire development services
+        run: |
+          aspire start --apphost samples/aspire-services/apphost.go --non-interactive
+          aspire wait postgres --apphost samples/aspire-services/apphost.go --timeout 120 --non-interactive
+          aspire wait redis --apphost samples/aspire-services/apphost.go --timeout 120 --non-interactive
+          go run ./samples/model-store -dsn 'postgres://postgres:postgres@localhost:54329/vectorstore_test?sslmode=disable'
+          go run ./samples/redis-store -addr localhost:63799
+          go run ./samples/redis-store -addr localhost:63799 -namespace aspire_json -storage json -native
+      - name: Stop owned Aspire resources
+        if: always()
+        run: aspire stop --apphost samples/aspire-services/apphost.go --force --non-interactive
 
   vulnerabilities:
     name: Vulnerability scan

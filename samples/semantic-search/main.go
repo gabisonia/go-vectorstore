@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gabisonia/go-vectorstore/samples/internal/demo"
 	"github.com/gabisonia/go-vectorstore/stores/postgres"
 	"github.com/gabisonia/go-vectorstore/vectordata"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -65,7 +66,7 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 
-	pool, err := pgxpool.New(ctx, envOrDefault("PG_DSN", defaultPGDSN))
+	pool, err := pgxpool.New(ctx, demo.PostgresDSN(defaultPGDSN))
 	if err != nil {
 		exitf("connect postgres: %v", err)
 	}

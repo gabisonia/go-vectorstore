@@ -1,0 +1,9 @@
+.git
+**/.aspire
+**/node_modules
+**/.env
+**/.env.*
+**/data
+**/*.db
+**/*.db-*
+**/apphost

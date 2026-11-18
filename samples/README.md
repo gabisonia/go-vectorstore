@@ -13,7 +13,9 @@ model sample; then select SQLite or PostgreSQL when persistence is needed.
 | Typed filtered text retrieval | [typed-search](typed-search/README.md) | None in fixture mode; optional OpenAI |
 | Typed retrieval and cited context for generation | [typed-rag](typed-rag/README.md) | None in fixture mode; optional OpenAI |
 | Named vectors, scalar/key filters, squared distance, iterators, metadata, capabilities, hybrid, migration preview | [recipes](recipes/README.md) | None for portable recipes; PostgreSQL for hybrid/migration |
-| Local model with agent-selected search/read tools | [local-doc-agent](local-doc-agent/README.md) | Docker Compose; downloads local models; separate Go 1.26+ module |
+| Shared databases and orchestrated sample workflows | [aspire-services](aspire-services/README.md) | Aspire 17, Go 1.26+, Docker |
+| Local model with agent-selected search/read tools | [local-doc-agent](local-doc-agent/README.md) | Aspire 17, Go 1.26+, Docker; downloads local models; separate module |
+| Aspire 17 Go AppHost, pgvector search UI and dashboard telemetry | [aspire-vector-search](aspire-vector-search/README.md) | Aspire 17, Go 1.26+, Docker; isolated modules; fixture embeddings |
 | Original Record API semantic search | [semantic-search](semantic-search/README.md) | PostgreSQL and OpenAI key |
 | Original Record API RAG story demo | [ragrimosa](ragrimosa/README.md) | PostgreSQL and OpenAI key |
 

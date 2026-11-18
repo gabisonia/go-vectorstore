@@ -12,7 +12,7 @@ behavior, not a universal latency, recall or durability guarantee.
 
 Create one application-owned pgx pool per database/configuration and reuse it.
 Require TLS certificate/hostname verification for remote databases, with a trusted
-CA and `sslmode=verify-full`. The repository's `sslmode=disable` compose DSNs are
+CA and `sslmode=verify-full`. The repository's `sslmode=disable` local Aspire DSNs are
 local development examples. Keep credentials in your application's secret system;
 avoid logging connection strings, query arguments, embeddings or document bodies.
 

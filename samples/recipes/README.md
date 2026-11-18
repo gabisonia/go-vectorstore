@@ -19,10 +19,12 @@ need no API key.
 | PostgreSQL hybrid search | `go run ./samples/recipes -recipe hybrid -dsn "$PG_DSN"` | Ranked IDs including `costs`, with `reciprocal_rank_fusion` scores |
 | PostgreSQL migration preview | `go run ./samples/recipes -recipe migration -dsn "$PG_DSN"` | Proposed optional Category column SQL/args and `Preview only; no migration applied.` |
 
-For the last two recipes, start the root compose service and set the DSN:
+For the last two recipes, start the [Aspire services](../aspire-services/README.md)
+and set the DSN:
 
 ```sh
-docker compose up -d postgres
+aspire start --apphost samples/aspire-services/apphost.go
+aspire wait postgres --apphost samples/aspire-services/apphost.go
 export PG_DSN='postgres://postgres:postgres@localhost:54329/vectorstore_test?sslmode=disable'
 go run ./samples/recipes -recipe hybrid -dsn "$PG_DSN"
 go run ./samples/recipes -recipe migration -dsn "$PG_DSN"
@@ -64,7 +66,7 @@ Named-vector, scalar-query, key-filter, squared-distance and iterator fixtures u
 providers; reruns reuse their collections. Capabilities and metadata create none. To clean up,
 remove a closed sample SQLite file and its sidecars, or delete only collections
 under your chosen prefix through `DeleteCollection`. Stop local PostgreSQL with
-`docker compose down`.
+`aspire stop --apphost samples/aspire-services/apphost.go --force`; volumes remain.
 
 The squared-distance recipe requires master after v0.4.1. Its thresholds use
 squared units; ordinary L2 distance 5 becomes squared distance 25. See the

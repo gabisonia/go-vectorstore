@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vector Lab · go-vectorstore + Aspire</title>
+  <style>
+    :root { color-scheme: light; --ink:#183a36; --muted:#647570; --paper:#f6f7f2; --line:#dce4da; --accent:#176b50; --wash:#e7f1e7; }
+    * { box-sizing:border-box; } body { margin:0; background:var(--paper); color:var(--ink); font:15px/1.6 system-ui,-apple-system,sans-serif; }
+    main { max-width:1060px; margin:auto; padding:0 32px 48px; } nav { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:28px 0; border-bottom:1px solid var(--line); }
+    .brand { font-weight:800; letter-spacing:.12em; font-size:13px; } .brand span { color:var(--accent); } .badge { border:1px solid var(--line); border-radius:24px; padding:5px 12px; font-size:12px; background:white; }
+    header { padding:45px 0 26px; } .eyebrow { text-transform:uppercase; font-size:11px; font-weight:700; letter-spacing:.16em; color:var(--accent); } h1 { font-size:clamp(32px,5vw,50px); letter-spacing:-.045em; line-height:1.14; margin:12px 0; font-weight:650; } header p { max-width:660px; margin:12px 0; color:var(--muted); font-size:16px; }
+    .stats { display:flex; flex-wrap:wrap; gap:8px 24px; padding:16px 0 24px; font-size:12px; color:var(--muted); } .stats strong { color:var(--ink); font-weight:600; } .dot { display:inline-block; width:7px; height:7px; border-radius:50%; background:#39976b; margin-right:6px; }
+    .panel { padding:26px; border:1px solid var(--line); border-radius:16px; background:white; box-shadow:0 6px 24px #183a3605; }
+    label { display:block; font-size:12px; font-weight:600; margin-bottom:7px; } .query { display:flex; gap:10px; } input,select,textarea,button { font:inherit; } input,select,textarea { color:var(--ink); border:1px solid #ccd8cd; border-radius:8px; background:#fff; padding:10px 12px; width:100%; } input:focus,select:focus,textarea:focus { outline:2px solid #74ab8b; outline-offset:2px; } #q { font-size:17px; padding:13px 14px; }
+    button { border:0; border-radius:8px; background:var(--accent); color:white; padding:10px 22px; font-weight:600; cursor:pointer; white-space:nowrap; } button:hover { background:#10553f; } button:disabled { opacity:.5; cursor:wait; } .filters { display:grid; grid-template-columns:1fr 1fr 110px; gap:16px; margin-top:18px; } .hint { margin:12px 0 0; color:var(--muted); font-size:12px; }
+    .examples { display:flex; flex-wrap:wrap; align-items:center; gap:7px; margin:16px 0 28px; } .examples span { font-size:12px; color:var(--muted); margin-right:4px; } .chip { background:transparent; border:1px solid var(--line); color:var(--muted); border-radius:20px; padding:4px 12px; font-size:12px; font-weight:400; } .chip:hover { background:var(--wash); color:var(--ink); }
+    .results-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:30px 0 14px; } h2 { margin:0; font-size:19px; letter-spacing:-.02em; } #search-status { color:var(--muted); font-size:12px; } #results { display:grid; gap:12px; } .card { background:white; border:1px solid var(--line); border-radius:12px; padding:22px 24px; } .card-top { display:flex; align-items:center; justify-content:space-between; gap:10px; } .category { text-transform:uppercase; letter-spacing:.1em; font-size:10px; font-weight:700; color:var(--accent); background:var(--wash); padding:3px 9px; border-radius:4px; } .score { color:var(--muted); font:12px ui-monospace,monospace; } h3 { margin:10px 0 5px; font-size:18px; font-weight:600; } .card p { margin:5px 0 14px; color:#5a6c64; font-size:14px; } .card-bottom { display:flex; justify-content:space-between; align-items:center; gap:12px; } .record-id { font:10px ui-monospace,monospace; color:#829087; overflow-wrap:anywhere; } .remove { background:none; padding:0; color:#9b4b44; font-size:12px; font-weight:400; } .remove:hover { background:none; text-decoration:underline; } .empty { padding:30px; text-align:center; border:1px dashed var(--line); border-radius:12px; color:var(--muted); }
+    details { margin:28px 0 0; background:#edf2e9; border:1px solid var(--line); border-radius:12px; padding:20px 24px; } summary { cursor:pointer; font-weight:600; font-size:14px; } details .hint { margin:8px 0 16px; } .note-fields { display:grid; grid-template-columns:2fr 1fr; gap:16px; } textarea { margin-bottom:12px; min-height:95px; resize:vertical; } #note-message { font-size:12px; color:var(--muted); margin-left:10px; } footer { margin-top:32px; display:flex; flex-wrap:wrap; justify-content:space-between; gap:8px; color:var(--muted); font-size:11px; } .error { color:#a43f33 !important; }
+    @media (max-width:640px) { main { padding:0 16px 32px; } nav { align-items:flex-start; } .badge { font-size:10px; } header { padding-top:30px; } .panel { padding:18px; } .query { flex-direction:column; } .filters { grid-template-columns:1fr 1fr; } .filters>div:last-child { grid-column:1/-1; } .note-fields { grid-template-columns:1fr; } .card { padding:18px; } .results-head { align-items:flex-start; } }
+  </style>
+</head>
+<body>
+<main>
+  <nav><div class="brand"><span>◈</span> VECTOR LAB</div><span class="badge">Aspire 17 · Go AppHost preview</span></nav>
+  <header><div class="eyebrow">go-vectorstore / local playground</div><h1>Search what you know.</h1><p>Explore typed vector retrieval, add your own notes, and follow each request in the Aspire dashboard.</p></header>
+  <div class="stats" aria-live="polite"><span><i class="dot"></i><strong id="provider">Connecting…</strong></span><span><strong id="document-count">—</strong> documents</span><span><strong>12</strong> dimensions</span><span><strong>Fixture embeddings</strong> · no API key</span></div>
+  <section class="panel" aria-label="Search documents">
+    <form id="search-form">
+      <label for="q">What would you like to find?</label>
+      <div class="query"><input id="q" name="q" value="sqlite backup" placeholder="Try sqlite backup" required maxlength="256"><button id="search-button" type="submit">Search ↗</button></div>
+      <div class="filters">
+        <div><label for="mode">Search method</label><select id="mode"><option value="vector">Vector similarity</option><option value="hybrid">Hybrid · vectors + keywords</option></select></div>
+        <div><label for="category">Category filter</label><select id="category"><option value="">All categories</option></select></div>
+        <div><label for="top">Results</label><select id="top"><option>3</option><option selected>5</option><option>8</option><option>10</option></select></div>
+      </div>
+      <p id="mode-hint" class="hint">Vector results use cosine similarity. Category filters apply before the page limit.</p>
+    </form>
+  </section>
+  <div class="examples"><span>Explore</span><button class="chip" data-query="sqlite backup">sqlite backup</button><button class="chip" data-query="postgres hybrid">postgres hybrid</button><button class="chip" data-query="aspire dashboard">aspire dashboard</button><button class="chip" data-query="telemetry traces">telemetry traces</button></div>
+  <div class="results-head"><h2>Retrieved documents</h2><span id="search-status" role="status" aria-live="polite">Loading…</span></div>
+  <section id="results" aria-label="Search results" aria-busy="true"></section>
+  <details id="note-panel"><summary>Add a document to the collection</summary><p class="hint">Your notes persist in this sample's PostgreSQL volume. Embeddings are generated automatically from the body.</p>
+    <form id="note-form"><div class="note-fields"><div><label for="note-title">Title</label><input id="note-title" required maxlength="160" placeholder="My SQLite backup checklist"></div><div><label for="note-category">Category</label><select id="note-category"></select></div></div>
+    <label for="note-body" style="margin-top:14px">Body</label><textarea id="note-body" required maxlength="4096" placeholder="Write a few sentences using words from the demo vocabulary, such as SQLite, backup, PostgreSQL, Aspire or telemetry."></textarea><button id="note-button" type="submit">Add document + embed</button><span id="note-message" role="status" aria-live="polite"></span></form>
+  </details>
+  <footer><span>Local PostgreSQL + pgvector · Fixture vectors are a vocabulary demo, not a semantic model.</span><span>Aspire → vector-api → Traces / Metrics / Structured logs</span></footer>
+</main>
+<script>
+const $ = id => document.getElementById(id);
+let currentSearch;
+async function api(url, options) {
+  const response = await fetch(url, options);
+  if (response.status === 204) return null;
+  const value = await response.json();
+  if (!response.ok) throw new Error(value.error || 'Request failed.');
+  return value;
+}
+function element(tag, className, text) { const e = document.createElement(tag); if (className) e.className = className; if (text !== undefined) e.textContent = text; return e; }
+async function status() {
+  const data = await api('/api/status');
+  $('provider').textContent = data.provider; $('document-count').textContent = data.documents;
+  if ($('category').options.length === 1) {
+    for (const category of data.categories) {
+      $('category').add(new Option(category, category)); $('note-category').add(new Option(category, category));
+    }
+    $('note-category').value = 'custom';
+  }
+}
+function render(hit) {
+  const doc = hit.document, card = element('article', 'card'), top = element('div', 'card-top');
+  const kind = hit.distance === undefined ? 'RRF' : 'similarity';
+  top.append(element('span', 'category', doc.category), element('span', 'score', `${kind} ${hit.score.toFixed(kind === 'RRF' ? 4 : 3)}`));
+  const bottom = element('div', 'card-bottom'); bottom.append(element('span', 'record-id', doc.id));
+  if (doc.id.startsWith('note-')) {
+    const remove = element('button', 'remove', 'Remove note'); remove.type = 'button';
+    remove.addEventListener('click', async () => {
+      remove.disabled = true;
+      try { await api(`/api/documents/${encodeURIComponent(doc.id)}`, {method:'DELETE'}); await status(); await search(); }
+      catch (error) { $('search-status').textContent = error.message; $('search-status').classList.add('error'); remove.disabled = false; }
+    }); bottom.append(remove);
+  }
+  card.append(top, element('h3', '', doc.title), element('p', '', doc.body), bottom); return card;
+}
+async function search() {
+  currentSearch?.abort(); const controller = new AbortController(); currentSearch = controller;
+  $('search-button').disabled = true; $('results').setAttribute('aria-busy', 'true'); $('search-status').classList.remove('error'); $('search-status').textContent = 'Searching…';
+  $('mode-hint').textContent = $('mode').value === 'hybrid' ? 'Hybrid combines vector and PostgreSQL full-text candidates with reciprocal rank fusion (RRF). Its scores use different units.' : 'Vector results use cosine similarity. Category filters apply before the page limit.';
+  try {
+    const params = new URLSearchParams({q:$('q').value, category:$('category').value, mode:$('mode').value, top:$('top').value});
+    const data = await api(`/api/search?${params}`, {signal:controller.signal});
+    $('results').replaceChildren(...data.results.map(render));
+    if (!data.results.length) $('results').append(element('div', 'empty', 'No matches in this category. Try another filter or add a document.'));
+    $('search-status').textContent = `${data.results.length} results · ${data.elapsedMs.toFixed(1)} ms`;
+  } catch (error) {
+    if (error.name === 'AbortError') return;
+    $('search-status').textContent = error.message; $('search-status').classList.add('error'); $('results').replaceChildren();
+  } finally { if (currentSearch === controller) { $('search-button').disabled = false; $('results').setAttribute('aria-busy', 'false'); } }
+}
+$('search-form').addEventListener('submit', event => { event.preventDefault(); search(); });
+for (const id of ['mode','category','top']) $(id).addEventListener('change', search);
+for (const chip of document.querySelectorAll('[data-query]')) chip.addEventListener('click', () => { $('q').value = chip.dataset.query; $('category').value = ''; search(); });
+$('note-form').addEventListener('submit', async event => {
+  event.preventDefault(); $('note-button').disabled = true; $('note-message').classList.remove('error'); $('note-message').textContent = 'Embedding and saving…';
+  const note = {title:$('note-title').value, category:$('note-category').value, body:$('note-body').value};
+  try {
+    await api('/api/documents', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(note)});
+    $('note-message').textContent = 'Saved. Your document is now searchable.'; $('note-form').reset(); $('note-category').value = 'custom';
+    $('q').value = note.body.slice(0,64); $('category').value = note.category; $('mode').value = 'vector'; await status(); await search();
+  } catch (error) { $('note-message').textContent = error.message; $('note-message').classList.add('error'); }
+  finally { $('note-button').disabled = false; }
+});
+status().then(search).catch(error => { $('provider').textContent = 'Service unavailable'; $('search-status').textContent = error.message; $('search-status').classList.add('error'); });
+</script>
+</body>
+</html>

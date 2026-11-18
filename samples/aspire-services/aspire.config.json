@@ -1,0 +1,18 @@
+{
+  "appHost": { "path": "apphost.go", "language": "go" },
+  "packages": {
+    "Aspire.Hosting.Go": "17.0.0",
+    "Aspire.Hosting.PostgreSQL": "17.0.0",
+    "Aspire.Hosting.Redis": "17.0.0"
+  },
+  "profiles": {
+    "http": {
+      "applicationUrl": "http://localhost:19180",
+      "environmentVariables": {
+        "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL": "http://localhost:19181",
+        "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL": "http://localhost:19182",
+        "ASPIRE_ALLOW_UNSECURED_TRANSPORT": "true"
+      }
+    }
+  }
+}

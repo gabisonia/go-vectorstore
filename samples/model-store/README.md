@@ -15,9 +15,13 @@ go run ./samples/model-store -sqlite /tmp/model-store.db
 Or start the repository's PostgreSQL instance and use native model storage:
 
 ```sh
-docker compose up -d postgres
+aspire start --apphost samples/aspire-services/apphost.go
+aspire wait postgres --apphost samples/aspire-services/apphost.go
 go run ./samples/model-store -dsn 'postgres://postgres:postgres@localhost:54329/vectorstore_test?sslmode=disable'
 ```
+
+The [shared services guide](../aspire-services/README.md) covers Aspire prerequisites
+and stopping the development databases while retaining data.
 
 The sample demonstrates struct tags, generated int64 keys, store-wide embedding
 defaults, bounded embedding batches, string-array overlap filtering, text queries,

@@ -13,13 +13,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gabisonia/go-vectorstore/samples/internal/demo"
 	"github.com/gabisonia/go-vectorstore/stores/postgres"
 	"github.com/gabisonia/go-vectorstore/vectordata"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 const (
-	defaultPGDSN             = "postgres://postgres:postgres@localhost:54330/vectorstore_test?sslmode=disable"
+	defaultPGDSN             = "postgres://postgres:postgres@localhost:54329/vectorstore_test?sslmode=disable"
 	defaultCollectionName    = "ragrimosa_story"
 	defaultEmbeddingModel    = "text-embedding-3-small"
 	defaultChatModel         = "gpt-4o-mini"
@@ -91,7 +92,7 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 
-	pool, err := pgxpool.New(ctx, envOrDefault("PG_DSN", defaultPGDSN))
+	pool, err := pgxpool.New(ctx, demo.PostgresDSN(defaultPGDSN))
 	if err != nil {
 		exitf("connect postgres: %v", err)
 	}

@@ -194,5 +194,11 @@ and links aligned with VERSION, docs and executable examples.
 library and Agent Framework versions. Root `go test ./...` does not traverse that
 module. Run `go test -race ./...` and `go vet ./...` inside it; its dedicated CI
 jobs cover minimum/current Go and dependency scanning. `smoke.sh` runs real local
-models through Docker Compose and can download several GB. Normal tests use local
+models through Aspire and can download several GB. Normal tests use local
 HTTP stand-ins. Keep framework dependencies out of the root library go.mod.
+
+The Go 1.26+ AppHosts in `samples/aspire-services` and `samples/aspire-vector-search`
+also have isolated modules. Run `bash scripts/verify-aspire.sh` with Aspire CLI 17
+to restore generated SDKs, build/vet the hosts and test the vector API. Generated
+`.aspire` directories stay ignored. The shared host replaces all sample service
+orchestration; integration tests retain their disposable Testcontainers setup.

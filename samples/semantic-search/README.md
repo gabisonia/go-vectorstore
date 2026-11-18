@@ -6,37 +6,37 @@ credential-free fixture mode.
 
 This sample indexes 3 fake articles into Postgres (`pgvector`) and runs semantic search using OpenAI embeddings.
 
-## Run With Docker Compose (app in container)
+## Run with Aspire
 
 ```bash
-cd samples/semantic-search
-cp .env.example .env
-# edit .env and set OPENAI_API_KEY
-
-docker compose up -d postgres
-docker compose --profile app run --rm app -q "how can I reduce cloud costs?"
+# From the repository root; requires Aspire 17, Go 1.26+ and Docker.
+export OPENAI_API_KEY=your_key_here
+VECTORSTORE_SAMPLE=semantic-search QUERY='how can I reduce cloud costs?' \
+  aspire run --apphost samples/aspire-services/apphost.go
 ```
 
-Optional metadata filter:
+Aspire waits for pgvector and injects its connection settings. The application
+uses **explicit start** so the AppHost alone does not invoke a paid API. Start
+**semantic-search** in the dashboard, or from another terminal:
 
 ```bash
-docker compose --profile app run --rm app -q "go cancellation patterns" -category backend
+aspire resource semantic-search start --apphost samples/aspire-services/apphost.go
+aspire logs semantic-search --apphost samples/aspire-services/apphost.go
 ```
 
 Shutdown:
 
 ```bash
-docker compose down
+aspire stop --apphost samples/aspire-services/apphost.go
 ```
 
 ## Run On Host (go run)
 
 ```bash
-cd samples/semantic-search
 export OPENAI_API_KEY=your_key_here
-
-docker compose up -d postgres
-go run . -q "how can I reduce cloud costs?" -category backend
+aspire start --apphost samples/aspire-services/apphost.go
+aspire wait postgres --apphost samples/aspire-services/apphost.go
+go run ./samples/semantic-search -q "how can I reduce cloud costs?" -category backend
 ```
 
 When running on host, default `PG_DSN` is:
@@ -56,7 +56,14 @@ postgres://postgres:postgres@localhost:54329/vectorstore_test?sslmode=disable
 - `OPENAI_API_KEY` (required)
 - `OPENAI_EMBEDDING_MODEL` (optional, default `text-embedding-3-small`)
 - `OPENAI_BASE_URL` (optional, default `https://api.openai.com/v1`)
-- `PG_DSN` (optional; defaults to local compose Postgres on port `54329`)
+- `PG_DSN` (optional explicit DSN; otherwise pgx reads Aspire's PG variables, or defaults to the local development database on `54329`)
+- `QUERY` / `CATEGORY` configure the managed Aspire resource's CLI arguments
+
+Stop the shared AppHost before switching its mode or changing managed arguments.
+See [shared Aspire workflows](../aspire-services/README.md) for credentials,
+persistence, resource inspection and cleanup. The native Go example keeps the
+library's Go 1.25 minimum; Go AppHost orchestration needs Go 1.26+. The sample's
+OpenAI requests require explicit credentials and can incur charges.
 
 ## What it does
 
