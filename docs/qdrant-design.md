@@ -1,9 +1,11 @@
 # Qdrant connector design and compatibility gates
 
-The first Qdrant increment is an executable backend assessment, before a public
-`stores/qdrant` provider. It protects the existing model contract while deciding
+The first Qdrant increment established an executable backend assessment. The
+[bounded `stores/qdrant` foundation](qdrant.md) now uses its guarded-manifest
+primitive for canonical snapshots. The assessment protects the model contract while deciding
 how collection lifecycle, typed/dynamic CRUD, dense search, filtering and discovery
-can use Qdrant. No Qdrant capabilities are advertised by this increment.
+can use Qdrant. The probe itself advertises no capabilities; the provider reports
+only its verified canonical dense execution.
 
 The [ordered parity plan](parity-plan.md) delivers one reviewable PR at a time.
 This follows the merged SQLite workload increment in
@@ -78,7 +80,13 @@ Insert, schema, snapshot or exact-distance contracts to accommodate those paths.
 
 The [publication experiment](qdrant-publication-proof.md) implements a bounded
 **immutable generation plus revision-guarded manifest** protocol for the topology
-it checks. The following requirements still govern any provider implementation:
+it checks. The first provider deliberately keeps its entire bounded canonical
+dataset in the manifest point. This avoids multi-point staging/reader retention
+for exact execution while preserving guarded publication, logical epochs and
+retained positive receipts. Its format, limits and restart evidence are documented
+[separately](qdrant.md); it does not copy the experiment's slot layout.
+
+The following requirements govern future native multi-point execution:
 
 1. Keep the definition, generated-key state and canonical records authoritative.
    Prepare/validate a whole logical mutation using existing model preparation and
@@ -116,21 +124,22 @@ capability checkbox. Do not silently introduce one in the connector.
 
 1. **Merged [PR #60](https://github.com/gabisonia/go-vectorstore/pull/60):** pinned
    real-server compatibility probe, design and CI; all 19 jobs passed.
-2. **Publication proof implemented, awaiting merge:** executable manifest/generation
+2. **Merged [PR #61](https://github.com/gabisonia/go-vectorstore/pull/61):** executable manifest/generation
    protocol with independent clients, concurrency, stale revisions, logical
    delete/recreate, uncertain outcomes, read-only recovery and reader retention.
    One standalone auto shard/replica; finite lifetime slots/receipts; no online
    reclamation. Physical reset with active clients remains outside its contract.
-3. **Next, provider foundation:** expose collection lifecycle, typed/dynamic CRUD,
-   dense exact scanning/filtering, embeddings and metadata only after the storage
-   protocol passes. Reuse `vectordata` contracts/codecs and run shared conformance
-   and filter parity against the real server. Publish accurate capabilities,
-   limits, rerunnable samples and restart/reopen coverage.
+3. **Provider foundation implemented:** bounded standalone snapshots, collection
+   lifecycle, typed/dynamic CRUD, canonical dense ranking/filtering, embeddings and
+   metadata. Reuse `vectordata` contracts/codecs and the existing Go engine. Shared
+   conformance/filter parity, independent clients, delayed requests and process
+   restart checks run on the real pinned server. See [limits](qdrant.md) and the
+   [rerunnable Aspire sample](../samples/qdrant-store/README.md).
 4. **Native execution:** separately prove numerical/candidate recall, filter truth,
    complete ties and one-generation payload retrieval; then measure against the
    canonical path. Sparse/hybrid support follows in later focused increments.
 
-The current provider matrix remains unchanged. Other parity-plan stages follow
+The provider matrix reports the bounded foundation's exact capabilities. Other parity-plan stages follow
 the Qdrant decision rather than being silently marked complete.
 
 ## Primary references

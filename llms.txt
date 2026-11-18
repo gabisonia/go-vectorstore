@@ -19,6 +19,7 @@ indexes or hybrid support. Deterministic sample embeddings are instructional.
 ## Usage and limits
 
 - [Production operation](https://raw.githubusercontent.com/gabisonia/go-vectorstore/master/docs/production.md): TLS, pool sizing, permissions, retries, backups and monitoring.
+- [Bounded Qdrant provider](https://raw.githubusercontent.com/gabisonia/go-vectorstore/master/docs/qdrant.md): Standalone canonical snapshots, exact search, capacity and unknown-write recovery.
 - [Compatibility and release policy](https://raw.githubusercontent.com/gabisonia/go-vectorstore/master/docs/releases.md): Version availability, patch guarantees and storage fixtures.
 - [Security policy](https://raw.githubusercontent.com/gabisonia/go-vectorstore/master/SECURITY.md): Private vulnerability reporting and supported versions.
 

@@ -42,6 +42,13 @@ func main() {
 			WithLifetime(aspire.ContainerLifetimePersistent).
 			WithVolume("/data", aspire.VolumeName("go-vectorstore_redis-data")).
 			WithArgs([]string{"--appendonly", "yes", "--appendfsync", "everysec", "--maxmemory-policy", "noeviction"})
+		version := "v1.20.2"
+		builder.AddContainer("qdrant", &aspire.AddContainerOptions{Image: "qdrant/qdrant", Tag: &version}).
+			WithHttpEndpoint(aspire.HttpEndpointName("http"), aspire.HttpEndpointTargetPort(6333), aspire.HttpEndpointPort(portEnv("DEV_QDRANT_PORT", 63339))).
+			WithHttpHealthCheck(aspire.HttpHealthCheckPath("/readyz")).
+			WithLifetime(aspire.ContainerLifetimePersistent).
+			WithVolume("/qdrant/storage", aspire.VolumeName("go-vectorstore-dev-qdrant")).
+			WithEnvironment("QDRANT__TELEMETRY_DISABLED", "true").WithEnvironment("QDRANT__CLUSTER__ENABLED", "false")
 	}
 	app, err := builder.Build()
 	if err != nil {

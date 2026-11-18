@@ -9,7 +9,8 @@ This file describes contributing to this repository.
 - `stores/memory`, `stores/sqlite`, `stores/postgres`, `stores/redis`: concrete providers.
 - `stores/sqlitevec`: optional extension adapter sharing SQLite's engine and format.
 - `internal/exactsearch`: shared bounded exact-search ranking for memory/SQLite.
-- `internal/qdrantprobe`: opt-in pinned real-server contract probe; no public provider.
+- `internal/qdrantprobe`: opt-in pinned real-server contract/publication experiments.
+- `stores/qdrant`: bounded standalone canonical snapshots and exact Go search.
 - `vectordata/conformance`: shared provider behavior and filter parity fixtures.
 - `samples`: runnable workflows; sample-only helpers live in `samples/internal`.
 - `samples/sqlite-workload`: opt-in sequential measurement harness; generated JSONL and fixture limits are documented in its README.
@@ -71,14 +72,24 @@ and `go vet -tags=qdrantprobe ./internal/qdrantprobe`. Default tests need no Qdr
 See [docs/qdrant-design.md](docs/qdrant-design.md). Preserve canonical envelopes,
 portable duplicate/batch/snapshot/filter/distance semantics and explicit unknown
 write outcomes. Native `insert_only`, scroll offsets and atomic alias lists do
-not by themselves provide those guarantees. Conditional manifest publication is
-still a design gate; do not advertise a production connector before proving it.
+not by themselves provide those guarantees. Conditional manifest publication
+is verified by the bounded provider; native multi-point execution remains a
+separate retention/recall gate.
 The [publication experiment](docs/qdrant-publication-proof.md) is tagged test code
 with fixed lifetime slots/receipts, logical epoch fencing and no online cleanup.
 Preserve positive receipt evidence across superseding writes; absent receipts do
 not settle requests still in flight. Never stage an uncertain reservation until
 its exact slot descriptor is confirmed. Do not generalize the standalone proof
-to replicated topologies, physical reset with active clients or production limits.
+to replicated topologies, physical reset with active clients or unbounded limits.
+
+The Qdrant foundation uses one bounded canonical snapshot point, guarded revision/
+epoch updates and retained receipts. Never evict success evidence or replay an
+unknown write; confirm positive receipts by read only. Physical ownership and
+immutable limits must match on reopen. Run `go test -race ./stores/qdrant` and
+`go test -count=1 -race -tags=integration -timeout=5m ./stores/qdrant`; integration
+tests use owned fixtures or unique namespaces on an explicitly supplied server.
+Restart tests SIGKILL only their owned container and skip supplied servers; CI
+runs them separately without QDRANT_TEST_URL. See [provider scope](docs/qdrant.md).
 
 PostgreSQL and sample recipe integration tests need Docker:
 

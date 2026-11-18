@@ -9,7 +9,7 @@ A lightweight Go vector-store library inspired by `Microsoft.Extensions.VectorDa
 
 Scope:
 - Go 1.25+
-- PostgreSQL + `pgvector`, embedded SQLite, standalone Redis snapshots and in-memory model storage
+- PostgreSQL + `pgvector`, embedded SQLite, standalone Redis, bounded Qdrant snapshots and in-memory model storage
 - Model-driven collections with typed/native keys, named vectors, struct tags, and optional embeddings
 - Shared model contracts and conformance tests across providers
 - Original Record API and custom codecs remain supported
@@ -26,6 +26,7 @@ require it. Use current stable Go for up-to-date standard-library security fixes
 
 - Go 1.25+
 - PostgreSQL provider: PostgreSQL 16+ with `pgvector` extension
+- Qdrant provider: standalone Qdrant 1.20.2 with explicit snapshot/receipt limits ([scope](docs/qdrant.md))
 - SQLite provider: a writable database file; no database server or C toolchain required
 - Redis provider: standalone snapshots with Go exact search; opt-in HNSW/FLAT, scalar and string full-text indexes ([limits](docs/redis.md))
 - Docker (optional, for integration tests and Aspire sample services)
@@ -38,6 +39,7 @@ require it. Use current stable Go for up-to-date standard-library security fixes
 - `stores/sqlite`: durable SQLite model collections with exact search and opt-in scalar indexes
 - `stores/sqlitevec`: optional scalar L1 extension execution with exact Go ranking over the same SQLite format
 - `stores/redis`: atomic snapshots/hash generations, dense exact search and opt-in HNSW/FLAT
+- `stores/qdrant`: bounded standalone snapshots and exact Go search ([scope and limits](docs/qdrant.md))
 - `stores/memory`: transient model collections for development and contract tests
 - `samples`: runnable demos (see `samples/README.md`)
 - `docs`: architecture and implementation notes

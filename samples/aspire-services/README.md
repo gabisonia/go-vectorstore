@@ -11,6 +11,7 @@ Run the commands below from the repository root.
 aspire start --apphost samples/aspire-services/apphost.go
 aspire wait postgres --apphost samples/aspire-services/apphost.go
 aspire wait redis --apphost samples/aspire-services/apphost.go
+aspire wait qdrant --apphost samples/aspire-services/apphost.go
 ```
 
 The default `services` mode starts:
@@ -19,9 +20,10 @@ The default `services` mode starts:
 | --- | --- |
 | PostgreSQL | pgvector/pgvector:pg16, `localhost:54329`, database `vectorstore_test`, local demo user/password `postgres` |
 | Redis | redis:8.2 with JSON and Search, `localhost:63799`, local plaintext/no password, AOF/everysec, noeviction |
+| Qdrant | qdrant/qdrant:v1.20.2, standalone, `http://localhost:63339` |
 
-Both containers and their volumes persist across ordinary AppHost stops.
-`DEV_POSTGRES_PORT` and `DEV_REDIS_PORT` override host ports. The dashboard uses
+These containers and their volumes persist across ordinary AppHost stops.
+`DEV_POSTGRES_PORT`, `DEV_REDIS_PORT` and `DEV_QDRANT_PORT` override host ports. The dashboard uses
 19180–19182; change `aspire.config.json` if needed. It can run beside the separate
 [vector search UI](../aspire-vector-search/README.md), which uses other resources.
 After changing a persistent resource's configuration, use its Restart action
@@ -32,7 +34,8 @@ Native examples keep their existing commands:
 
 ```sh
 go run ./samples/model-store -dsn 'postgres://postgres:postgres@localhost:54329/vectorstore_test?sslmode=disable'
-go run ./samples/redis-store
+go run ./samples/redis-store -addr localhost:63799
+go run ./samples/qdrant-store
 ```
 
 The fixed PostgreSQL credentials are local development defaults, not production

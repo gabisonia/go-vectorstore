@@ -95,6 +95,14 @@ jobs:
         run: go test -count=1 -race -v -tags=qdrantprobe -timeout=3m ./internal/qdrantprobe
       - name: Vet probe
         run: go vet -tags=qdrantprobe ./internal/qdrantprobe
+      - name: Verify bounded Qdrant provider and shared conformance
+        env:
+          QDRANT_TEST_URL: http://localhost:6333
+        run: |
+          go test -count=1 -race -tags=integration -timeout=5m ./stores/qdrant
+          go vet -tags=integration ./stores/qdrant
+      - name: Verify process-crash recovery on an owned disposable server
+        run: go test -count=1 -race -tags=integration -run TestIntegrationRestart -timeout=3m ./stores/qdrant
 
   integration-postgres:
     name: Postgres ${{ matrix.postgres }} (Go ${{ matrix.go }})
@@ -265,9 +273,12 @@ jobs:
           aspire start --apphost samples/aspire-services/apphost.go --non-interactive
           aspire wait postgres --apphost samples/aspire-services/apphost.go --timeout 120 --non-interactive
           aspire wait redis --apphost samples/aspire-services/apphost.go --timeout 120 --non-interactive
+          aspire wait qdrant --apphost samples/aspire-services/apphost.go --timeout 120 --non-interactive
           go run ./samples/model-store -dsn 'postgres://postgres:postgres@localhost:54329/vectorstore_test?sslmode=disable'
           go run ./samples/redis-store -addr localhost:63799
           go run ./samples/redis-store -addr localhost:63799 -namespace aspire_json -storage json -native
+          go run ./samples/qdrant-store
+          go run ./samples/qdrant-store
       - name: Stop owned Aspire resources
         if: always()
         run: aspire stop --apphost samples/aspire-services/apphost.go --force --non-interactive

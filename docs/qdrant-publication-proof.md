@@ -161,13 +161,13 @@ serializes leader updates. These are pinned implementation observations, not a
 promise about other releases or distributed failures. Revisit them on upgrades;
 the real-server tests do not replace a distributed proof or crash/replay tests.
 
-## Next increment
+## Provider foundation and remaining gates
 
-Use the bounded standalone protocol as evidence for the provider foundation;
-do not copy these test-only constants or claim native acceleration. Specify
-practical configurable limits, persistent physical ownership, logical tombstone
-lifecycle, reopen/restart behavior and outcome diagnostics. Implement typed/dynamic
-CRUD, exact canonical dense ranking, portable filters, embedding preparation and
-accurate metadata/capabilities; run shared conformance and filter parity on real
-Qdrant. Public support remains gated on those checks. Reclamation, additional
-topologies, native candidate selection and sparse/hybrid are later increments.
+The [provider foundation](qdrant.md) uses the guarded-manifest/receipt primitive
+with the entire bounded canonical dataset in one point. It has its own immutable
+configurable bounds, physical ownership, tombstones, outcome diagnostics and
+process-restart tests; it does not adopt this experiment's slot layout/constants.
+Typed/dynamic CRUD, exact dense ranking, filters, embeddings, metadata and shared
+conformance run against real Qdrant. Native multi-point execution still needs
+generation retention/reclamation and candidate recall proofs. Additional
+topologies and sparse/hybrid support remain later increments.

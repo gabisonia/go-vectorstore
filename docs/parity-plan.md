@@ -83,7 +83,7 @@ jobs passed. Its existing-index cleanup fix, full raw evidence and reproducible
 summaries are on master. Controlled cold I/O, concurrency measurements and other
 native metrics remain future optimizations rather than prerequisites for Qdrant.
 
-## 3. Connector breadth: Qdrant — compatibility merged; publication proof implemented, awaiting merge
+## 3. Connector breadth: Qdrant — compatibility/publication proofs merged; bounded foundation implemented
 
 Add one connector at a time, starting with Qdrant. Begin with collection lifecycle,
 typed/dynamic CRUD, dense vectors, filtering, metadata and shared conformance on a
@@ -109,10 +109,16 @@ and fail-closed resource limits. It retains all old/uncertain slots and receipts
 online reclamation is unsupported. Its one-node/one-auto-shard/one-replica scope
 does not establish distributed correctness or physical reset with active clients.
 
-Next implement the provider foundation with practical explicit bounds, lifecycle
-ownership, reopen/restart validation and outcome diagnostics; run shared
-conformance and filter parity on a real server before exposing support. Native
-candidate acceleration, reclamation and sparse/hybrid remain later increments.
+[PR #61](https://github.com/gabisonia/go-vectorstore/pull/61) merged the publication
+proof. The [bounded provider foundation](qdrant.md) uses its guarded-manifest and
+retained-receipt primitive with one canonical snapshot point. It adds immutable
+record/byte/receipt limits, physical ownership, logical tombstones, typed/dynamic
+CRUD, exact dense ranking, filters, embeddings, metadata and explicit unknown-write
+confirmation. Shared conformance/filter parity, concurrent clients, delayed original
+requests and owned-server SIGKILL/restart tests verify this increment. A rerunnable
+typed sample uses the shared Aspire services. Native candidate acceleration,
+online reclamation, distributed topologies and sparse/hybrid remain later increments;
+the foundation is explicitly unsuitable for indefinite unbounded writes.
 
 ## 4. Embedding output flexibility — queued
 
