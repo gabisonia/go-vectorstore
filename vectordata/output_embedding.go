@@ -64,7 +64,8 @@ func (f OutputEmbeddingFunc[I, E]) EmbedOutputs(ctx context.Context, inputs []I)
 // AdaptOutputEmbedder adapts typed output to the existing dense InputEmbedder
 // boundary. It copies float32 values or exactly widens float16 bits; existing
 // property normalization separately applies dimensions, metric and storage
-// precision. Configure the result in one existing InputEmbedder slot.
+// precision. Configure the result in one existing InputEmbedder slot. The source
+// remains caller-owned for its full lifetime.
 func AdaptOutputEmbedder[I any, E EmbeddingElement](source OutputEmbedder[I, E]) (InputEmbedder, error) {
 	if isNilValue(source) {
 		return nil, fmt.Errorf("%w: nil output embedder", ErrInvalidEmbeddingOptions)

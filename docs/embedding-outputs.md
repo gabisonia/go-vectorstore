@@ -35,6 +35,8 @@ honors context cancellation, and supports concurrent use. Inputs are borrowed;
 do not mutate/retain them. Output buffers can be reused on the next call because
 the adapter copies/converts every vector before returning it. Concurrent calls
 must not share mutable output buffers.
+The application owns the source and its client lifetime. Keep them alive while
+collections use the adapter, and close them after in-flight work has finished.
 
 All input types are checked before calling the source. Nil inputs, wrong input
 types or a typed-nil source fail with `ErrInvalidEmbeddingOptions`. Empty batches
