@@ -735,7 +735,7 @@ func TestPublicationPreparationFailureDoesNotAllocateKeysOrSlots(t *testing.T) {
 }
 
 func TestPublicationRejectsUnsupportedTopologyBeforeInitialization(t *testing.T) {
-	path := collection(t, map[string]any{"vectors": map[string]any{}, "shard_number": 2, "replication_factor": 1, "metadata": map[string]any{"publication_proof": 1}})
+	path := collection(t, map[string]any{"vectors": map[string]any{}, "shard_number": 2, "sharding_method": "auto", "replication_factor": 1, "metadata": map[string]any{"publication_proof": 1}})
 	p := proofClient(t, path)
 	if _, err := p.initialize(t.Context()); !errors.Is(err, vectordata.ErrUnsupported) {
 		t.Fatal("multi-shard topology accepted:", err)
