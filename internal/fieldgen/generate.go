@@ -97,8 +97,11 @@ func Run(ctx context.Context, opts Options) error {
 	if err != nil {
 		return err
 	}
-	code, err := emit(pkg, opts, fields)
+	code, err := emit(pkg.Package, opts, fields)
 	if err != nil {
+		return err
+	}
+	if err := pkg.verify(code); err != nil {
 		return err
 	}
 	if opts.Check {
@@ -133,8 +136,13 @@ func Run(ctx context.Context, opts Options) error {
 // -e allows initial generation and regeneration when application code refers to
 // missing/stale output. Requested model types still must resolve completely.
 // go list compiles dependencies but does not execute application init functions.
-func load(ctx context.Context, dir, output string) (*types.Package, error) {
-	command := exec.CommandContext(ctx, "go", "list", "-e", "-deps", "-export", "-json", ".")
+type sourcePackage struct {
+	*types.Package
+	verify func([]byte) error
+}
+
+func load(ctx context.Context, dir, output string) (*sourcePackage, error) {
+	command := exec.CommandContext(ctx, "go", "list", "-e", "-deps", "-export", "-json", ".", vectorPackage)
 	command.Dir = dir
 	var stdout, stderr bytes.Buffer
 	command.Stdout, command.Stderr = &stdout, &stderr
@@ -191,7 +199,27 @@ func load(ctx context.Context, dir, output string) (*types.Package, error) {
 	if pkg == nil {
 		return nil, fmt.Errorf("cannot resolve package: %v", problems)
 	}
-	return pkg, nil
+	verify := func(code []byte) error {
+		filename := filepath.Join(dir, output)
+		generated, err := parser.ParseFile(fset, filename, code, 0)
+		if err != nil {
+			return err
+		}
+		var generatedError error
+		check := types.Config{Importer: imports, Error: func(err error) {
+			if issue, ok := err.(types.Error); ok && fset.Position(issue.Pos).Filename == filename && generatedError == nil {
+				generatedError = err
+			}
+		}}
+		// Check emitted references before publishing them, while continuing to
+		// tolerate application expressions that need regeneration themselves.
+		_, _ = check.Check(target.ImportPath, fset, append(files, generated), nil)
+		if generatedError != nil {
+			return fmt.Errorf("generated references do not compile: %w", generatedError)
+		}
+		return nil
+	}
+	return &sourcePackage{Package: pkg, verify: verify}, nil
 }
 
 type property struct {

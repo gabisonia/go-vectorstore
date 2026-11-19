@@ -76,6 +76,8 @@ Use the same `-output` and `-name` options as the directive. `-check` reports st
 or missing output without writing files. Ordinary generation preserves unchanged
 output and refuses to overwrite a file without the matching generator/model
 header. Generated source is replaced atomically after formatting.
+The tool type-checks generated references before publication; inaccessible types
+in promoted dependency fields produce an error without replacing output.
 
 Generation reads/type-checks source and dependency export data with the Go
 toolchain; it never executes model package initialization. Missing generated

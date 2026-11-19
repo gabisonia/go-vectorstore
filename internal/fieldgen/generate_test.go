@@ -178,3 +178,17 @@ func TestInvalidOptions(t *testing.T) {
 		}
 	}
 }
+
+func TestUnnameablePromotedTypeDoesNotPublishOutput(t *testing.T) {
+	opts, dir := fixture(t, "package models\nimport \"example.test/models/foreign\"\ntype Article struct { foreign.Base }\n")
+	if err := os.Mkdir(filepath.Join(dir, "foreign"), 0755); err != nil {
+		t.Fatal(err)
+	}
+	write(t, filepath.Join(dir, "foreign"), "model.go", "package foreign\ntype hidden string\ntype Base struct { ID string `vectordata:\"key\"`; Value hidden `vectordata:\"data\"` }\n")
+	if err := Run(t.Context(), opts); err == nil {
+		t.Fatal("generated code naming an inaccessible foreign type")
+	}
+	if _, err := os.Stat(filepath.Join(dir, opts.Output)); !os.IsNotExist(err) {
+		t.Fatalf("failed generation published output: %v", err)
+	}
+}
