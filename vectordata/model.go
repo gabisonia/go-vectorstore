@@ -574,10 +574,17 @@ func normalizeData(value any, p DataProperty) (any, error) {
 		}
 	case TypeStringArray:
 		if x, ok := value.([]string); ok {
-			if x == nil {
-				x = []string{}
-			}
 			return append([]string{}, x...), nil
+		}
+		v := reflect.ValueOf(value)
+		if v.Kind() == reflect.Slice && v.Type().Elem().Kind() == reflect.String {
+			// Match the codec's string-kind inference for named slice/element
+			// types. Retain legacy typed-nil => empty-array normalization.
+			out := make([]string, v.Len())
+			for i := range out {
+				out[i] = v.Index(i).String()
+			}
+			return out, nil
 		}
 	case TypeJSON:
 		raw, err := json.Marshal(value)

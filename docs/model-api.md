@@ -215,6 +215,14 @@ boolean and timestamp slices continue to use JSON; unannotated string slices
 remain `string_array`. UUID arrays require an explicit type. Registrations do not
 change implicitly.
 
+String-array fields also accept named slice and string element types, such as
+`type Labels []Label` with `type Label string`. Both typed writes and whole-array
+`Eq`/`In` operands normalize to copied `[]string` values. Registrations and stored
+representations remain unchanged. Legacy typed nil string slices normalize to
+non-nil empty arrays; an absent/nil optional pointer field remains SQL NULL.
+Dynamic string-array membership operands use ordinary `string` values; generated
+[typed references](typed-fields.md) perform that conversion for named elements.
+
 `Contains` tests one scalar element with a GIN-compatible typed predicate. `Eq`
 and `In` compare whole arrays, preserving order and duplicates. NULL arrays retain
 SQL unknown behavior under negated membership; an empty array contains nothing.

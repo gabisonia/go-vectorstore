@@ -90,9 +90,9 @@ generic instantiations. It does not infer custom codec mappings or runtime schem
 overrides. Packages shadowing predeclared identifiers are rejected. Schema/tag
 validity, numeric ranges, finite floats, timestamp/UUID/calendar/decimal formats,
 JSON serialization and provider support remain runtime checks through the
-existing model API. In particular, inferred legacy `string_array` storage still
-requires the existing supported `[]string` representation; generation does not
-expand the codec's accepted types.
+existing model API. String arrays accept named slice and string element types,
+normalizing to canonical `[]string` storage. Generated membership methods convert
+named string operands to the ordinary `string` values expected by the dynamic AST.
 
 See [the runnable sample](../samples/typed-fields/README.md) for query, count,
 filtered vector search, storage aliases, nullable values and SQLite reopen.

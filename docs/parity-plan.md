@@ -148,7 +148,7 @@ separate future conversion decisions.
 [PR #64](https://github.com/gabisonia/go-vectorstore/pull/64) merged after all 21 CI
 checks passed, including minimum/current-Go provider conformance and Aspire.
 
-## 5. Typed filter/order references — implemented
+## 5. Typed filter/order references — merged
 
 Add optional generated typed property references over the existing filter AST.
 The acceptance test is that invalid property names/types fail compilation in
@@ -166,12 +166,31 @@ runs it against PostgreSQL. Existing provider conformance continues to cover the
 unchanged AST. Custom codec mappings and runtime definition overrides remain
 outside generator inference; provider/value validation remains in the core.
 
+[PR #65](https://github.com/gabisonia/go-vectorstore/pull/65) merged after all 21 CI
+checks passed. The merged source includes generated-reference type checking before
+atomic publication, so inaccessible dependency types fail without replacing output.
+
 ## 6. Native service discovery — deferred pending a concrete consumer
 
 Metadata discovery is already covered. Prefer small optional interfaces for
 access to underlying clients/decorators when a real integration needs them.
 Document lifetime/ownership and typed-wrapper forwarding. A generic service
 locator is not required solely to reproduce .NET method names.
+
+## Post-parity production review
+
+The planned implementation increments above have merged. Continue with focused
+fixes backed by reproductions and shared provider checks; retain the existing
+deferment of native service access without a concrete consumer.
+
+The first typed-model review reproduced a schema/write mismatch for named string
+slice and element types: codec setup accepted them as `string_array`, but writes
+and whole-array filter operands rejected them. Normalize these accepted Go
+representations to the existing copied `[]string` format, retaining legacy
+nil/empty behavior and the ordinary-slice fast path. Shared provider checks cover
+typed/dynamic writes, pointer NULL/empty distinctions, buffer ownership, equality/
+membership/query/count/search, atomic invalid batches and reopen with plain Go
+types. The generated-reference sample exercises named array operands as well.
 
 ## Completion checks for each implementation PR
 

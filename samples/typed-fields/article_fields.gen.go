@@ -168,16 +168,16 @@ func (_ArticleFields_Enabled) Desc() vsdata.SortField {
 // Tag: "data"
 type _ArticleFields_Tags struct{}
 
-var _ func(Article) []string = func(model Article) []string { return model.Tags }
+var _ func(Article) Labels = func(model Article) Labels { return model.Tags }
 
 func (_ArticleFields_Tags) Name() string { return "Tags" }
-func (_ArticleFields_Tags) Eq(value []string) vsdata.Filter {
+func (_ArticleFields_Tags) Eq(value Labels) vsdata.Filter {
 	return vsdata.Eq(vsdata.Column("Tags"), value)
 }
-func (_ArticleFields_Tags) Ne(value []string) vsdata.Filter {
+func (_ArticleFields_Tags) Ne(value Labels) vsdata.Filter {
 	return vsdata.Ne(vsdata.Column("Tags"), value)
 }
-func (_ArticleFields_Tags) In(values ...[]string) vsdata.Filter {
+func (_ArticleFields_Tags) In(values ...Labels) vsdata.Filter {
 	operands := make([]any, len(values))
 	for i := range values {
 		operands[i] = values[i]
@@ -186,17 +186,17 @@ func (_ArticleFields_Tags) In(values ...[]string) vsdata.Filter {
 }
 func (_ArticleFields_Tags) IsNull() vsdata.Filter    { return vsdata.Eq(vsdata.Column("Tags"), nil) }
 func (_ArticleFields_Tags) IsNotNull() vsdata.Filter { return vsdata.Ne(vsdata.Column("Tags"), nil) }
-func (_ArticleFields_Tags) Contains(value string) vsdata.Filter {
+func (_ArticleFields_Tags) Contains(value Label) vsdata.Filter {
 	return vsdata.Contains(vsdata.Column("Tags"), string(value))
 }
-func (_ArticleFields_Tags) ContainsAny(values ...string) vsdata.Filter {
+func (_ArticleFields_Tags) ContainsAny(values ...Label) vsdata.Filter {
 	operands := make([]any, len(values))
 	for i := range values {
 		operands[i] = string(values[i])
 	}
 	return vsdata.ContainsAny(vsdata.Column("Tags"), operands...)
 }
-func (_ArticleFields_Tags) ContainsAll(values ...string) vsdata.Filter {
+func (_ArticleFields_Tags) ContainsAll(values ...Label) vsdata.Filter {
 	operands := make([]any, len(values))
 	for i := range values {
 		operands[i] = string(values[i])
