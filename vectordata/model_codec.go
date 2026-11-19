@@ -458,11 +458,20 @@ func assignModelValue(target reflect.Value, value any) error {
 			return nil
 		}
 	case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-		if source.Kind() == reflect.Uint64 {
-			if target.OverflowUint(source.Uint()) {
+		if source.Kind() == reflect.Uint64 || source.Kind() == reflect.Int64 {
+			var n uint64
+			if source.Kind() == reflect.Int64 {
+				if source.Int() < 0 {
+					return fmt.Errorf("negative integer cannot fit unsigned destination")
+				}
+				n = uint64(source.Int())
+			} else {
+				n = source.Uint()
+			}
+			if target.OverflowUint(n) {
 				return fmt.Errorf("unsigned integer overflow")
 			}
-			target.SetUint(source.Uint())
+			target.SetUint(n)
 			return nil
 		}
 	case reflect.Float32, reflect.Float64:
@@ -471,6 +480,11 @@ func assignModelValue(target reflect.Value, value any) error {
 				return fmt.Errorf("float overflow")
 			}
 			target.SetFloat(source.Float())
+			return nil
+		}
+	case reflect.Bool:
+		if source.Kind() == reflect.Bool {
+			target.SetBool(source.Bool())
 			return nil
 		}
 	case reflect.String:
@@ -508,9 +522,10 @@ func assignJSONValue(target reflect.Value, value any) error {
 	return decodeJSONValue(target, value)
 }
 
-// Structured native elements need their Go conversion/text decoding rather than
-// a JSON round-trip (defined time.Time types need not implement JSON methods).
-func assignStructuredArray(target reflect.Value, value any, kind DataType) error {
+// Native arrays use checked scalar conversion/text decoding rather than JSON
+// methods on the slice or its elements. Allocate owned output even when source
+// and destination have assignable types.
+func assignNativeArray(target reflect.Value, value any, kind DataType) error {
 	if isNilValue(value) {
 		return nil
 	}
@@ -518,7 +533,7 @@ func assignStructuredArray(target reflect.Value, value any, kind DataType) error
 		if target.IsNil() {
 			target.Set(reflect.New(target.Type().Elem()))
 		}
-		return assignStructuredArray(target.Elem(), value, kind)
+		return assignNativeArray(target.Elem(), value, kind)
 	}
 	source := reflect.ValueOf(value)
 	if source.Kind() != reflect.Slice || target.Kind() != reflect.Slice {
@@ -577,8 +592,8 @@ func (c *StructCodec[T]) Decode(record ModelRecord) (T, error) {
 		var assignErr error
 		if field.jsonDecoder {
 			assignErr = assignJSONValue(target, value)
-		} else if field.dataType == TypeUUIDArray || field.dataType == TypeTimeArray || field.dataType == TypeDateOnlyArray || field.dataType == TypeTimeOnlyArray || field.dataType == TypeDecimalArray {
-			assignErr = assignStructuredArray(target, value, field.dataType)
+		} else if _, array := field.dataType.ArrayElementType(); array {
+			assignErr = assignNativeArray(target, value, field.dataType)
 		} else {
 			assignErr = assignModelValue(target, value)
 		}

@@ -38,6 +38,7 @@ func Run(t *testing.T, factory Factory) {
 	t.Run("normalization_errors", func(t *testing.T) { runNormalizationErrors(t, factory) })
 	t.Run("json_scalars", func(t *testing.T) { runJSONScalars(t, factory) })
 	t.Run("json_decode", func(t *testing.T) { runJSONDecode(t, factory) })
+	t.Run("native_decode", func(t *testing.T) { runNativeDecode(t, factory) })
 	t.Run("filter_edges", func(t *testing.T) { runFilterEdges(t, factory) })
 	t.Run("provider_annotations", func(t *testing.T) { runProviderAnnotations(t, factory) })
 	t.Run("single_record_operations", func(t *testing.T) { runSingleRecordOperations(t, factory) })

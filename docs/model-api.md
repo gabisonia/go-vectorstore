@@ -227,6 +227,12 @@ fields can use float32/float64 slices, and boolean fields can use bool slices,
 including named slice/element aliases. Integer bounds and floating-point
 finiteness are checked; typed reads reject values outside the destination range.
 Dynamic records may also supply `[]any` with valid non-null scalar elements.
+Native array decoding allocates independent output slices and uses checked native
+element conversions, bypassing JSON methods on the slice and its elements.
+Unsigned destinations reject negative values and values outside their range.
+Native boolean scalars similarly decode as booleans. Application JSON decoder
+methods apply to JSON-mapped fields; UUID and other text-based native mappings
+retain their existing text conversion rules.
 
 `TypeUUIDArray` maps to `uuid[]` and returns canonical `[]string` values in dynamic
 records. Its elements follow the same strict UUID validation and typed text mapping

@@ -258,6 +258,20 @@ canonical read/rewrite stability, application validation errors, no partial slic
 results, iterator stopping/resource release and reopening. Upgrade guidance calls
 out values previously accepted by bypassed validation. Stored data is not rewritten.
 
+[PR #71](https://github.com/gabisonia/go-vectorstore/pull/71) merged JSON decoder
+precedence after all 21 CI checks passed.
+
+The native decoding audit reproduced numeric/boolean/string arrays and native
+boolean scalars invoking application JSON decoding through a fallback. Assignable
+array types also shared source buffers. Decode native arrays through checked
+element conversions into owned slices, preserving text conversions for structured
+types, and add native boolean/signed-to-unsigned conversion checks. Unit coverage
+checks slice/element JSON method isolation, exact integers, bounds, ownership and
+explicit JSON behavior. Shared provider contracts cover native round trips,
+SQL NULL/empty pointers, canonical read/rewrite stability, narrowing errors without
+partial slice results, iterator stopping and reopen. Upgrade guidance explains the
+native conversion correction; persisted formats remain unchanged.
+
 Remaining production work proceeds one focused PR at a time:
 
 1. Continue the typed-model audit for schema/codec agreement, decode overflow,
