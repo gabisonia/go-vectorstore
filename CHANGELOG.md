@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Honor custom `UnmarshalJSON` methods for JSON-mapped fields before native text
+  conversion and assignable scalar/map/slice shortcuts. Preserve decoder error
+  causes and field context, pointer SQL NULL/JSON-null behavior and native
+  mappings. Verify round trips, validation failures, iterator cleanup and read/
+  rewrite stability across providers; add upgrade guidance for previously bypassed
+  validation.
+
 - Preserve declared JSON values during typed model encoding: retain exact
   `json.Number` values, float32 JSON formatting and scalar/pointer-field marshaler
   methods. Reject invalid JSON numbers and marshaler failures before writes or

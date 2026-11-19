@@ -245,6 +245,19 @@ filters/count/search, no partial failed batch or generated-key consumption, and
 validation before embeddings. Existing stored JSON is read unchanged; upgrade
 guidance describes explicit correction of previously affected records.
 
+[PR #70](https://github.com/gabisonia/go-vectorstore/pull/70) merged JSON encoding
+corrections after all 21 CI checks passed.
+
+The JSON decoding review reproduced custom `UnmarshalJSON` being bypassed by
+native text conversion and direct assignment of scalar/map/slice values. Give a
+JSON-mapped field's JSON decoder precedence while retaining existing native data
+conversions and SQL NULL versus JSON-null behavior. Unit checks cover decoder
+precedence, map/slice validation and source-buffer isolation, nested pointers and
+dynamic null markers. Shared provider contracts cover explicit round trips,
+canonical read/rewrite stability, application validation errors, no partial slice
+results, iterator stopping/resource release and reopening. Upgrade guidance calls
+out values previously accepted by bypassed validation. Stored data is not rewritten.
+
 Remaining production work proceeds one focused PR at a time:
 
 1. Continue the typed-model audit for schema/codec agreement, decode overflow,
