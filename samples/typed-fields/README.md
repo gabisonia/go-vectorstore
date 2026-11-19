@@ -20,7 +20,8 @@ Unrated: 1
 The committed generated references follow `Article`'s tags and logical names.
 The sample combines typed boolean/range/array filters with a dynamic JSON path,
 orders results, counts NULL ratings and reuses the filter for exact vector search.
-`Title` has a storage alias. Both fixed fixture IDs are upserted on each run;
+`Title` has a storage alias; `Tags` uses named `Labels`/`Label` types that retain
+canonical string-array storage. Both fixed fixture IDs are upserted on each run;
 the dedicated `typed_fields_demo` collection and SQLite file persist until you
 remove them. Use a fresh file or a dedicated database for the sample.
 

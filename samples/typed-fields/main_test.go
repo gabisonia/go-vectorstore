@@ -49,9 +49,9 @@ func TestGeneratedFilterSemantics(t *testing.T) {
 			}
 			five, two := 5, 2
 			_, err = collection.Upsert(t.Context(), []Article{
-				{ID: "a", Title: "Alpha", Rating: &five, Enabled: true, Tags: []string{"go", "guide"}, Details: map[string]any{"level": "beginner"}, Vector: []float32{1, 0}},
-				{ID: "b", Title: "Beta", Tags: []string{"go"}, Vector: []float32{0, 1}},
-				{ID: "c", Title: "Gamma", Rating: &two, Enabled: true, Tags: []string{"other"}, Details: map[string]any{}, Vector: []float32{1, 1}},
+				{ID: "a", Title: "Alpha", Rating: &five, Enabled: true, Tags: Labels{"go", "guide"}, Details: map[string]any{"level": "beginner"}, Vector: []float32{1, 0}},
+				{ID: "b", Title: "Beta", Tags: Labels{"go"}, Vector: []float32{0, 1}},
+				{ID: "c", Title: "Gamma", Rating: &two, Enabled: true, Tags: Labels{"other"}, Details: map[string]any{}, Vector: []float32{1, 1}},
 			})
 			if err != nil {
 				t.Fatal(err)
@@ -68,8 +68,8 @@ func TestGeneratedFilterSemantics(t *testing.T) {
 				{"three valued not", vectordata.Not(ArticleFields.Rating.Gte(4)), []string{"c"}},
 				{"membership any", ArticleFields.Tags.ContainsAny("guide", "other"), []string{"a", "c"}},
 				{"membership", ArticleFields.Tags.Contains("guide"), []string{"a"}},
-				{"array equality", ArticleFields.Tags.Eq([]string{"go"}), []string{"b"}},
-				{"array in", ArticleFields.Tags.In([]string{"go"}, []string{"other"}), []string{"b", "c"}},
+				{"array equality", ArticleFields.Tags.Eq(Labels{"go"}), []string{"b"}},
+				{"array in", ArticleFields.Tags.In(Labels{"go"}, Labels{"other"}), []string{"b", "c"}},
 				{"json null", ArticleFields.Details.IsJSONNull(), []string{"b"}},
 				{"json null differs from sql null", ArticleFields.Details.IsNull(), nil},
 				{"or", vectordata.Or(ArticleFields.Rating.Lt(3), ArticleFields.Enabled.Eq(false)), []string{"b", "c"}},

@@ -15,12 +15,15 @@ import (
 	"github.com/gabisonia/go-vectorstore/vectordata"
 )
 
+type Label string
+type Labels []Label
+
 type Article struct {
 	ID      string         `vectordata:"key"`
 	Title   string         `vectordata:"data,name=stored_title"`
 	Rating  *int           `vectordata:"data"`
 	Enabled bool           `vectordata:"data"`
-	Tags    []string       `vectordata:"data"`
+	Tags    Labels         `vectordata:"data"`
 	Details map[string]any `vectordata:"data"`
 	Vector  []float32      `vectordata:"vector,dimensions=2,metric=l2"`
 }
@@ -43,8 +46,8 @@ func run(ctx context.Context, args []string, out io.Writer) error {
 	}
 	rating := 5
 	if _, err := collection.Upsert(ctx, []Article{
-		{ID: "go", Title: "Go guide", Rating: &rating, Enabled: true, Tags: []string{"go", "guide"}, Details: map[string]any{"level": "beginner"}, Vector: []float32{1, 0}},
-		{ID: "draft", Title: "Draft", Enabled: false, Tags: []string{"go"}, Vector: []float32{0, 1}},
+		{ID: "go", Title: "Go guide", Rating: &rating, Enabled: true, Tags: Labels{"go", "guide"}, Details: map[string]any{"level": "beginner"}, Vector: []float32{1, 0}},
+		{ID: "draft", Title: "Draft", Enabled: false, Tags: Labels{"go"}, Vector: []float32{0, 1}},
 	}); err != nil {
 		return err
 	}

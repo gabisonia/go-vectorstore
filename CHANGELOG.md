@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Fix writes and whole-array filters for named string slices/elements already
+  accepted by model schema inference. Preserve canonical `[]string` storage,
+  copied buffers and legacy nil/empty semantics; add shared provider contracts
+  and generated typed-reference sample coverage.
+
 - Add optional vectordata-gen for typed filter/order references over the existing
   AST. Generate from tagged model source without executing package initialization;
   check field/operand errors at compilation and generated freshness in CI.
