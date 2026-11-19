@@ -91,6 +91,14 @@ it does not establish the outcome of a failed operation. Blindly repeating Inser
 with generated keys can create duplicates. Upsert can overwrite concurrent changes,
 so stable keys alone do not supply application-level concurrency control.
 
+Application UUID text and JSON marshaling errors remain discoverable through
+normalization and filter validation, including standard JSON marshaler wrappers.
+Use the outer `ErrInvalidRecord`/`ErrInvalidFilter` classification for the operation
+and inspect the inner cause for application diagnostics. A filter may wrap record
+normalization and match both validation sentinels. Marshaling/validation failures
+covered here occur before writes or query embedding; they do not indicate a
+database commit attempt.
+
 The library does not replay PostgreSQL writes/commits. SQLite retries acquisition
 and side-effect-free reads with cancelable waits capped at five seconds; it does
 not replay write statements/commits. A read retry must fit the caller's overall

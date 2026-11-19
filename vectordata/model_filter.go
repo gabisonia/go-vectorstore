@@ -67,7 +67,7 @@ func ValidateModelFilter(filter Filter, d CollectionDefinition) error {
 			return err
 		}
 		invalid := func(err error) error {
-			return fmt.Errorf("%w: invalid value for %q: %v", ErrInvalidFilter, ref.Name, err)
+			return fmt.Errorf("%w: invalid value for %q: %w", ErrInvalidFilter, ref.Name, err)
 		}
 		ref, _ = NormalizeFieldRef(ref)
 		if ordered && value == nil {

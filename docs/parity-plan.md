@@ -219,6 +219,19 @@ round trips, filtering, deletion and caller ownership. Definitions and canonical
 UUID representations remain unchanged; upgrade guidance explains the validation
 tightening.
 
+[PR #68](https://github.com/gabisonia/go-vectorstore/pull/68) merged UUID key
+binding validation after all 21 CI checks passed.
+
+The error-propagation audit reproduced loss of application `MarshalText` and
+`MarshalJSON` causes: wrappers retained error messages but discarded error chains.
+Wrap causes through UUID/JSON normalization and filter validation, preserving
+invalid-record/filter matching and standard JSON marshaler wrappers. Unit checks
+cover key, scalar, array and JSON-path operands. Shared provider contracts cover
+typed writes, query/count/search/iteration, no partial failed batches or generated
+key consumption, and validation before embedding. Filter wrappers can expose both
+validation sentinels through an inner record normalizer; document the outer filter
+classification. This increment changes no interfaces or stored representations.
+
 Remaining production work proceeds one focused PR at a time:
 
 1. Continue the typed-model audit for schema/codec agreement, decode overflow,
