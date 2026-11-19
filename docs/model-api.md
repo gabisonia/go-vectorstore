@@ -610,6 +610,14 @@ can return errors directly. Existing manually constructed `OperationError` value
 may have empty store metadata. See `ExampleOperationError` in
 [the executable examples](../vectordata/example_test.go).
 
+UUID `MarshalText` and JSON serialization failures preserve the original cause
+through `errors.Is`/`errors.As`, including `*json.MarshalerError`. Record/key
+validation still matches `ErrInvalidRecord`, and filter validation still matches
+`ErrInvalidFilter`. A filter wrapping a record normalizer can also match
+`ErrInvalidRecord`; classify filter failures with `ErrInvalidFilter` and inspect
+the inner chain for application diagnostics. These validation failures are
+rejected before writes or query embedding; this adds no automatic retries.
+
 SQLite accelerates top-level key `Eq`/`In` queries and counts using its existing
 primary index. Queries sort/page matching records in Go; counts avoid payload
 decoding. Other supported scalar filters, ordering and paging run in SQL, decoding

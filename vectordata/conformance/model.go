@@ -35,6 +35,7 @@ func Run(t *testing.T, factory Factory) {
 	t.Run("array_sets", func(t *testing.T) { runArraySets(t, factory) })
 	t.Run("named_string_arrays", func(t *testing.T) { runNamedStringArrays(t, factory) })
 	t.Run("typed_codec_context", func(t *testing.T) { runTypedCodecContext(t, factory) })
+	t.Run("normalization_errors", func(t *testing.T) { runNormalizationErrors(t, factory) })
 	t.Run("filter_edges", func(t *testing.T) { runFilterEdges(t, factory) })
 	t.Run("provider_annotations", func(t *testing.T) { runProviderAnnotations(t, factory) })
 	t.Run("single_record_operations", func(t *testing.T) { runSingleRecordOperations(t, factory) })

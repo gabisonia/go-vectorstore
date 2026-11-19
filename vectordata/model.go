@@ -471,7 +471,7 @@ func (d CollectionDefinition) NormalizeKey(key any) (any, error) {
 		if text, yes := key.(encoding.TextMarshaler); yes {
 			raw, err := text.MarshalText()
 			if err != nil {
-				return nil, fmt.Errorf("%w: %v", ErrInvalidRecord, err)
+				return nil, fmt.Errorf("%w: %w", ErrInvalidRecord, err)
 			}
 			s = string(raw)
 		}
@@ -589,7 +589,7 @@ func normalizeData(value any, p DataProperty) (any, error) {
 	case TypeJSON:
 		raw, err := json.Marshal(value)
 		if err != nil {
-			return nil, fmt.Errorf("%w: property %q: %v", ErrInvalidRecord, p.Name, err)
+			return nil, fmt.Errorf("%w: property %q: %w", ErrInvalidRecord, p.Name, err)
 		}
 		dec := json.NewDecoder(strings.NewReader(string(raw)))
 		dec.UseNumber()

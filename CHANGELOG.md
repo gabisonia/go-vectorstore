@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Preserve UUID text and JSON marshaling error causes through record/key
+  normalization and model-filter validation. Retain invalid-record/filter
+  classification and standard JSON error wrappers for `errors.Is`/`errors.As`.
+  Verify failed-batch atomicity, generated keys and validation before embeddings
+  across providers; stored formats and successful operations remain unchanged.
+
 - Reject incomplete non-string UUID key mappings during model/typed-wrapper
   construction, before collection creation. Require value text formatting and
   pointer text decoding so generated keys can be reused for reads, deletes and
