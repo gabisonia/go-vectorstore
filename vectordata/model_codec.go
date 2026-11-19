@@ -28,6 +28,7 @@ type structField struct {
 	binary         bool
 	sparse         bool
 	embeddingInput bool
+	jsonDecoder    bool
 }
 
 // StructCodec resolves field mappings once at construction, not once per record.
@@ -272,6 +273,7 @@ func NewStructCodec[T any](definition *CollectionDefinition) (*StructCodec[T], e
 			return nil, fmt.Errorf("%w: field %q type conflicts with definition", ErrSchemaMismatch, p.Name)
 		}
 		codec.fields[len(codec.fields)-1].dataType = p.Type
+		codec.fields[len(codec.fields)-1].jsonDecoder = p.Type == TypeJSON && reflect.PointerTo(typ).Implements(reflect.TypeFor[json.Unmarshaler]())
 	}
 	for _, p := range d.Vectors {
 		if err := add(p.Name, "vector"); err != nil {
@@ -477,6 +479,10 @@ func assignModelValue(target reflect.Value, value any) error {
 			return nil
 		}
 	}
+	return decodeJSONValue(target, value)
+}
+
+func decodeJSONValue(target reflect.Value, value any) error {
 	payload, err := json.Marshal(value)
 	if err != nil {
 		return err
@@ -484,6 +490,22 @@ func assignModelValue(target reflect.Value, value any) error {
 	decoder := json.NewDecoder(strings.NewReader(string(payload)))
 	decoder.UseNumber()
 	return decoder.Decode(target.Addr().Interface())
+}
+
+// A JSON field's resolved decoder takes precedence over native text conversion
+// or assignable scalar/map/slice values. SQL NULL still leaves pointer
+// fields nil; a JSON null reaches the decoder after pointer allocation.
+func assignJSONValue(target reflect.Value, value any) error {
+	if value == nil {
+		return nil
+	}
+	if target.Kind() == reflect.Pointer {
+		if target.IsNil() {
+			target.Set(reflect.New(target.Type().Elem()))
+		}
+		return assignJSONValue(target.Elem(), value)
+	}
+	return decodeJSONValue(target, value)
 }
 
 // Structured native elements need their Go conversion/text decoding rather than
@@ -553,7 +575,9 @@ func (c *StructCodec[T]) Decode(record ModelRecord) (T, error) {
 			}
 		}
 		var assignErr error
-		if field.dataType == TypeUUIDArray || field.dataType == TypeTimeArray || field.dataType == TypeDateOnlyArray || field.dataType == TypeTimeOnlyArray || field.dataType == TypeDecimalArray {
+		if field.jsonDecoder {
+			assignErr = assignJSONValue(target, value)
+		} else if field.dataType == TypeUUIDArray || field.dataType == TypeTimeArray || field.dataType == TypeDateOnlyArray || field.dataType == TypeTimeOnlyArray || field.dataType == TypeDecimalArray {
 			assignErr = assignStructuredArray(target, value, field.dataType)
 		} else {
 			assignErr = assignModelValue(target, value)

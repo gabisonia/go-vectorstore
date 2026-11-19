@@ -154,6 +154,14 @@ before writes or embeddings. Nil pointer fields retain SQL NULL semantics;
 non-nil JSON values retain the existing JSON-null distinction. Inferred/native
 string, integer, floating-point and boolean fields keep their native mappings.
 
+On reads, JSON-mapped fields implementing `json.Unmarshaler` receive the canonical
+JSON before native text conversion or scalar/map/slice assignment. Their JSON
+validation errors retain the field name and original cause; slice reads return
+no partial values, and iterators stop at the first decode error. SQL NULL leaves
+pointer fields nil without invoking a decoder. JSON null reaches a custom JSON
+decoder as `null` after pointer allocation; existing dynamic `JSONNull` markers
+remain supported. Native data fields retain their existing conversion rules.
+
 PostgreSQL uses native columns, B-tree indexes for scalar `index` properties,
 GIN indexes for indexed native arrays, GIN full-text indexes for `fulltext`
 strings, and optional per-vector HNSW/IVFFlat indexes. JSON properties currently

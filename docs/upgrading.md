@@ -66,6 +66,14 @@ are unchanged. Existing records are read as stored; if affected values were
 written previously, validate and re-upsert them from authoritative application
 inputs. The provider does not rewrite stored JSON automatically.
 
+JSON-mapped fields with a custom `UnmarshalJSON` now invoke it before native text
+conversion or direct value assignment. Earlier reads could bypass that method for
+strings, assignable maps/slices and other scalar values. Data rejected by your JSON
+decoder now returns a field-labeled codec error with the original cause. Validate
+previously stored values against your decoder, including records affected by the
+JSON encoding issue above. Native mappings, SQL NULL pointer behavior and stored
+registrations remain unchanged; the provider does not rewrite data on read.
+
 On master after v0.4.1, non-string UUID key bindings require both value text
 formatting (`encoding.TextMarshaler` or `fmt.Stringer`) and pointer text decoding
 (`encoding.TextUnmarshaler`). This applies to model key fields and the typed key
