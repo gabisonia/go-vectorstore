@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Honor cancellation around typed model codec callbacks for writes, retrieval,
+  all search forms and iterators. Stop canceled encoding before provider writes
+  or embeddings, discard canceled decode results and close iterator sources.
+  Preserve codec error causes and confirmed write results; verify generated-key
+  atomicity and the shared behavior across providers.
+
 - Fix writes and whole-array filters for named string slices/elements already
   accepted by model schema inference. Preserve canonical `[]string` storage,
   copied buffers and legacy nil/empty semantics; add shared provider contracts

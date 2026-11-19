@@ -129,7 +129,7 @@ func (c *TypedModelCollection[K, T]) TryGet(ctx context.Context, key K, opts Ret
 	if err != nil || !found {
 		return zero, false, err
 	}
-	value, err := c.codec.Decode(record)
+	value, err := c.decodeRecord(ctx, record)
 	if err != nil {
 		return zero, false, err
 	}

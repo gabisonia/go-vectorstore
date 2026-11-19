@@ -122,30 +122,22 @@ func (c *TypedModelCollection[K, T]) SearchBinary(ctx context.Context, v BinaryV
 	if !ok {
 		return nil, ErrUnsupported
 	}
-	return c.searchResults(b.SearchBinary(ctx, v, top, opts))
+	return c.searchResults(ctx, func() ([]ModelSearchResult, error) { return b.SearchBinary(ctx, v, top, opts) })
 }
 func (c *TypedModelCollection[K, T]) SearchBinaryIter(ctx context.Context, v BinaryVector, top int, opts ModelSearchOptions) iter.Seq2[TypedModelSearchResult[T], error] {
-	return func(yield func(TypedModelSearchResult[T], error) bool) {
+	return c.searchSequence(ctx, func(yield func(ModelSearchResult, error) bool) {
 		b, ok := c.base.(BinarySearcher)
 		if !ok {
-			yield(TypedModelSearchResult[T]{}, ErrUnsupported)
+			yield(ModelSearchResult{}, ErrUnsupported)
 			return
 		}
-		for r, err := range b.SearchBinaryIter(ctx, v, top, opts) {
-			var item T
-			if err == nil {
-				item, err = c.codec.Decode(r.Record)
-			}
-			if !yield(TypedModelSearchResult[T]{item, r.Distance, r.Score, r.ScoreKind}, err) || err != nil {
-				return
-			}
-		}
-	}
+		b.SearchBinaryIter(ctx, v, top, opts)(yield)
+	})
 }
 func (c *TypedModelCollection[K, T]) HybridSearchBinary(ctx context.Context, v BinaryVector, keywords string, top int, opts HybridSearchOptions) ([]TypedModelSearchResult[T], error) {
 	b, ok := c.base.(BinaryHybridSearcher)
 	if !ok {
 		return nil, ErrUnsupported
 	}
-	return c.searchResults(b.HybridSearchBinary(ctx, v, keywords, top, opts))
+	return c.searchResults(ctx, func() ([]ModelSearchResult, error) { return b.HybridSearchBinary(ctx, v, keywords, top, opts) })
 }

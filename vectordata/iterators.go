@@ -221,15 +221,21 @@ func HybridSearchSparseIter(ctx context.Context, c ModelCollection, vector Spars
 }
 
 func (c *TypedModelCollection[K, T]) GetManyIter(ctx context.Context, keys []K, opts RetrievalOptions) iter.Seq2[T, error] {
-	return iteration.WithContext(ctx, func(yield func(T, error) bool) {
+	return c.recordSequence(ctx, func(yield func(ModelRecord, error) bool) {
 		values := make([]any, len(keys))
 		for i, key := range keys {
 			values[i] = key
 		}
-		for record, err := range GetManyIter(ctx, c.base, values, opts) {
+		GetManyIter(ctx, c.base, values, opts)(yield)
+	})
+}
+
+func (c *TypedModelCollection[K, T]) recordSequence(ctx context.Context, source iter.Seq2[ModelRecord, error]) iter.Seq2[T, error] {
+	return iteration.WithContext(ctx, func(yield func(T, error) bool) {
+		for record, err := range source {
 			var item T
 			if err == nil {
-				item, err = c.codec.Decode(record)
+				item, err = c.decodeRecord(ctx, record)
 			}
 			if !yield(item, err) || err != nil {
 				return
@@ -243,7 +249,7 @@ func (c *TypedModelCollection[K, T]) searchSequence(ctx context.Context, source 
 		for result, err := range source {
 			var item T
 			if err == nil {
-				item, err = c.codec.Decode(result.Record)
+				item, err = c.decodeRecord(ctx, result.Record)
 			}
 			if !yield(TypedModelSearchResult[T]{item, result.Distance, result.Score, result.ScoreKind}, err) || err != nil {
 				return

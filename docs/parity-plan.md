@@ -192,6 +192,30 @@ typed/dynamic writes, pointer NULL/empty distinctions, buffer ownership, equalit
 membership/query/count/search, atomic invalid batches and reopen with plain Go
 types. The generated-reference sample exercises named array operands as well.
 
+[PR #66](https://github.com/gabisonia/go-vectorstore/pull/66) merged the named-string
+fix after all 21 CI checks passed.
+
+The next shared typed-model audit reproduced callbacks continuing after canceled
+encoding and typed reads returning data after a decoder canceled the operation.
+Check context before/after each synchronous model codec callback, stop encoding
+before provider writes/embeddings, preserve codec causes alongside cancellation,
+discard partial decoded slices and stop/close iterators. Confirmed provider write
+results retain their success classification. Tests cover every typed search form,
+legacy provider adapters, deadlines, iterator disposal and real shared-provider
+generated-key continuity. This increment does not claim to interrupt callbacks
+already executing or change persisted data/model interfaces.
+
+Remaining production work proceeds one focused PR at a time:
+
+1. Continue the typed-model audit for schema/codec agreement, decode overflow,
+   error propagation and mutable-value ownership; fix reproduced defects.
+2. Extend restore/failure drills, checking registered schemas, native values and
+   generated-key continuity, with explicit provider-specific outcome limits.
+3. Publish reproducible PostgreSQL/Redis mixed-workload evidence alongside the
+   existing SQLite measurements; include cancellation, concurrency and memory.
+4. Prepare a reviewed release candidate, compatibility/upgrade guidance and a
+   pinned consumer smoke test. Publication remains a separate explicit action.
+
 ## Completion checks for each implementation PR
 
 Run relevant race tests, minimum-Go checks, shared provider contracts and real
