@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Preserve declared JSON values during typed model encoding: retain exact
+  `json.Number` values, float32 JSON formatting and scalar/pointer-field marshaler
+  methods. Reject invalid JSON numbers and marshaler failures before writes or
+  embeddings. Preserve native mappings, nil pointer semantics and stored formats;
+  add cross-provider round-trip/filter/atomicity checks and upgrade guidance.
+
 - Preserve UUID text and JSON marshaling error causes through record/key
   normalization and model-filter validation. Retain invalid-record/filter
   classification and standard JSON error wrappers for `errors.Is`/`errors.As`.

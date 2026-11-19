@@ -57,6 +57,15 @@ through errors.Is/As. See the [model guide](model-api.md) for supported types.
 
 ## Existing model collections
 
+On master after v0.4.1, typed fields mapped to JSON retain their Go
+representation during encoding. Earlier writes could quote `json.Number`, widen
+float32 before JSON serialization, or bypass scalar marshaler methods. New writes
+honor those representations and reject invalid numbers/marshaler failures. Native
+scalar mappings, nil pointer SQL NULL behavior, registrations and storage formats
+are unchanged. Existing records are read as stored; if affected values were
+written previously, validate and re-upsert them from authoritative application
+inputs. The provider does not rewrite stored JSON automatically.
+
 On master after v0.4.1, non-string UUID key bindings require both value text
 formatting (`encoding.TextMarshaler` or `fmt.Stringer`) and pointer text decoding
 (`encoding.TextUnmarshaler`). This applies to model key fields and the typed key
