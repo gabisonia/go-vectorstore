@@ -13,6 +13,7 @@ Redis and memory, plus the original PostgreSQL Record API.
 - [Discovery index](../llms.txt): concise links for tools consuming repository documentation
 
 - [Model API](model-api.md): schemas, typed/native keys and data, optional named vectors, filters, embeddings, search and iterators
+- [Typed property references](typed-fields.md): optional generation, compile-checked operands and ordering, regeneration and dynamic JSON paths
 - [SQLite provider](sqlite.md): setup, persistence, concurrency and snapshot-scan limits
 - [Opt-in sqlite-vec](sqlitevec.md): exact scalar L1 candidates, precision proof and fallback
 - [SQLite vector design](sqlite-vector-design.md): opt-in extension choice, executable compatibility probe and implementation gates

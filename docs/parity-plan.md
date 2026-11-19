@@ -125,7 +125,7 @@ after all 21 CI checks passed, including minimum/current-Go shared conformance,
 owned-server restart cases and both Aspire sample jobs. Master includes its
 provider, immutable capacity/receipt limits, usage/outcome diagnostics and sample.
 
-## 4. Embedding output flexibility — typed adapter and first representation implemented
+## 4. Embedding output flexibility — typed adapter and first representation merged
 
 Design an additive contract alongside the existing float32 embedders, informed by
 Microsoft's EmbeddingType. Separate input conversion, output representation and
@@ -145,12 +145,26 @@ context checks, byte-identical SQLite reopen and a credential-free sample cover
 the increment. Float64, quantized integer, automatic binary/sparse outputs remain
 separate future conversion decisions.
 
-## 5. Typed filter/order references — queued
+[PR #64](https://github.com/gabisonia/go-vectorstore/pull/64) merged after all 21 CI
+checks passed, including minimum/current-Go provider conformance and Aspire.
+
+## 5. Typed filter/order references — implemented
 
 Add optional generated typed property references over the existing filter AST.
 The acceptance test is that invalid property names/types fail compilation in
 generated usage, while dynamic string references remain supported. Do not attempt
 to translate arbitrary Go callbacks into SQL or emulate LINQ syntax.
+
+The optional [generator](typed-fields.md) emits concrete typed key/data references
+from tagged model source, without executing model initialization. Methods build
+the unchanged AST and sort values; JSON paths remain dynamic. Compiler anchors
+detect renamed/removed fields and changed Go types, while read-only freshness
+checks detect changed tags and added properties. Compile-negative tests cover
+misspellings, operands and unsupported operators. A rerunnable sample exercises
+queries, NULL counts and filtered vector search on memory/SQLite; Aspire CI also
+runs it against PostgreSQL. Existing provider conformance continues to cover the
+unchanged AST. Custom codec mappings and runtime definition overrides remain
+outside generator inference; provider/value validation remains in the core.
 
 ## 6. Native service discovery — deferred pending a concrete consumer
 
