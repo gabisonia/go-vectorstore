@@ -391,6 +391,7 @@ func (c *StructCodec[T]) Encode(value T) (ModelRecord, error) {
 				}
 			}
 		case "data":
+			original := v
 			for v.Kind() == reflect.Pointer {
 				if v.IsNil() {
 					break
@@ -399,6 +400,11 @@ func (c *StructCodec[T]) Encode(value T) (ModelRecord, error) {
 			}
 			if v.Kind() == reflect.Pointer && v.IsNil() {
 				out.Data[field.name] = nil
+			} else if field.dataType == TypeJSON {
+				// Preserve JSON numbers, scalar precision and marshaler methods,
+				// including methods on a non-nil pointer field. Nil pointers above
+				// retain their existing SQL NULL meaning.
+				out.Data[field.name] = original.Interface()
 			} else if field.dataType == TypeUUID {
 				out.Data[field.name] = v.Interface()
 			} else {

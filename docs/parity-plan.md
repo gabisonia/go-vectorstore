@@ -232,6 +232,19 @@ key consumption, and validation before embedding. Filter wrappers can expose bot
 validation sentinels through an inner record normalizer; document the outer filter
 classification. This increment changes no interfaces or stored representations.
 
+[PR #69](https://github.com/gabisonia/go-vectorstore/pull/69) merged normalization
+error-chain preservation after all 21 CI checks passed.
+
+The explicit-JSON mapping audit reproduced scalar values being converted through
+native mappings before JSON serialization: `json.Number` became quoted text,
+float32 was widened and scalar marshaler methods were bypassed. Preserve the
+original value for declared JSON fields, including non-nil pointer fields, while
+retaining nil-pointer SQL NULL and existing native mappings. Unit/shared-provider
+checks cover exact numbers, float32 equality, custom JSON objects and failures,
+filters/count/search, no partial failed batch or generated-key consumption, and
+validation before embeddings. Existing stored JSON is read unchanged; upgrade
+guidance describes explicit correction of previously affected records.
+
 Remaining production work proceeds one focused PR at a time:
 
 1. Continue the typed-model audit for schema/codec agreement, decode overflow,

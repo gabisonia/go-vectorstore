@@ -144,6 +144,16 @@ are optional. Nonoptional fields reject nil values.
 JSON numbers retain their precision as `json.Number`. Dynamic records use logical
 property names in `ModelRecord.Data` and `ModelRecord.Vectors`.
 
+For typed fields explicitly mapped to `type=json`, the codec preserves the Go
+value for standard JSON serialization. A `json.Number` remains a JSON number,
+float32 values use float32 JSON formatting, and value-receiver or pointer-field
+marshalers are honored. For example, `Amount json.Number` with
+`vectordata:"data,type=json"` stores `9007199254740993` as a number rather than a
+quoted string. Invalid number literals and marshaler failures reject the batch
+before writes or embeddings. Nil pointer fields retain SQL NULL semantics;
+non-nil JSON values retain the existing JSON-null distinction. Inferred/native
+string, integer, floating-point and boolean fields keep their native mappings.
+
 PostgreSQL uses native columns, B-tree indexes for scalar `index` properties,
 GIN indexes for indexed native arrays, GIN full-text indexes for `fulltext`
 strings, and optional per-vector HNSW/IVFFlat indexes. JSON properties currently
