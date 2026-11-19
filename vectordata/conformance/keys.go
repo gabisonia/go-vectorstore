@@ -143,6 +143,7 @@ func runNativeKeys(t *testing.T, factory Factory, caps vectordata.ProviderCapabi
 		})
 	}
 	if slices.Contains(caps.GeneratedKeyTypes, vectordata.KeyUUID) {
+		t.Run("uuid_bindings", func(t *testing.T) { runUUIDBindings(t, factory) })
 		t.Run("generated_uuid", func(t *testing.T) {
 			ctx := context.Background()
 			store := factory(t)

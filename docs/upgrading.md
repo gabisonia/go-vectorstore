@@ -57,6 +57,16 @@ through errors.Is/As. See the [model guide](model-api.md) for supported types.
 
 ## Existing model collections
 
+On master after v0.4.1, non-string UUID key bindings require both value text
+formatting (`encoding.TextMarshaler` or `fmt.Stringer`) and pointer text decoding
+(`encoding.TextUnmarshaler`). This applies to model key fields and the typed key
+parameter `K`, including generated UUIDs. Older constructors could accept a
+decode-only type, return a generated key after committing a write, then reject
+that key in subsequent Get/Delete/filter calls. Setup now returns
+`ErrSchemaMismatch` before collection creation. Add the missing formatter or use
+string/named-string bindings. Existing definitions, UUID storage and supported
+bidirectional mappings remain compatible; this fix requires no data migration.
+
 Required vectors remain the default. The new Optional flag is omitted from
 serialized registrations when false, preserving previous required-vector
 registrations. Binary/sparse vector absence uses missing map keys; typed nullable

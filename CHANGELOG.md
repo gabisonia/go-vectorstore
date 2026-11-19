@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Reject incomplete non-string UUID key mappings during model/typed-wrapper
+  construction, before collection creation. Require value text formatting and
+  pointer text decoding so generated keys can be reused for reads, deletes and
+  filters. Preserve string/named-string and supported text/Stringer mappings,
+  existing registrations and canonical storage; add shared provider checks.
+
 - Honor cancellation around typed model codec callbacks for writes, retrieval,
   all search forms and iterators. Stop canceled encoding before provider writes
   or embeddings, discard canceled decode results and close iterator sources.
