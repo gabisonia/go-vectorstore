@@ -74,6 +74,13 @@ previously stored values against your decoder, including records affected by the
 JSON encoding issue above. Native mappings, SQL NULL pointer behavior and stored
 registrations remain unchanged; the provider does not rewrite data on read.
 
+Native arrays and native boolean scalars now consistently use native conversions
+rather than falling through JSON decoding. Custom `UnmarshalJSON` methods on
+native slice/element types and boolean scalars are no longer invoked by those
+mappings. Use an explicit JSON mapping when JSON decoder behavior is intended.
+Native arrays return independent slices, preserve SQL NULL/empty distinctions and
+reject integer/float narrowing errors. Stored formats and existing data are unchanged.
+
 On master after v0.4.1, non-string UUID key bindings require both value text
 formatting (`encoding.TextMarshaler` or `fmt.Stringer`) and pointer text decoding
 (`encoding.TextUnmarshaler`). This applies to model key fields and the typed key

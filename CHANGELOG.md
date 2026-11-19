@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Decode native arrays with checked scalar conversions and owned output slices,
+  avoiding application JSON methods on native slice/element types. Native boolean
+  scalars also retain their native conversion. Preserve integer/float range
+  checks, SQL NULL/empty distinctions and explicit JSON decoder behavior; verify
+  round trips, read/rewrite stability and failed-read cleanup across providers.
+
 - Honor custom `UnmarshalJSON` methods for JSON-mapped fields before native text
   conversion and assignable scalar/map/slice shortcuts. Preserve decoder error
   causes and field context, pointer SQL NULL/JSON-null behavior and native
