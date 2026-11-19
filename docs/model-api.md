@@ -93,7 +93,14 @@ before storage creation. An explicit definition uses exported Go field names and
 does not require tags.
 
 Supported native key types are string, int64, uint64 and UUID. UUID keys can be
-strings or compatible types with text mapping. PostgreSQL stores these as `text`,
+strings or compatible types with text mapping. For both model key fields and the
+typed key parameter `K`, non-string UUID types must provide value-side
+`encoding.TextMarshaler` or `fmt.Stringer` formatting and pointer-side
+`encoding.TextUnmarshaler` decoding.
+Decode-only or encode-only bindings fail with `ErrSchemaMismatch` before storage
+creation, including generated UUID bindings. String and named-string bindings
+remain supported; UUID text validity is checked at runtime.
+PostgreSQL stores these as `text`,
 `bigint`, `numeric(20,0)` and `uuid`, rather than stringifying all keys into a text
 column. Unsigned fields infer `KeyUint64`. Values from 0 to 18446744073709551615 retain
 their exact identity across writes, reads, filters, ordering and deletes. Native

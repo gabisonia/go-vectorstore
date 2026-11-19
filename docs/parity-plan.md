@@ -205,6 +205,20 @@ legacy provider adapters, deadlines, iterator disposal and real shared-provider
 generated-key continuity. This increment does not claim to interrupt callbacks
 already executing or change persisted data/model interfaces.
 
+[PR #67](https://github.com/gabisonia/go-vectorstore/pull/67) merged the codec
+cancellation fix after all 21 CI checks passed.
+
+The next schema/codec review reproduced acceptance of decode-only non-string UUID
+key mappings. Generated writes could return keys that subsequent reads/deletes
+could not normalize. Reuse the existing UUID data-field compatibility check for
+model key fields and the typed key parameter, requiring both value-side text
+formatting and pointer text decoding. Reject incomplete bindings before storage
+creation, while preserving string/named-string, text-marshaled and Stringer-based
+keys. Unit and shared-provider contracts cover invalid setup, explicit/generated
+round trips, filtering, deletion and caller ownership. Definitions and canonical
+UUID representations remain unchanged; upgrade guidance explains the validation
+tightening.
+
 Remaining production work proceeds one focused PR at a time:
 
 1. Continue the typed-model audit for schema/codec agreement, decode overflow,
