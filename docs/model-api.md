@@ -57,6 +57,15 @@ type parameters. Both struct values and pointers to structs are supported.
 Reflection mappings are resolved once when constructing a `StructCodec[T]`.
 Custom `ModelCodec[T]` implementations can provide their own mappings.
 
+`TypedModelCollection` checks the operation context before and after each model
+codec callback. Cancellation stops later callbacks and prevents handing an encoded
+batch to the provider. Reads return no partial slice values on decode failure or
+cancellation; iterators stop with one error and close their source. Codec errors
+remain discoverable with `errors.Is`/`errors.As` when cancellation occurs at the
+same callback. Callbacks are synchronous: one already executing must return before
+the wrapper can observe cancellation. A confirmed provider write retains its
+returned keys even if the context is canceled as its acknowledgement arrives.
+
 For compile-checked filter operands and ordering on tagged structs, use the
 optional [typed property generator](typed-fields.md). It builds the same filter
 AST and sort values; dynamic `Column`/`DataPath` expressions remain available.

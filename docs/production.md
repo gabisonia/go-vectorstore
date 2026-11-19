@@ -64,6 +64,13 @@ buffered query/vector-search rows and at exhaustion; cancellation during the fin
 if iteration continues. Breaking the loop deliberately ends iteration and closes
 its resources. Consumers should also check ctx.Err before expensive per-item work.
 
+Typed model wrappers also check cancellation around each synchronous codec
+callback, stopping later callbacks and rejecting canceled encoding before provider
+writes or embeddings begin. They cannot interrupt an application callback already
+executing. Concurrent codec failures and cancellation preserve both error causes;
+decoded partial values are discarded. Cancellation after a provider confirms a
+write does not turn that known success into a failed write or trigger a replay.
+
 Release cursors by finishing/breaking the range before issuing another operation
 through a single-connection PostgreSQL pool. Memory/SQLite materialize listing,
 lookup/query snapshots or search pages and release locks/SQLite's connection

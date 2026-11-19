@@ -52,7 +52,7 @@ func (c *TypedModelCollection[K, T]) SearchInput(ctx context.Context, input any,
 	if !ok {
 		return nil, ErrUnsupported
 	}
-	return c.searchResults(s.SearchInput(ctx, input, top, opts))
+	return c.searchResults(ctx, func() ([]ModelSearchResult, error) { return s.SearchInput(ctx, input, top, opts) })
 }
 
 func (c *TypedModelCollection[K, T]) HybridSearchInput(ctx context.Context, input any, keywords string, top int, opts HybridSearchOptions) ([]TypedModelSearchResult[T], error) {
@@ -60,7 +60,7 @@ func (c *TypedModelCollection[K, T]) HybridSearchInput(ctx context.Context, inpu
 	if !ok {
 		return nil, ErrUnsupported
 	}
-	return c.searchResults(s.HybridSearchInput(ctx, input, keywords, top, opts))
+	return c.searchResults(ctx, func() ([]ModelSearchResult, error) { return s.HybridSearchInput(ctx, input, keywords, top, opts) })
 }
 
 // EmbedInputQuery embeds one non-nil input and validates the output. Text queries

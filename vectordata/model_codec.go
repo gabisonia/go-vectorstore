@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"iter"
 	"reflect"
@@ -13,6 +14,8 @@ import (
 )
 
 // ModelCodec maps domain values to dynamic model records; custom codecs can avoid reflection.
+// Callbacks are synchronous. TypedModelCollection checks cancellation before and
+// after each callback; it cannot interrupt a callback already executing.
 type ModelCodec[T any] interface {
 	Encode(T) (ModelRecord, error)
 	Decode(ModelRecord) (T, error)
@@ -624,7 +627,17 @@ func (c *TypedModelCollection[K, T]) EnsureExists(ctx context.Context) error {
 func (c *TypedModelCollection[K, T]) EnsureDeleted(ctx context.Context) error {
 	return c.base.EnsureDeleted(ctx)
 }
-func (c *TypedModelCollection[K, T]) encode(values []T) ([]ModelRecord, error) {
+func codecContextError(ctx context.Context, err error) error {
+	if cause := ctx.Err(); cause != nil {
+		return errors.Join(cause, err)
+	}
+	return err
+}
+
+func (c *TypedModelCollection[K, T]) encode(ctx context.Context, values []T) ([]ModelRecord, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	records := make([]ModelRecord, len(values))
 	typ := reflect.TypeFor[K]()
 	narrowInteger := (typ.Kind() >= reflect.Int && typ.Kind() <= reflect.Int64 || typ.Kind() >= reflect.Uint && typ.Kind() <= reflect.Uint64) && typ.Bits() < 64
@@ -633,8 +646,11 @@ func (c *TypedModelCollection[K, T]) encode(values []T) ([]ModelRecord, error) {
 		definition = c.base.Definition()
 	}
 	for i, value := range values {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		r, err := c.codec.Encode(value)
-		if err != nil {
+		if err := codecContextError(ctx, err); err != nil {
 			return nil, err
 		}
 		// Check the whole batch before calling the provider. In particular, a
@@ -652,7 +668,7 @@ func (c *TypedModelCollection[K, T]) encode(values []T) ([]ModelRecord, error) {
 		}
 		records[i] = r
 	}
-	return records, nil
+	return records, ctx.Err()
 }
 func typedKeys[K comparable](values []any) ([]K, error) {
 	out := make([]K, len(values))
@@ -667,7 +683,7 @@ func typedKeys[K comparable](values []any) ([]K, error) {
 	return out, nil
 }
 func (c *TypedModelCollection[K, T]) Insert(ctx context.Context, values []T) ([]K, error) {
-	records, err := c.encode(values)
+	records, err := c.encode(ctx, values)
 	if err != nil {
 		return nil, err
 	}
@@ -681,7 +697,7 @@ func (c *TypedModelCollection[K, T]) Insert(ctx context.Context, values []T) ([]
 	return typedKeys[K](keys)
 }
 func (c *TypedModelCollection[K, T]) Upsert(ctx context.Context, values []T) ([]K, error) {
-	records, err := c.encode(values)
+	records, err := c.encode(ctx, values)
 	if err != nil {
 		return nil, err
 	}
@@ -695,14 +711,21 @@ func (c *TypedModelCollection[K, T]) Upsert(ctx context.Context, values []T) ([]
 	return typedKeys[K](keys)
 }
 func (c *TypedModelCollection[K, T]) Get(ctx context.Context, key K, opts RetrievalOptions) (T, error) {
+	if err := ctx.Err(); err != nil {
+		var zero T
+		return zero, err
+	}
 	r, err := c.base.Get(ctx, key, opts)
 	if err != nil {
 		var zero T
 		return zero, err
 	}
-	return c.codec.Decode(r)
+	return c.decodeRecord(ctx, r)
 }
 func (c *TypedModelCollection[K, T]) GetMany(ctx context.Context, keys []K, opts RetrievalOptions) ([]T, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	values := make([]any, len(keys))
 	for i, key := range keys {
 		values[i] = key
@@ -711,12 +734,27 @@ func (c *TypedModelCollection[K, T]) GetMany(ctx context.Context, keys []K, opts
 	if err != nil {
 		return nil, err
 	}
-	return c.decode(records)
+	return c.decode(ctx, records)
 }
-func (c *TypedModelCollection[K, T]) decode(records []ModelRecord) ([]T, error) {
+func (c *TypedModelCollection[K, T]) decodeRecord(ctx context.Context, record ModelRecord) (T, error) {
+	var zero T
+	if err := ctx.Err(); err != nil {
+		return zero, err
+	}
+	value, err := c.codec.Decode(record)
+	if err := codecContextError(ctx, err); err != nil {
+		return zero, err
+	}
+	return value, nil
+}
+
+func (c *TypedModelCollection[K, T]) decode(ctx context.Context, records []ModelRecord) ([]T, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	out := make([]T, len(records))
 	for i, r := range records {
-		v, err := c.codec.Decode(r)
+		v, err := c.decodeRecord(ctx, r)
 		if err != nil {
 			return nil, err
 		}
@@ -735,32 +773,34 @@ func (c *TypedModelCollection[K, T]) Count(ctx context.Context, filter Filter) (
 	return c.base.Count(ctx, filter)
 }
 func (c *TypedModelCollection[K, T]) QueryIter(ctx context.Context, filter Filter, top int, opts QueryOptions) iter.Seq2[T, error] {
-	return func(yield func(T, error) bool) {
-		for r, err := range c.base.QueryIter(ctx, filter, top, opts) {
-			var value T
-			if err == nil {
-				value, err = c.codec.Decode(r)
-			}
-			if !yield(value, err) || err != nil {
-				return
-			}
-		}
-	}
+	return c.recordSequence(ctx, func(yield func(ModelRecord, error) bool) {
+		c.base.QueryIter(ctx, filter, top, opts)(yield)
+	})
 }
 func (c *TypedModelCollection[K, T]) Query(ctx context.Context, filter Filter, top int, opts QueryOptions) ([]T, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	records, err := c.base.Query(ctx, filter, top, opts)
 	if err != nil {
 		return nil, err
 	}
-	return c.decode(records)
+	return c.decode(ctx, records)
 }
-func (c *TypedModelCollection[K, T]) searchResults(results []ModelSearchResult, err error) ([]TypedModelSearchResult[T], error) {
+func (c *TypedModelCollection[K, T]) searchResults(ctx context.Context, load func() ([]ModelSearchResult, error)) ([]TypedModelSearchResult[T], error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	results, err := load()
 	if err != nil {
+		return nil, err
+	}
+	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 	out := make([]TypedModelSearchResult[T], len(results))
 	for i, r := range results {
-		item, err := c.codec.Decode(r.Record)
+		item, err := c.decodeRecord(ctx, r.Record)
 		if err != nil {
 			return nil, err
 		}
@@ -769,35 +809,27 @@ func (c *TypedModelCollection[K, T]) searchResults(results []ModelSearchResult, 
 	return out, nil
 }
 func (c *TypedModelCollection[K, T]) Search(ctx context.Context, vector []float32, top int, opts ModelSearchOptions) ([]TypedModelSearchResult[T], error) {
-	return c.searchResults(c.base.Search(ctx, vector, top, opts))
+	return c.searchResults(ctx, func() ([]ModelSearchResult, error) { return c.base.Search(ctx, vector, top, opts) })
 }
 func (c *TypedModelCollection[K, T]) SearchText(ctx context.Context, text string, top int, opts ModelSearchOptions) ([]TypedModelSearchResult[T], error) {
-	return c.searchResults(c.base.SearchText(ctx, text, top, opts))
+	return c.searchResults(ctx, func() ([]ModelSearchResult, error) { return c.base.SearchText(ctx, text, top, opts) })
 }
 func (c *TypedModelCollection[K, T]) SearchIter(ctx context.Context, vector []float32, top int, opts ModelSearchOptions) iter.Seq2[TypedModelSearchResult[T], error] {
-	return func(yield func(TypedModelSearchResult[T], error) bool) {
-		for r, err := range c.base.SearchIter(ctx, vector, top, opts) {
-			var item T
-			if err == nil {
-				item, err = c.codec.Decode(r.Record)
-			}
-			if !yield(TypedModelSearchResult[T]{item, r.Distance, r.Score, r.ScoreKind}, err) || err != nil {
-				return
-			}
-		}
-	}
+	return c.searchSequence(ctx, func(yield func(ModelSearchResult, error) bool) {
+		c.base.SearchIter(ctx, vector, top, opts)(yield)
+	})
 }
 func (c *TypedModelCollection[K, T]) HybridSearch(ctx context.Context, vector []float32, keywords string, top int, opts HybridSearchOptions) ([]TypedModelSearchResult[T], error) {
 	h, ok := c.base.(HybridSearcher)
 	if !ok {
 		return nil, ErrUnsupported
 	}
-	return c.searchResults(h.HybridSearch(ctx, vector, keywords, top, opts))
+	return c.searchResults(ctx, func() ([]ModelSearchResult, error) { return h.HybridSearch(ctx, vector, keywords, top, opts) })
 }
 func (c *TypedModelCollection[K, T]) HybridSearchText(ctx context.Context, text, keywords string, top int, opts HybridSearchOptions) ([]TypedModelSearchResult[T], error) {
 	h, ok := c.base.(HybridSearcher)
 	if !ok {
 		return nil, ErrUnsupported
 	}
-	return c.searchResults(h.HybridSearchText(ctx, text, keywords, top, opts))
+	return c.searchResults(ctx, func() ([]ModelSearchResult, error) { return h.HybridSearchText(ctx, text, keywords, top, opts) })
 }

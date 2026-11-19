@@ -171,30 +171,22 @@ func (c *TypedModelCollection[K, T]) SearchSparse(ctx context.Context, v SparseV
 	if !ok {
 		return nil, ErrUnsupported
 	}
-	return c.searchResults(s.SearchSparse(ctx, v, top, opts))
+	return c.searchResults(ctx, func() ([]ModelSearchResult, error) { return s.SearchSparse(ctx, v, top, opts) })
 }
 func (c *TypedModelCollection[K, T]) SearchSparseIter(ctx context.Context, v SparseVector, top int, opts ModelSearchOptions) iter.Seq2[TypedModelSearchResult[T], error] {
-	return func(yield func(TypedModelSearchResult[T], error) bool) {
+	return c.searchSequence(ctx, func(yield func(ModelSearchResult, error) bool) {
 		s, ok := c.base.(SparseSearcher)
 		if !ok {
-			yield(TypedModelSearchResult[T]{}, ErrUnsupported)
+			yield(ModelSearchResult{}, ErrUnsupported)
 			return
 		}
-		for r, err := range s.SearchSparseIter(ctx, v, top, opts) {
-			var item T
-			if err == nil {
-				item, err = c.codec.Decode(r.Record)
-			}
-			if !yield(TypedModelSearchResult[T]{item, r.Distance, r.Score, r.ScoreKind}, err) || err != nil {
-				return
-			}
-		}
-	}
+		s.SearchSparseIter(ctx, v, top, opts)(yield)
+	})
 }
 func (c *TypedModelCollection[K, T]) HybridSearchSparse(ctx context.Context, v SparseVector, keywords string, top int, opts HybridSearchOptions) ([]TypedModelSearchResult[T], error) {
 	s, ok := c.base.(SparseHybridSearcher)
 	if !ok {
 		return nil, ErrUnsupported
 	}
-	return c.searchResults(s.HybridSearchSparse(ctx, v, keywords, top, opts))
+	return c.searchResults(ctx, func() ([]ModelSearchResult, error) { return s.HybridSearchSparse(ctx, v, keywords, top, opts) })
 }
