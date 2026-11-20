@@ -1,5 +1,8 @@
 # Performance and verification
 
+The [PostgreSQL mixed-workload report](benchmarks/postgres-mixed/report.md) measures
+point reads and filtered exact searches while four clients update records.
+
 ## Shared provider and SQLite verification
 
 Run the complete model contract against both exact-search providers, then the

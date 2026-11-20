@@ -46,6 +46,7 @@ nav:
     - Upgrading: upgrading.md
     - Compatibility and releases: releases.md
     - Performance: performance.md
+    - PostgreSQL mixed workload: benchmarks/postgres-mixed/report.md
     - SQLite workload results: benchmarks/sqlite-workload/report.md
     - Benchmark artifacts: benchmarks/sqlite-workload/README.md
   - Development:

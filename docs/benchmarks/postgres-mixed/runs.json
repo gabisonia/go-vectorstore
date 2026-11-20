@@ -1,0 +1,116 @@
+[
+  {
+    "client_heap_alloc_bytes": 8797888,
+    "database_cgroup_bytes": 93069312,
+    "dimensions": 128,
+    "duration_seconds": 5.001081958,
+    "errors": 0,
+    "expected_cancellations": 1,
+    "go": "go1.26.1",
+    "logical_cpus": 11,
+    "operations": {
+      "get": {
+        "completed": 20580,
+        "ops_per_second": 4115.109524865738,
+        "p50_us": 184.75,
+        "p95_us": 375.417
+      },
+      "search": {
+        "completed": 10290,
+        "ops_per_second": 2057.554762432869,
+        "p50_us": 546.166,
+        "p95_us": 1087.917
+      },
+      "upsert": {
+        "completed": 10290,
+        "ops_per_second": 2057.554762432869,
+        "p50_us": 808.292,
+        "p95_us": 1500.208
+      }
+    },
+    "pgvector": "0.8.7",
+    "platform": "darwin/arm64",
+    "postgres": "16.16 (Debian 16.16-1.pgdg12+1)",
+    "records": 4096,
+    "revision": "3c8637bb3dede9268616db018391f2fb6f165694",
+    "seed": 94,
+    "top": 8,
+    "workers": 4
+  },
+  {
+    "client_heap_alloc_bytes": 8591008,
+    "database_cgroup_bytes": 109993984,
+    "dimensions": 128,
+    "duration_seconds": 5.001994541,
+    "errors": 0,
+    "expected_cancellations": 1,
+    "go": "go1.26.1",
+    "logical_cpus": 11,
+    "operations": {
+      "get": {
+        "completed": 17656,
+        "ops_per_second": 3529.791937052016,
+        "p50_us": 202.167,
+        "p95_us": 495.458
+      },
+      "search": {
+        "completed": 8828,
+        "ops_per_second": 1764.895968526008,
+        "p50_us": 589.167,
+        "p95_us": 1456.25
+      },
+      "upsert": {
+        "completed": 8828,
+        "ops_per_second": 1764.895968526008,
+        "p50_us": 892.958,
+        "p95_us": 1986.666
+      }
+    },
+    "pgvector": "0.8.7",
+    "platform": "darwin/arm64",
+    "postgres": "16.16 (Debian 16.16-1.pgdg12+1)",
+    "records": 4096,
+    "revision": "3c8637bb3dede9268616db018391f2fb6f165694",
+    "seed": 94,
+    "top": 8,
+    "workers": 4
+  },
+  {
+    "client_heap_alloc_bytes": 10439760,
+    "database_cgroup_bytes": 109662208,
+    "dimensions": 128,
+    "duration_seconds": 5.001358542,
+    "errors": 0,
+    "expected_cancellations": 1,
+    "go": "go1.26.1",
+    "logical_cpus": 11,
+    "operations": {
+      "get": {
+        "completed": 19962,
+        "ops_per_second": 3991.3155260445233,
+        "p50_us": 192.417,
+        "p95_us": 395.709
+      },
+      "search": {
+        "completed": 9981,
+        "ops_per_second": 1995.6577630222616,
+        "p50_us": 546.834,
+        "p95_us": 1101.333
+      },
+      "upsert": {
+        "completed": 9981,
+        "ops_per_second": 1995.6577630222616,
+        "p50_us": 839.458,
+        "p95_us": 1558.167
+      }
+    },
+    "pgvector": "0.8.7",
+    "platform": "darwin/arm64",
+    "postgres": "16.16 (Debian 16.16-1.pgdg12+1)",
+    "records": 4096,
+    "revision": "3c8637bb3dede9268616db018391f2fb6f165694",
+    "seed": 94,
+    "top": 8,
+    "workers": 4
+  }
+]
