@@ -19,8 +19,10 @@ tracks the pinned connector’s collection and filter limitations. Pinecone has
 Docker interoperability coverage on its retired local emulator. Hosted Pinecone
 behavior requires live validation. Azure DocumentDB and Cosmos DB for NoSQL each
 have a public Go adapter for externally managed collections. The two Docker
-fixtures exercise both Go- and C#-created schemas. The Cosmos emulator can
-return a short filtered page. See the [DocumentDB](../internal/parity/README.md#azure-documentdb-connector-on-documentdb-local)
+fixtures exercise both Go- and C#-created schemas. A hosted run also passed
+DocumentDB filtered HNSW search. On hosted Cosmos NoSQL, C# returned the two
+eligible items and Go point operations passed. The Go gateway rejected the
+adapter's collection-wide ranked query with HTTP 400. See the [DocumentDB](../internal/parity/README.md#azure-documentdb-connector-on-documentdb-local)
 and [Cosmos NoSQL](../internal/parity/README.md#cosmos-db-for-nosql-on-the-linux-vnext-emulator) fixtures.
 
 | Workflow | Go implementation | Status |

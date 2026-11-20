@@ -268,7 +268,12 @@ field and dimensions. Upsert sets the two fields and preserves other fields.
 Search supports string equality inside the native vector query and returns
 cosine similarity. The fixture covers both collection creators with
 CommunityToolkit.VectorData.AzureDocumentDB 1.1.1 on VectorData 11.0.0.
-Hosted Azure DocumentDB, larger-scale recall and recovery remain unverified.
+
+On 2026-11-20 the same three-item fixture passed on a hosted North Europe
+M30 cluster with one shard and 32 GiB storage. Both index creators passed
+schema checks, shared reads, updates and deletes, and filtered HNSW ranking.
+The clients used native credentials and TLS with certificate verification.
+Larger-scale recall, latency under load and recovery remain unmeasured.
 
 ## Cosmos DB for NoSQL on the Linux vNext emulator
 
@@ -293,9 +298,7 @@ during container creation.
 The three-item fixture includes two matching items and an excluded item with
 the best cosine score. C# filtered search returns one matching item at top 2
 and both matching items in score order at top 3 on this emulator. This
-underfilled page limits the filtered-search parity claim. Hosted behavior, multi-partition
-query execution, authentication enforcement and larger-scale recall remain
-unverified.
+underfilled page limits the filtered-search parity claim. The hosted comparison below uses the same three items.
 
 Cosmos NoSQL upserts and deletes disable the generic Azure HTTP retry policy.
 The adapter returns throttling (HTTP 429) to the caller. HTTP 408 or a lost
@@ -304,3 +307,21 @@ status codes and discards successful emulator responses for an upsert and a
 delete. It counts transport attempts and uses separate point reads to check
 the applied state. A read shows the current item in this single-writer fixture.
 Concurrent writers and regional failover require separate evidence.
+
+### Hosted Cosmos NoSQL result, 2026-11-20
+
+In Germany West Central, both Go- and C#-created containers exposed the
+policies needed for strict `AttachNative`. Shared item reads, writes and
+deletes passed with account-key authentication and verified TLS. The write
+faults injected into the SDK transport also passed against the hosted account.
+C# returned `shared` then `second` at both top 2 and top 3.
+
+The Go adapter's `Search` uses azcosmos v1.5.0's gateway pager. For both
+creators the service rejected its cross-partition `TOP` / `ORDER BY
+VectorDistance` query with HTTP 400. A separate probe removed the limit and
+ordering, bound the same text and vector, projected
+`VectorDistance(c.direction, @v, true)`, and sorted the two scores in Go.
+It observed 0.8 for `shared` and 0 for `second`. This probe reads every
+eligible score. The public adapter propagates the original gateway error.
+Physical partition fan-out, Entra RBAC, scale and regional failover remain
+unverified.
