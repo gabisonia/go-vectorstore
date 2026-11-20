@@ -1,8 +1,15 @@
 # Changelog
 
-## v0.5.0
+## Unreleased
 
-Release candidate in source; publish only after the release workflow passes.
+- Protect the full published v0.5.0 API with a zero-incompatibility CI comparison,
+  retain the earlier migration report as history, and refresh published-version
+  documentation. Upgrade the isolated local agent to v0.5.0 and allow separate
+  model/index volumes for parallel checkouts and smoke runs.
+
+## v0.5.0 — 2026-11-20
+
+[Release notes](https://github.com/gabisonia/go-vectorstore/releases/tag/v0.5.0).
 
 - Prepare the v0.5.0 minor release with reviewed API/storage compatibility and
   explicit JSON/UUID upgrade guidance. Add a pinned API comparison against

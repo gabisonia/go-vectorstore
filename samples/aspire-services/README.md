@@ -90,6 +90,11 @@ then builds/runs the existing agent Dockerfile after successful setup. The named
 sample's existing downloads and SQLite index. Models are large and CPU inference
 can take minutes. No cloud key is needed.
 
+Set `AGENT_MODEL_VOLUME` and `AGENT_INDEX_VOLUME` to distinct Docker volume names
+when isolating a local-agent run from another checkout. Reuse those names between
+ask/ingest/chat phases to keep its cache and index. Other AppHost ports still need
+to be distinct when running multiple checkouts concurrently.
+
 Configure `AGENT_COMMAND=ask|ingest|chat` (default ask) and `QUERY` for a one-shot
 question. With **chat**, Aspire's resource terminal provides interactive input:
 

@@ -51,8 +51,9 @@ go get github.com/gabisonia/go-vectorstore@latest
 ```
 
 Use the [release list](https://github.com/gabisonia/go-vectorstore/releases) to
-check available tags and pin the resolved version in go.mod. This checkout
-prepares v0.5.0; its tag becomes available after release publication. See the
+check available tags and pin the resolved version in go.mod. Published
+[v0.5.0](https://github.com/gabisonia/go-vectorstore/releases/tag/v0.5.0) is available.
+Master can include later changes; use a matching tag for a released checkout. See the
 [upgrade guide](docs/upgrading.md) and [compatibility policy](docs/releases.md).
 
 ## Quick Start (Local)

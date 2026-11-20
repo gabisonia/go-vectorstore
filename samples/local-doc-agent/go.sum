@@ -28,8 +28,8 @@ github.com/ebitengine/purego v0.10.1 h1:dewVBCBT2GaMu1SrNTYxQhgQBethzfhiwvZiLGP/
 github.com/ebitengine/purego v0.10.1/go.mod h1:iIjxzd6CiRiOG0UyXP+V1+jWqUXVjPKLAI0mRfJZTmQ=
 github.com/felixge/httpsnoop v1.1.0 h1:3YtUj32ZZkqZtt3sZZsClsymw/QDuVfpNhoA31zeORc=
 github.com/felixge/httpsnoop v1.1.0/go.mod h1:Zqxgdd+1Rkcz8euOqdr7lqgCRJztwr5hp9vDSi5UZCE=
-github.com/gabisonia/go-vectorstore v0.4.1 h1:ic3drIg/Vroox56gpcL+COScNDTNC9MicKEvWM5OqvA=
-github.com/gabisonia/go-vectorstore v0.4.1/go.mod h1:WCboQ2YxdtYDZpPtty54hCaxKFsEKBzg6tCEvEtmVSM=
+github.com/gabisonia/go-vectorstore v0.5.0 h1:oVvr0mTUJ3NHDiFVYp6GIxf5hAnww5D23FPN/dQcPfQ=
+github.com/gabisonia/go-vectorstore v0.5.0/go.mod h1:Abjy2oqp033JbxqZ0S3T4ROXhMpFgY2Ks3RmXBq0dDk=
 github.com/github/copilot-sdk/go v1.0.22 h1:60ZJTe7hNnUILSG9AkZEjCc7fHfBBJRqQ3eUxu/je0I=
 github.com/github/copilot-sdk/go v1.0.22/go.mod h1:U0STg9Jdv9LDwtkUtcUJCzPQ4KTnKakRfP+1LhEx248=
 github.com/go-logr/logr v1.4.4 h1:tG4xh9yMsRCAiodLVTxyrkzSZ9+o0L1Kg/+cPVcbP/8=

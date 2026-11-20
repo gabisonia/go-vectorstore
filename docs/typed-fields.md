@@ -3,7 +3,7 @@
 `vectordata-gen` is an optional Go 1.25+ tool for tagged struct models. It emits
 property references that build the existing `vectordata.Filter` AST and
 `SortField` values. Providers, collection interfaces and stored schemas stay the
-same. The tool is included in the v0.5.0 source candidate; use the same library/tool
+same. The tool is available from published v0.5.0; use the same library/tool
 revision and commit generated source alongside your model.
 
 In the package containing the model:

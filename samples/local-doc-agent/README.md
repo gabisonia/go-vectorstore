@@ -1,7 +1,7 @@
 # Local documentation agent
 
 A small working agent that researches local Markdown documents. It combines
-Microsoft Agent Framework Go v0.2.0, go-vectorstore v0.4.1, SQLite, and Ollama.
+Microsoft Agent Framework Go v0.2.0, go-vectorstore v0.5.0, SQLite, and Ollama.
 There is no cloud account or paid API key in the default configuration.
 
 This is an isolated Go 1.26+ module. The main library keeps its own dependencies
@@ -127,6 +127,8 @@ registry. Use a fresh index when changing embedding weights/configuration.
 | `MODEL_THREADS` | `4` | CPU threads for the local chat-model alias |
 | `EMBED_MODEL` | `all-minilm:22m` | Local embedding model |
 | `EMBED_DIMENSIONS` | `384` | Must match embedding model output |
+| `AGENT_MODEL_VOLUME` | `vector-doc-agent_models` | Docker volume for cached local models |
+| `AGENT_INDEX_VOLUME` | `vector-doc-agent_index` | Docker volume for this demo's SQLite index |
 | `AGENT_COMMAND` | `ask` | Aspire resource command: ask, ingest or chat |
 | `QUERY` | Bundled SQLite/hybrid question | One-shot ask argument |
 | `OLLAMA_URL` | Injected Aspire endpoint | Local inference endpoint; direct native runs can override it |
@@ -138,6 +140,23 @@ The Aspire model-setup resource creates the local `doc-agent-chat` alias from CH
 context/token budget and MODEL_THREADS (default four). The alias shares its source
 model weights. Lower thread counts can improve CPU performance on oversubscribed
 laptops.
+
+Separate checkouts or concurrent smoke runs should use distinct model and index
+volume names. Pass `AGENT_MODEL_VOLUME` and `AGENT_INDEX_VOLUME` to the AppHost or
+`smoke.sh` to isolate their data. Keep those names consistent across ask/ingest/chat
+phases when checking persistence. Defaults retain the original cached volumes.
+For a live smoke test beside other AppHosts, first choose unused dashboard,
+OTLP and resource-service ports in `samples/aspire-services/aspire.config.json`,
+then use dedicated volumes:
+
+```sh
+AGENT_MODEL_VOLUME=local-agent-smoke-models \
+AGENT_INDEX_VOLUME=local-agent-smoke-index \
+  bash samples/local-doc-agent/smoke.sh
+```
+
+A fresh model volume downloads the weights once. Explicit profile endpoint
+settings still need distinct ports even when using Aspire's `--isolated` flag.
 
 Model overrides are passed to the AppHost as environment variables:
 
@@ -180,5 +199,5 @@ index reuse and a follow-up conversation. It leaves the cached models/index
 available for further exploration. It refuses to replace an already-running
 shared AppHost, starts/stops only its own test run, and uses Aspire terminal tape
 playback for a real two-turn conversation. Existing `vector-doc-agent_models`
-and `vector-doc-agent_index` volumes are reused by name. This sample uses a preview framework with
+and `vector-doc-agent_index` volumes are reused by name unless overridden. This sample uses a preview framework with
 pinned versions; it is a local learning project, not a production service.

@@ -33,8 +33,9 @@ bash .github/scripts/release_test.sh
 ```
 
 `bash scripts/check-api.sh` uses a pinned, isolated Go 1.26+ apidiff tool and the
-immutable v0.4.1 tag (fetch tags first). It fails on any change to the reviewed
-incompatible API report. Review/update the baseline and report deliberately;
+immutable v0.5.0 tag (fetch tags first). It requires zero incompatible API changes,
+including APIs introduced in v0.5.0. The v0.4.1 report is historical release evidence,
+not a current exception list. Advance the baseline after a reviewed release;
 never accept unexpected differences simply to make CI green. `Required CI` joins
 all verification jobs; include any new CI job in its needs list.
 
