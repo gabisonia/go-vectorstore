@@ -13,8 +13,9 @@ using a pinned golang.org/x/exp apidiff tool outside the root module. The archiv
 [reviewed report](../scripts/api-v0.4.1-incompatible.txt) contains one incompatible
 change: `HybridSearchOptions` gained a slice and ceased to be comparable.
 
-`bash scripts/check-api.sh` now compares against the published v0.5.0 tag and
-requires zero incompatible API changes, including APIs introduced in v0.5.0.
+After publication, `bash scripts/check-api.sh` used v0.5.0 as its baseline and
+required zero incompatible API changes, including APIs introduced in v0.5.0.
+See the [release policy](releases.md#compatibility-policy) for the current baseline.
 The historical report is not used to allow breaks in the current minor line.
 The tool requires Go 1.26+; the library keeps Go 1.25. Review API and upgrade
 consequences before advancing a published baseline.

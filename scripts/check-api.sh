@@ -6,7 +6,7 @@ cd "$(dirname "$0")/.."
 api_tmp="$(mktemp -d)"
 trap 'rm -rf "$api_tmp"' EXIT
 api_module=github.com/gabisonia/go-vectorstore
-api_baseline=v0.5.0
+api_baseline=v0.6.0
 api_tool=v0.0.0-20261119141654-b15d094f3610
 mkdir -p "$api_tmp/baseline" "$api_tmp/bin"
 git archive "$api_baseline" | tar -x -C "$api_tmp/baseline"
