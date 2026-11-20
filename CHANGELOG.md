@@ -5,7 +5,9 @@
 - Add native access to C#-created Qdrant collections, SQLite vec0 tables and
   Redis Search hash/JSON indexes. Add Docker interoperability checks for those
   providers, the existing PostgreSQL typed model API and in-memory operations.
-  Add an opt-in Azure AI Search fixture using a local Azure CLI identity.
+  Add native SQL Server 2025 and Azure AI Search adapters for the tested
+  three-field schemas. Verify SQL Server in Docker and Azure AI Search locally
+  using Azure CLI credentials.
 
 - Add an isolated v0.5.0 documentation retrieval pilot with small local MiniLM
   embeddings, graded retrieval evaluation, bounded concurrent searches, model

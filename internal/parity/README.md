@@ -76,6 +76,14 @@ index, compares C# and Go document reads and vector ranking, then removes the
 index. The identity needs index-management and document read/write permissions
 on that service. The fixture uses the public Azure cloud endpoint.
 
+The Go fixture calls `azuresearch.AttachNative` with the service endpoint, a
+token callback and a `NativeSchema` identifying the key, text and float32 vector.
+The adapter validates the cosine profile before any writes. `Upsert` uploads
+a complete document, `GetText` reads the stored text without requesting the
+vector, and `Search` returns the native ranking and scores. A missing or
+unreadable write acknowledgement returns `ErrNativeOutcomeUnknown`. The
+application owns index creation, token refresh and index lifetime.
+
 Live Azure operations are skipped in CI. The locked NuGet restore is still
 checked there. A successful build or restore alone does not verify Azure access.
 
