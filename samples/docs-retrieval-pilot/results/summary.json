@@ -7,23 +7,23 @@
       "Completed": true,
       "Stage": "complete",
       "Error": "",
-      "StartedUTC": "2026-11-20T11:15:57Z",
+      "StartedUTC": "2026-11-20T11:19:02Z",
       "Environment": {
         "Library": "v0.5.0",
-        "Go": "go1.26.1",
+        "Go": "go1.27.4",
         "OS": "darwin",
         "Arch": "arm64",
-        "Revision": "008da565a80ad9e96e1fa54c74e2c69d945a80b5",
+        "Revision": "4ffcec7f88bd9967d9837b845cfc060c8e7ac41f",
         "OllamaVersion": "0.40.16",
         "CPUs": 11
       },
       "Config": {
         "Corpus": "../../docs",
         "Queries": "queries.json",
-        "Output": "data/measured",
+        "Output": "data/patched",
         "URL": "http://127.0.0.1:11435",
         "Model": "all-minilm:22m",
-        "Revision": "008da565a80ad9e96e1fa54c74e2c69d945a80b5",
+        "Revision": "4ffcec7f88bd9967d9837b845cfc060c8e7ac41f",
         "Dimensions": 384,
         "ContextTokens": 512,
         "ChunkRunes": 400,
@@ -57,9 +57,9 @@
         "Reused": 0,
         "Upserted": 1307,
         "Deleted": 0,
-        "Seconds": 15.691998875
+        "Seconds": 15.938131083
       },
-      "QueryEmbeddingSeconds": 0.028069375,
+      "QueryEmbeddingSeconds": 0.028840208,
       "Quality": {
         "K": 5,
         "CandidateChunks": 100,
@@ -220,27 +220,27 @@
             }
           }
         ],
-        "Seconds": 0.143109875
+        "Seconds": 0.121724083
       },
       "Load": {
         "Concurrency": 4,
         "Requests": 100,
         "Failures": 0,
-        "Seconds": 1.056873875,
-        "RequestsPerSecond": 94.61866961183046,
-        "P50Millis": 31.666,
-        "P95Millis": 76.127,
-        "MaxMillis": 135.837
+        "Seconds": 0.919654833,
+        "RequestsPerSecond": 108.7364480799722,
+        "P50Millis": 27.076,
+        "P95Millis": 72.848,
+        "MaxMillis": 94.293
       },
       "HeapBeforeIngestion": {
-        "AllocBytes": 4291496,
-        "TotalAllocatedBytes": 10696248,
+        "AllocBytes": 3316456,
+        "TotalAllocatedBytes": 9947280,
         "NumGC": 4
       },
       "HeapAfterLoad": {
-        "AllocBytes": 3679592,
-        "TotalAllocatedBytes": 1071964608,
-        "NumGC": 391
+        "AllocBytes": 5452232,
+        "TotalAllocatedBytes": 1064570176,
+        "NumGC": 380
       },
       "Restore": {
         "FileSHA256": "50c57319f0c9f331dba99aec3ad0faf1e4d7308ca954019efe2af1e509780bd3",
@@ -248,30 +248,30 @@
         "Bytes": 13414400,
         "Records": 1307,
         "IdenticalRankings": true,
-        "Seconds": 0.494327292
+        "Seconds": 0.377917667
       }
     },
     "reused": {
       "Completed": true,
       "Stage": "complete",
       "Error": "",
-      "StartedUTC": "2026-11-20T11:16:37Z",
+      "StartedUTC": "2026-11-20T11:19:20Z",
       "Environment": {
         "Library": "v0.5.0",
-        "Go": "go1.26.1",
+        "Go": "go1.27.4",
         "OS": "darwin",
         "Arch": "arm64",
-        "Revision": "008da565a80ad9e96e1fa54c74e2c69d945a80b5",
+        "Revision": "4ffcec7f88bd9967d9837b845cfc060c8e7ac41f",
         "OllamaVersion": "0.40.16",
         "CPUs": 11
       },
       "Config": {
         "Corpus": "../../docs",
         "Queries": "queries.json",
-        "Output": "data/measured",
+        "Output": "data/patched",
         "URL": "http://127.0.0.1:11435",
         "Model": "all-minilm:22m",
-        "Revision": "008da565a80ad9e96e1fa54c74e2c69d945a80b5",
+        "Revision": "4ffcec7f88bd9967d9837b845cfc060c8e7ac41f",
         "Dimensions": 384,
         "ContextTokens": 512,
         "ChunkRunes": 400,
@@ -305,9 +305,9 @@
         "Reused": 1307,
         "Upserted": 0,
         "Deleted": 0,
-        "Seconds": 0.155825291
+        "Seconds": 0.117166708
       },
-      "QueryEmbeddingSeconds": 0.055445416,
+      "QueryEmbeddingSeconds": 0.05176875,
       "Quality": {
         "K": 5,
         "CandidateChunks": 100,
@@ -468,27 +468,27 @@
             }
           }
         ],
-        "Seconds": 0.107757958
+        "Seconds": 0.094863709
       },
       "Load": {
         "Concurrency": 4,
         "Requests": 100,
         "Failures": 0,
-        "Seconds": 1.170880125,
-        "RequestsPerSecond": 85.40583947481387,
-        "P50Millis": 31.152,
-        "P95Millis": 106.456,
-        "MaxMillis": 168.161
+        "Seconds": 0.847394791,
+        "RequestsPerSecond": 118.00874994993922,
+        "P50Millis": 26.223,
+        "P95Millis": 75.203,
+        "MaxMillis": 91.604
       },
       "HeapBeforeIngestion": {
-        "AllocBytes": 4547272,
-        "TotalAllocatedBytes": 10633096,
+        "AllocBytes": 3490656,
+        "TotalAllocatedBytes": 9873344,
         "NumGC": 4
       },
       "HeapAfterLoad": {
-        "AllocBytes": 5758056,
-        "TotalAllocatedBytes": 1059044064,
-        "NumGC": 389
+        "AllocBytes": 3369728,
+        "TotalAllocatedBytes": 1027158904,
+        "NumGC": 376
       },
       "Restore": {
         "FileSHA256": "50c57319f0c9f331dba99aec3ad0faf1e4d7308ca954019efe2af1e509780bd3",
@@ -496,7 +496,7 @@
         "Bytes": 13414400,
         "Records": 1307,
         "IdenticalRankings": true,
-        "Seconds": 0.473639875
+        "Seconds": 0.359662166
       }
     }
   }

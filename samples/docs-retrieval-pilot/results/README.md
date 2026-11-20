@@ -1,13 +1,13 @@
 # First measured documentation pilot
 
 Both runs completed on 2026-11-20 using source revision
-`008da565a80ad9e96e1fa54c74e2c69d945a80b5` and published go-vectorstore v0.5.0.
+`4ffcec7f88bd9967d9837b845cfc060c8e7ac41f` and published go-vectorstore v0.5.0.
 [summary.json](summary.json) contains the report fields for both runs, omitting
 only the 100 raw chunk ranks per query to keep this checked-in evidence readable.
 The CLI's generated `report.json` includes those ranks and scores. Corpus, query,
 database-copy and full canonical-record SHA256 values remain in the extracts.
 
-The host was an Apple M3 Pro, 36 GiB RAM, macOS 26.6.2, Go 1.26.1, arm64,
+The host was an Apple M3 Pro, 36 GiB RAM, macOS 26.6.2, Go 1.27.4, arm64,
 11 reported CPUs. SQLite and the CLI ran on the host. Ollama 0.40.16 ran in
 Docker Desktop's approximately 7.65 GiB Linux VM, with this service limited to
 two CPUs/1 GiB and requests using two threads. Other user services were running;
@@ -22,10 +22,10 @@ reproducing, since model tags can change.
 From the sample directory with its Compose service/model ready:
 
 ```sh
-go run . -ollama http://127.0.0.1:11435 -revision 008da565a80ad9e96e1fa54c74e2c69d945a80b5 -output data/measured
+GOTOOLCHAIN=go1.27.4 go run . -ollama http://127.0.0.1:11435 -revision 4ffcec7f88bd9967d9837b845cfc060c8e7ac41f -output data/patched
 # Preserve the first report before the next command replaces it.
-cp data/measured/report.json data/fresh-report.json
-go run . -ollama http://127.0.0.1:11435 -revision 008da565a80ad9e96e1fa54c74e2c69d945a80b5 -output data/measured
+cp data/patched/report.json data/fresh-report.json
+GOTOOLCHAIN=go1.27.4 go run . -ollama http://127.0.0.1:11435 -revision 4ffcec7f88bd9967d9837b845cfc060c8e7ac41f -output data/patched
 ```
 
 Use an empty owned output for the first command and the stated source revision
@@ -36,15 +36,15 @@ cutoff five. Configuration durations in JSON are integer nanoseconds.
 | Observation | Fresh index | Unchanged-corpus rerun |
 | --- | ---: | ---: |
 | Chunks embedded / reused | 1,307 / 0 | 0 / 1,307 |
-| Ingestion seconds | 15.692 | 0.156 |
+| Ingestion seconds | 15.938 | 0.117 |
 | Mean Recall@5 | 0.900 | 0.900 |
 | MRR@5 | 0.725 | 0.725 |
 | nDCG@5 | 0.753 | 0.753 |
 | Searches / failures, four workers | 100 / 0 | 100 / 0 |
-| Successful searches per second | 94.62 | 85.41 |
-| p50 / p95 search milliseconds | 31.67 / 76.13 | 31.15 / 106.46 |
-| Go heap after load, MiB | 3.51 | 5.49 |
-| Offline restore seconds, including record/ranking verification | 0.494 | 0.474 |
+| Successful searches per second | 108.74 | 118.01 |
+| p50 / p95 search milliseconds | 27.08 / 72.85 | 26.22 / 75.20 |
+| Go heap after load, MiB | 5.20 | 3.21 |
+| Offline restore seconds, including record/ranking verification | 0.378 | 0.360 |
 | Restored records and identical evaluation rankings | 1,307 / yes | 1,307 / yes |
 
 Each backup was 13,414,400 bytes. Every canonical field/vector digest matched
@@ -67,3 +67,7 @@ An earlier exploratory ingestion was interrupted before measurement because
 Ollama's default eleven threads saturated the VM. The final runs start from a
 fresh index with the explicit two-thread setting; the interrupted attempt is not
 included in the table or report extracts.
+
+Final race tests, vet and the consumer vulnerability scan passed with Go 1.27.4.
+The older system Go 1.26.1 was flagged for standard-library advisories during
+verification; its exploratory measurements were replaced by these patched-toolchain runs.

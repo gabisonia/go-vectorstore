@@ -14,7 +14,8 @@ run, per-query judgments, observed latency and a documented retrieval miss.
 
 ## Run
 
-From this directory, with Go 1.25+, Docker and Compose v2:
+From this directory, with a current security-patched Go 1.25+ toolchain, Docker
+and Compose v2 (`go.mod` declares the API compatibility floor):
 
 ```sh
 docker compose --project-name vectorstore-docs-pilot up -d --wait
