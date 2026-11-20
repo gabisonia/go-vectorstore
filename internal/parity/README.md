@@ -99,3 +99,19 @@ bigint key. It maps one nvarchar(max) text field and a two-dimensional float32
 vector. Either client can create the table and observe the other's updates
 and deletes. Search uses exact cosine distance with `VECTOR_DISTANCE`.
 Generated IDENTITY keys and approximate indexes remain outside this adapter.
+
+## Weaviate 1.40.7
+
+Run `bash scripts/test-weaviate-parity.sh` with Docker. The server uses a
+disposable volume and publishes no ports. The Go fixture creates a FLAT class,
+and the C# connector creates an HNSW class. Each client reads, updates, searches
+and deletes UUID-keyed objects in the same physical class.
+
+`weaviate.AttachNative` accepts an endpoint, a `NativeSchema` and an optional
+HTTP transport for authentication. It checks the text property and the named
+self-provided cosine vector before writes. Weaviate omits dimensions from its
+class schema, so the caller supplies the dimensions used for local validation.
+For a C# property mapped to a different physical name, configure its JSON
+property name as well. The fixture disables automatic schema creation to detect
+mapping drift. Search returns raw cosine distances. A lost or incomplete write
+acknowledgement returns `ErrNativeOutcomeUnknown`.

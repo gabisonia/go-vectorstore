@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add native Weaviate access for UUID-keyed objects with a text field and a
+  named dense cosine vector. Verify FLAT and HNSW retrieval against the locked
+  C# connector on Weaviate 1.40.7.
+
 - Add native access to C#-created Qdrant collections, SQLite vec0 tables and
   Redis Search hash/JSON indexes. Add Docker interoperability checks for those
   providers, the existing PostgreSQL typed model API and in-memory operations.

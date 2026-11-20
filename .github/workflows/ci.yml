@@ -78,6 +78,7 @@ jobs:
       - run: bash scripts/test-reference-catalog.sh
       - run: bash scripts/test-postgres-parity.sh
       - run: bash scripts/test-redis-parity.sh
+      - run: bash scripts/test-weaviate-parity.sh
 
   sqlserver-dotnet-parity:
     name: Native SQL Server 2025 and .NET interoperability
