@@ -26,13 +26,18 @@ Neon shares the PostgreSQL connector. The deprecated volatile store maps to in-m
 
 ## Qdrant checkpoint
 
-Run `bash scripts/test-qdrant-parity.sh` with Go, Docker and .NET SDK 10.0.400.
-The script creates a disposable Qdrant 1.20.2 container. The fixture covers
-collection creation by either client, attaching by physical name, a single
-named cosine vector, keyword equality, full unsigned IDs and cross-language
-updates and deletes. The two-point fixture exercises the native query endpoint.
-A second fixture waits for native indexing on 8,192 vectors and measures filtered
-recall@10 over 32 deterministic queries against exhaustive cosine ranking.
-The Go client also loses an acknowledgement after a real commit and verifies
-that it reports an uncertain outcome without replay. Hybrid search, UUIDs,
-recovery and the other providers still require evidence.
+Run `bash scripts/test-qdrant-parity.sh` with Docker. The script builds the Go
+race-test binary and the locked .NET reference runner in Linux containers and
+runs them against a disposable Qdrant 1.20.2 instance without publishing ports.
+
+Both Go and C# create physical collections. The unsigned-ID fixture exercises
+keyword equality, full uint64 IDs, updates, deletion and a lost acknowledgement
+after a committed write. The GUID fixture uses two named cosine vectors with
+different dimensions. It compares the IDs and scores of a hybrid vector and
+full-text query against the C# connector, then uploads a snapshot to a new
+collection and repeats the comparison after deleting from the original.
+The indexed fixture waits for native indexing on 8,192 vectors and measures
+filtered recall@10 over 32 deterministic queries against exhaustive ranking.
+
+These cases cover standalone Qdrant. The full connector catalog, distributed
+recovery, and broader query options still require interoperability evidence.
