@@ -36,6 +36,7 @@ indexes or hybrid support. Deterministic sample embeddings are instructional.
 
 ## Working code on master
 
+- [Documentation retrieval pilot](https://raw.githubusercontent.com/gabisonia/go-vectorstore/master/samples/docs-retrieval-pilot/README.md): Isolated published v0.5.0 consumer with MiniLM, graded retrieval, bounded load and offline SQLite restore reports.
 - [Executable model examples](https://raw.githubusercontent.com/gabisonia/go-vectorstore/master/vectordata/example_test.go): Typed CRUD/search, automatic embeddings, named vectors and errors.
 - [Typed semantic search](https://raw.githubusercontent.com/gabisonia/go-vectorstore/master/samples/typed-search/main.go): Filtered SearchText with selectable providers.
 - [Typed RAG](https://raw.githubusercontent.com/gabisonia/go-vectorstore/master/samples/typed-rag/main.go): Retrieved sources and opt-in generation.

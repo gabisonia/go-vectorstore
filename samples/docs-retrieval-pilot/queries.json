@@ -1,0 +1,12 @@
+[
+  {"id":"sqlite-backup","text":"How can I safely back up a SQLite database that uses WAL?","relevant":{"production.md":2,"sqlite.md":1}},
+  {"id":"model-identity","text":"Can I reuse stored embeddings after changing to a different model with the same dimensions?","relevant":{"production.md":2}},
+  {"id":"redis-capacity","text":"What are the Redis collection size limits and why do writes process the whole collection?","relevant":{"redis.md":2}},
+  {"id":"qdrant-unknown-write","text":"How do I recover a Qdrant write with an unknown outcome using its retained receipt?","relevant":{"qdrant.md":2,"qdrant-publication-proof.md":1}},
+  {"id":"sqlite-native-distance","text":"Which vector distances can sqlite-vec execute natively and when does it fall back to Go?","relevant":{"sqlitevec.md":2,"sqlite-vector-design.md":1}},
+  {"id":"postgres-migration","text":"How do I preview and apply an additive PostgreSQL collection schema migration?","relevant":{"migrations.md":2}},
+  {"id":"native-keys","text":"How do typed collections generate integer or UUID keys while preserving native key types?","relevant":{"model-api.md":2}},
+  {"id":"typed-filters","text":"How can I generate typed property references so filter operands are checked at compile time?","relevant":{"typed-fields.md":2}},
+  {"id":"float16-output","text":"How do I adapt a float16 embedding generator while storing float32 vectors?","relevant":{"embedding-outputs.md":2}},
+  {"id":"provider-capabilities","text":"Which providers support approximate nearest neighbor indexes and hybrid keyword search?","relevant":{"parity.md":2,"model-api.md":1}}
+]

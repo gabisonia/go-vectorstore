@@ -18,6 +18,7 @@ model sample; then select SQLite or PostgreSQL when persistence is needed.
 | Named vectors, scalar/key filters, squared distance, iterators, metadata, capabilities, hybrid, migration preview | [recipes](recipes/README.md) | None for portable recipes; PostgreSQL for hybrid/migration |
 | Shared databases and orchestrated sample workflows | [aspire-services](aspire-services/README.md) | Aspire 17, Go 1.26+, Docker |
 | Local model with agent-selected search/read tools | [local-doc-agent](local-doc-agent/README.md) | Aspire 17, Go 1.26+, Docker; downloads local models; separate module |
+| Ingestion, graded retrieval, concurrent search and offline restore pilot | [docs-retrieval-pilot](docs-retrieval-pilot/README.md) | Aspire 17, Go 1.26+, Docker; MiniLM; separate Go 1.25+ v0.5.0 consumer |
 | Aspire 17 Go AppHost, pgvector search UI and dashboard telemetry | [aspire-vector-search](aspire-vector-search/README.md) | Aspire 17, Go 1.26+, Docker; isolated modules; fixture embeddings |
 | Original Record API semantic search | [semantic-search](semantic-search/README.md) | PostgreSQL and OpenAI key |
 | Original Record API RAG story demo | [ragrimosa](ragrimosa/README.md) | PostgreSQL and OpenAI key |

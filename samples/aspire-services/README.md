@@ -109,6 +109,29 @@ aspire terminal attach agent --apphost samples/aspire-services/apphost.go
 For model settings, corpus/index behavior and the full real-model smoke test, see
 [local-doc-agent](../local-doc-agent/README.md).
 
+## Documentation retrieval pilot
+
+```sh
+VECTORSTORE_SAMPLE=docs-retrieval-pilot PILOT_REVISION="$(git rev-parse HEAD)" \
+  aspire run --apphost samples/aspire-services/apphost.go
+```
+
+This mode starts only `pilot-ollama`, a `pilot-models` initialization container and
+the `docs-retrieval-pilot` Go application. Aspire owns readiness, the injected
+Ollama endpoint, model setup, application arguments and logs. It downloads only
+the small MiniLM embedding model, with a separate cache volume and two CPUs/1 GiB
+for Ollama; it does not start the agent's chat model or development databases.
+The pilot exits after ingestion, quality/load evaluation and verified offline
+SQLite restore. Its report and databases remain on the host under
+`samples/docs-retrieval-pilot/data/pilot`.
+
+Use `aspire resource docs-retrieval-pilot restart` with this AppHost to rerun and
+check embedding reuse. `PILOT_CONCURRENCY` and `PILOT_REQUESTS_PER_WORKER` customize
+load when launching; `PILOT_MODEL_VOLUME` and `PILOT_OUTPUT` isolate parallel
+checkouts, whose AppHost profile ports must also differ. See the
+[pilot instructions](../docs-retrieval-pilot/README.md) for completion checks,
+all overrides and measurement boundaries.
+
 ## Inspect and stop
 
 ```sh
