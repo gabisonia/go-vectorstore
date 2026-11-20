@@ -55,16 +55,24 @@ func AttachNative(ctx context.Context, container *azcosmos.ContainerClient, s Na
 		return nil, err
 	}
 	p := resp.ContainerProperties
-	if p == nil || !slices.Equal(p.PartitionKeyDefinition.Paths, []string{"/id"}) || p.VectorEmbeddingPolicy == nil || p.IndexingPolicy == nil {
-		return nil, vectordata.ErrSchemaMismatch
+	if p == nil {
+		return nil, fmt.Errorf("%w: missing container properties", vectordata.ErrSchemaMismatch)
+	}
+	if !slices.Equal(p.PartitionKeyDefinition.Paths, []string{"/id"}) {
+		return nil, fmt.Errorf("%w: partition paths %q", vectordata.ErrSchemaMismatch, p.PartitionKeyDefinition.Paths)
+	}
+	if p.VectorEmbeddingPolicy == nil || p.IndexingPolicy == nil {
+		return nil, fmt.Errorf("%w: missing policy (embedding present %t, indexing present %t)", vectordata.ErrSchemaMismatch, p.VectorEmbeddingPolicy != nil, p.IndexingPolicy != nil)
 	}
 	path := "/" + s.Vector
 	embedded := slices.ContainsFunc(p.VectorEmbeddingPolicy.VectorEmbeddings, func(v azcosmos.VectorEmbedding) bool {
-		return v.Path == path && int(v.Dimensions) == s.Dimensions && v.DataType == "float32" && v.DistanceFunction == "cosine"
+		return v.Path == path && int(v.Dimensions) == s.Dimensions && strings.EqualFold(string(v.DataType), "float32") && strings.EqualFold(string(v.DistanceFunction), "cosine")
 	})
-	indexed := slices.ContainsFunc(p.IndexingPolicy.VectorIndexes, func(v azcosmos.VectorIndex) bool { return v.Path == path && v.Type == "diskANN" })
+	indexed := slices.ContainsFunc(p.IndexingPolicy.VectorIndexes, func(v azcosmos.VectorIndex) bool {
+		return v.Path == path && strings.EqualFold(string(v.Type), "diskANN")
+	})
 	if !embedded || !indexed {
-		return nil, vectordata.ErrSchemaMismatch
+		return nil, fmt.Errorf("%w: expected %s float32 cosine DiskANN dimension %d, found embeddings %+v and indexes %+v", vectordata.ErrSchemaMismatch, path, s.Dimensions, p.VectorEmbeddingPolicy.VectorEmbeddings, p.IndexingPolicy.VectorIndexes)
 	}
 	return &NativeCollection{container, s}, nil
 }
