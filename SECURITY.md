@@ -29,6 +29,17 @@ hardening workflow repeats scanning weekly even without source changes and runs
 extended fuzz campaigns. Maintainers must monitor workflow failures, triage new
 advisories, and publish fixes; automation does not itself remediate dependencies.
 
+Dependabot checks the root library, isolated agent/pilot/API Go modules and GitHub
+Actions every Monday at 09:00 Europe/Amsterdam. Minor/patch version updates are
+grouped per module or ecosystem; major updates remain separate PRs, with at most
+two open version-update PRs per entry. Security alerts and security-fix PRs are
+enabled separately in repository settings and are not limited to that weekly
+schedule. Dependency PRs require CI and maintainer review before manual merge.
+The generated Aspire AppHost modules and provider image versions remain under
+explicit maintenance/compatibility review. See the
+[Dependabot configuration](.github/dependabot.yml). The Aspire API's local library
+replacement stays on the checkout; published consumer samples track released versions.
+
 ## Application responsibilities
 
 Use a patched Go toolchain and database/driver versions. Applications own database
