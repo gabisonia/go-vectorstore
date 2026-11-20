@@ -3,7 +3,6 @@
 package qdrant
 
 import (
-	"fmt"
 	"math"
 	"os"
 	"os/exec"
@@ -39,12 +38,6 @@ func TestNativeDotNetParity(t *testing.T) {
 			t.Fatalf("%s %s: %v", method, path, err)
 		}
 	}
-	type point struct {
-		ID      uint64
-		Payload struct{ Category string }
-		Vector  map[string][]float32
-		Score   float64
-	}
 	for _, creator := range []string{"csharp", "go"} {
 		t.Run(creator, func(t *testing.T) {
 			name := "parity_" + creator
@@ -54,25 +47,31 @@ func TestNativeDotNetParity(t *testing.T) {
 				req(t, "PUT", path+"/index?wait=true", map[string]string{"field_name": "category", "field_schema": "keyword"}, nil)
 			}
 			runner(t, "seed", name)
-			var seeded response[point]
-			req(t, "GET", path+"/points/7", nil, &seeded)
-			if seeded.Result.Payload.Category != "reference" || !slices.Equal(seeded.Result.Vector["direction"], []float32{0, 1}) {
-				t.Fatalf("C# seed: %+v", seeded.Result)
+			collection, err := s.AttachNativeCosine(ctx, name, "direction", 2)
+			if err != nil {
+				t.Fatal(err)
+			}
+			seeded, err := collection.GetPoint(ctx, 7)
+			if err != nil || seeded.Payload["category"] != "reference" || !slices.Equal(seeded.Vector, []float32{0, 1}) {
+				t.Fatalf("C# seed: %+v, %v", seeded, err)
 			}
 			id := uint64(math.MaxUint64)
-			req(t, "PUT", path+"/points?wait=true", map[string]any{"points": []any{map[string]any{"id": id, "payload": map[string]string{"category": "go"}, "vector": map[string][]float32{"direction": {1, 0}}}}}, nil)
-			var hits response[struct{ Points []point }]
-			req(t, "POST", path+"/points/query", map[string]any{"using": "direction", "query": []float32{1, 0}, "limit": 2, "filter": map[string]any{"must": []any{map[string]any{"key": "category", "match": map[string]string{"value": "go"}}}}}, &hits)
-			if len(hits.Result.Points) != 1 || hits.Result.Points[0].ID != id || math.Abs(hits.Result.Points[0].Score-1) > 1e-6 {
-				t.Fatalf("native query: %+v", hits.Result.Points)
+			err = collection.UpsertPoint(ctx, NativePoint{id, map[string]any{"category": "go"}, []float32{1, 0}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			hits, err := collection.SearchKeyword(ctx, []float32{1, 0}, 2, "category", "go")
+			if err != nil || len(hits) != 1 || hits[0].ID != id || math.Abs(hits[0].Score-1) > 1e-6 {
+				t.Fatalf("native query: %+v, %v", hits, err)
 			}
 			runner(t, "verify", name)
-			var updated response[point]
-			req(t, "GET", fmt.Sprintf("%s/points/%d", path, id), nil, &updated)
-			if updated.Result.Payload.Category != "updated" {
-				t.Fatalf("C# update: %+v", updated.Result)
+			updated, err := collection.GetPoint(ctx, id)
+			if err != nil || updated.Payload["category"] != "updated" {
+				t.Fatalf("C# update: %+v, %v", updated, err)
 			}
-			req(t, "POST", path+"/points/delete?wait=true", map[string]any{"points": []uint64{id}}, nil)
+			if err := collection.DeletePoint(ctx, id); err != nil {
+				t.Fatal(err)
+			}
 			runner(t, "verify-deletion", name)
 		})
 	}
