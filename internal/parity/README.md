@@ -40,6 +40,11 @@ can each create the table, retrieve the other client's written record, rank the
 same two points by cosine distance and observe deletion. The C#-created table
 uses `GetTypedModelCollection` with explicitly mapped column names.
 
+Run `bash scripts/test-redis-parity.sh` for Redis 8.2 hash and JSON storage.
+Each client creates the search index, reads the other client's record and
+checks native FLAT cosine retrieval. The Go fixture uses go-redis commands
+directly. A public adapter for C#-owned Redis keys remains pending.
+
 The MongoDB, Couchbase and Oracle reference projects
 pin patched transitive dependencies flagged by NuGet audit. Their live service
 behavior still needs validation.
