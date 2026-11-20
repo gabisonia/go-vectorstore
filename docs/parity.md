@@ -6,6 +6,33 @@ and its [data operations guide](https://learn.microsoft.com/en-us/dotnet/ai/vect
 It is a workflow comparison, not a claim of API or feature equivalence with every
 .NET connector. Provider capabilities differ in both ecosystems.
 
+The [connector interoperability guide](../internal/parity/README.md) lists the
+locked C# packages, physical schemas, local Docker commands and live-service
+coverage for the unreleased native APIs. The PostgreSQL fixture uses the
+existing typed model API. Oracle, SQL Server, Azure AI Search, Qdrant, SQLite, Redis, Weaviate, Chroma, Milvus and MongoDB have explicit entry points
+for attaching to externally managed collections. The Elasticsearch adapter targets
+8.19.9 indexes shared with Elastic’s connector on VectorData 9.7.0. Connector
+0.3.1 fails at collection construction on the 11.0.0 target. MongoDB connector
+1.74.0-preview fails at search on 11.0.0. Its live fixture uses 10.1.0. Couchbase has a Go adapter for externally
+provisioned Search indexes. The [Couchbase fixture](../internal/parity/README.md#couchbase-server-800)
+tracks the pinned connector’s collection and filter limitations. Pinecone has
+Docker interoperability coverage on its retired local emulator. Hosted Pinecone
+behavior requires live validation. Azure DocumentDB and Cosmos DB for NoSQL each
+have a public Go adapter for externally managed collections. The two Docker
+fixtures exercise both Go- and C#-created schemas. A hosted run also passed
+DocumentDB filtered HNSW search. On hosted Cosmos NoSQL, C# returned the two
+eligible items and Go point operations passed. The Go gateway rejected the
+adapter's collection-wide ranked query with HTTP 400. For exact cosine search,
+call `SearchExact` explicitly. It reads every eligible score and retains the
+best k in Go. Equal scores use ascending item ID. At 1,024 records and two
+queries per second, hosted Cosmos exact search matched every reference rank
+on two physical partitions. DocumentDB filtered HNSW recall@10 exceeded
+99% on the same workload. The [hosted workload report](../internal/parity/README.md#hosted-workload-results-2026-11-20)
+records latency and the Cosmos client settings that met the 60-second recovery
+target. After forced DocumentDB replica promotion, a previously acknowledged
+item was missing on readback. See the [DocumentDB](../internal/parity/README.md#azure-documentdb-connector-on-documentdb-local)
+and [Cosmos NoSQL](../internal/parity/README.md#cosmos-db-for-nosql-on-the-linux-vnext-emulator) fixtures.
+
 | Workflow | Go implementation | Status |
 | --- | --- | --- |
 | Declare key/data/vector properties | Struct tags, explicit CollectionDefinition, StructCodec and custom codecs | Implemented |

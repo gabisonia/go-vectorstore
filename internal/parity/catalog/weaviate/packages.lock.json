@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "dependencies": {
+    "net10.0": {
+      "CommunityToolkit.VectorData.Weaviate": {
+        "type": "Direct",
+        "requested": "[1.0.1, 1.0.1]",
+        "resolved": "1.0.1",
+        "contentHash": "HQAwX/gTfCn5sQRmLRqYa+rY+/6e9b4U+/e8hSQydUw8ivx1suaMfzuX8Qo5SNDjIznPBo6somiIyecYDpaXFQ==",
+        "dependencies": {
+          "Microsoft.Extensions.AI.Abstractions": "10.8.3",
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.10",
+          "Microsoft.Extensions.VectorData.Abstractions": "10.8.2"
+        }
+      },
+      "Microsoft.Extensions.VectorData.Abstractions": {
+        "type": "Direct",
+        "requested": "[11.0.0, 11.0.0]",
+        "resolved": "11.0.0",
+        "contentHash": "hZVGWv3AJhKDuEaRWOUia+XQQe/mViHh3xM3wdfKTFMWJxDUkjxFGPUDaFCq/WjBw8SC9PIFJzLyMoIfPYMA4w==",
+        "dependencies": {
+          "Microsoft.Extensions.AI.Abstractions": "11.0.0"
+        }
+      },
+      "Microsoft.Extensions.AI.Abstractions": {
+        "type": "Transitive",
+        "resolved": "11.0.0",
+        "contentHash": "UYZTudmTrGykWIRzcO/TKauTx/+L/h4MYpUBODCG7aIybRVkv2y6uhVwG6UHRS6uTzRqg0K8IJprC9/QhMZGsw=="
+      },
+      "Microsoft.Extensions.DependencyInjection.Abstractions": {
+        "type": "Transitive",
+        "resolved": "10.0.10",
+        "contentHash": "z/2xXlFw2aLGjHyEm6E0tQ+In6VfzQzTrtArbQ2c0TQE16ZbyDCMGPvaUT9I0s8rgy9sRWlU2P9waW37qV04qA=="
+      }
+    }
+  }
+}

@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType><ImplicitUsings>enable</ImplicitUsings></PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Oracle.VectorData" Version="[23.26.300]" />
+    <PackageReference Include="System.Security.Cryptography.Pkcs" Version="[8.0.2]" />
+  </ItemGroup>
+</Project>

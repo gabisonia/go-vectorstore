@@ -2,6 +2,41 @@
 
 ## Unreleased
 
+- Add native Pinecone access for namespace-scoped dense cosine vectors, string
+  metadata and equality filters. Docker interoperability uses Pinecone Local.
+
+- Add native Oracle access for explicit numeric keys, nullable categories and
+  dense FLOAT32 vectors, with exact cosine ranking and numeric prefilters.
+
+- Add native Couchbase document reads and writes and scoped cosine Search
+  with an exact keyword prefilter. The adapter uses Query and Search REST endpoints.
+
+- Update golang.org/x/crypto to v0.59.0.
+
+- Add native MongoDB Atlas Vector Search access for string keys and dense
+  cosine vectors, including exact search with a text equality prefilter.
+
+- Add native Milvus access for explicit string keys, nullable text and dense
+  cosine vectors, with strongly consistent reads and bound text filters.
+
+- Add native Elasticsearch access for string document IDs and dense cosine
+  vectors. The C# interoperability fixture uses VectorData 9.7.0. Elastic’s
+  connector 0.3.1 cannot construct a collection with VectorData 11.0.0.
+
+- Add native access to standalone Chroma v2 collections with cosine embeddings,
+  documents and metadata. Text-only updates preserve the stored embedding.
+
+- Add native Weaviate access for UUID-keyed objects with a text field and a
+  named dense cosine vector. Verify FLAT and HNSW retrieval against the locked
+  C# connector on Weaviate 1.40.7.
+
+- Add native access to C#-created Qdrant collections, SQLite vec0 tables and
+  Redis Search hash/JSON indexes. Add Docker interoperability checks for those
+  providers, the existing PostgreSQL typed model API and in-memory operations.
+  Add native SQL Server 2025 and Azure AI Search adapters for the tested
+  three-field schemas. Verify SQL Server in Docker and Azure AI Search locally
+  using Azure CLI credentials.
+
 - Require Go 1.26 for the updated pgx, Redis, SQLite and Testcontainers dependency graph. The published v0.5.0 release continues to support Go 1.25.
 
 - Add an isolated v0.5.0 documentation retrieval pilot with small local MiniLM

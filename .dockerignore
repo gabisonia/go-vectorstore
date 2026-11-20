@@ -7,3 +7,5 @@
 **/*.db
 **/*.db-*
 **/apphost
+internal/parity/**/bin
+internal/parity/**/obj

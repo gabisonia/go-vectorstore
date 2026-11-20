@@ -124,3 +124,19 @@ and the [larger workload evidence](benchmarks/sqlite-workload/README.md): 10k/10
 The write-plan correction requires the existing point index without changing the
 format. Controlled cold I/O, tail/concurrent-service measurements and additional
 native metrics remain separate work in the [parity plan](parity-plan.md).
+
+## Native .NET collections
+
+Use `sqlitevec.AttachNative(ctx, db, schema)` with a caller-owned
+`*sql.DB` opened with the `sqlite` driver to attach to an existing physical
+collection. Set `NativeSchema.DataTable`, `Key`, `Text`, `Vector` and
+`Dimensions` to the storage names and dimensions in the C# model.
+`VectorTable` defaults to the connector's `vec_` prefix.
+
+The adapter supports an integer primary key, one text column and one dense
+float32 vec0 vector configured with `DistanceFunction.CosineDistance`.
+`Search` returns ascending native cosine distances. `Upsert` and `Delete`
+change both tables in a single transaction. An unacknowledged commit returns
+`ErrNativeOutcomeUnknown`. The caller owns table creation and schema changes.
+Run `bash scripts/test-reference-catalog.sh` to verify both creator directions
+and transaction rollback in Docker against the locked C# connector.

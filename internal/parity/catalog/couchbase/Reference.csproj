@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <NoWarn>$(NoWarn);SKEXP0020</NoWarn>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Remove="vendor/**" />
+    <PackageReference Include="CouchbaseConnector.SemanticKernel" Version="[0.2.5]" />
+    <PackageReference Include="Microsoft.SemanticKernel.Core" Version="[1.71.0]" />
+    <PackageReference Include="Snappier" Version="[1.3.1]" />
+  </ItemGroup>
+</Project>

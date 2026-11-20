@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType><ImplicitUsings>enable</ImplicitUsings></PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="CommunityToolkit.VectorData.Milvus" Version="[1.0.0-preview]" />
+  </ItemGroup>
+</Project>

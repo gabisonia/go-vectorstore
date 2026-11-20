@@ -11,6 +11,22 @@ This is a bounded foundation, not a distributed or unbounded-write connector.
 Choose PostgreSQL for the existing server-side ANN/hybrid workflow. Normal library
 tests need no Qdrant; real-server checks use the integration build tag.
 
+## Native C# collections
+
+The unreleased `qdrant.AttachNativePoints[K]` also opens externally managed
+Qdrant collections by physical name. Choose `uint64` or `uuid.UUID` for the
+point ID and supply the complete map of named dense cosine vectors to their
+dimensions. `UpsertPoint` requires all configured vectors and replaces the full
+payload. `GetPoint` retrieves the vectors and payload. `Search` selects a named
+vector and accepts a skip offset and minimum similarity. `SearchKeyword` uses a
+keyword index. `HybridSearch` accepts an indexed text field and fuses its keyword
+matches with the named vector search using Qdrant's reciprocal rank fusion.
+
+A lost write acknowledgement returns `ErrNativeOutcomeUnknown`. The native
+handle operates on individual points and uses the server's ranking and scores.
+The bounded model provider described below uses canonical snapshots.
+Run `bash scripts/test-qdrant-parity.sh` for the Docker cross-language tests.
+
 ## Storage and consistency
 
 One physical collection is deterministically named from SHA-256 of the namespace
