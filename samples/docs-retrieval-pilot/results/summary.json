@@ -1,0 +1,503 @@
+{
+  "OmittedFields": [
+    "Quality.Queries[].Chunks"
+  ],
+  "Runs": {
+    "fresh": {
+      "Completed": true,
+      "Stage": "complete",
+      "Error": "",
+      "StartedUTC": "2026-11-20T11:15:57Z",
+      "Environment": {
+        "Library": "v0.5.0",
+        "Go": "go1.26.1",
+        "OS": "darwin",
+        "Arch": "arm64",
+        "Revision": "008da565a80ad9e96e1fa54c74e2c69d945a80b5",
+        "OllamaVersion": "0.40.16",
+        "CPUs": 11
+      },
+      "Config": {
+        "Corpus": "../../docs",
+        "Queries": "queries.json",
+        "Output": "data/measured",
+        "URL": "http://127.0.0.1:11435",
+        "Model": "all-minilm:22m",
+        "Revision": "008da565a80ad9e96e1fa54c74e2c69d945a80b5",
+        "Dimensions": 384,
+        "ContextTokens": 512,
+        "ChunkRunes": 400,
+        "OverlapRunes": 80,
+        "Threads": 2,
+        "K": 5,
+        "Candidates": 100,
+        "Workers": 4,
+        "PerWorker": 25,
+        "Timeout": 600000000000,
+        "OperationTimeout": 5000000000
+      },
+      "Identity": {
+        "Format": 1,
+        "Model": {
+          "Name": "all-minilm:22m",
+          "Digest": "1b226e2802dbb772b5fc32a58f103ca1804ef7501331012de126ab22f67475ef",
+          "Dimensions": 384,
+          "ContextTokens": 512,
+          "Threads": 2
+        },
+        "ChunkRunes": 400,
+        "OverlapRunes": 80,
+        "Metric": "cosine"
+      },
+      "CorpusSHA256": "30c0def50aa19232cb0286a4ace3ff33fdcbc96a7dafdabb63b906c87fd6f633",
+      "QueriesSHA256": "435f191ca2242943a2f96578d1f3451a2769f0de24489c83e31bdbe654c27506",
+      "Ingestion": {
+        "Files": 25,
+        "Chunks": 1307,
+        "Reused": 0,
+        "Upserted": 1307,
+        "Deleted": 0,
+        "Seconds": 15.691998875
+      },
+      "QueryEmbeddingSeconds": 0.028069375,
+      "Quality": {
+        "K": 5,
+        "CandidateChunks": 100,
+        "Mean": {
+          "Recall": 0.8999999999999999,
+          "MRR": 0.725,
+          "NDCG": 0.7534102844402657
+        },
+        "Queries": [
+          {
+            "ID": "sqlite-backup",
+            "Sources": [
+              "production.md",
+              "sqlite.md",
+              "stores-implementation.md",
+              "performance.md",
+              "upgrading.md"
+            ],
+            "Metrics": {
+              "Recall": 1,
+              "MRR": 1,
+              "NDCG": 1
+            }
+          },
+          {
+            "ID": "model-identity",
+            "Sources": [
+              "migrations.md",
+              "embedding-outputs.md",
+              "ai-guide.md",
+              "upgrading.md",
+              "model-api.md"
+            ],
+            "Metrics": {
+              "Recall": 0,
+              "MRR": 0,
+              "NDCG": 0
+            }
+          },
+          {
+            "ID": "redis-capacity",
+            "Sources": [
+              "performance.md",
+              "redis.md",
+              "parity.md",
+              "stores-implementation.md",
+              "production.md"
+            ],
+            "Metrics": {
+              "Recall": 1,
+              "MRR": 0.5,
+              "NDCG": 0.6309297535714574
+            }
+          },
+          {
+            "ID": "qdrant-unknown-write",
+            "Sources": [
+              "qdrant.md",
+              "qdrant-design.md",
+              "qdrant-publication-proof.md",
+              "parity-plan.md",
+              "sqlite-vector-design.md"
+            ],
+            "Metrics": {
+              "Recall": 1,
+              "MRR": 1,
+              "NDCG": 0.9639404333166534
+            }
+          },
+          {
+            "ID": "sqlite-native-distance",
+            "Sources": [
+              "sqlitevec.md",
+              "stores-implementation.md",
+              "parity.md",
+              "sqlite-vector-design.md",
+              "parity-plan.md"
+            ],
+            "Metrics": {
+              "Recall": 1,
+              "MRR": 1,
+              "NDCG": 0.9448479565595861
+            }
+          },
+          {
+            "ID": "postgres-migration",
+            "Sources": [
+              "release-0.5.md",
+              "upgrading.md",
+              "stores-implementation.md",
+              "migrations.md",
+              "connector-development.md"
+            ],
+            "Metrics": {
+              "Recall": 1,
+              "MRR": 0.25,
+              "NDCG": 0.4306765580733931
+            }
+          },
+          {
+            "ID": "native-keys",
+            "Sources": [
+              "model-api.md",
+              "connector-development.md",
+              "upgrading.md",
+              "sqlite.md",
+              "parity-plan.md"
+            ],
+            "Metrics": {
+              "Recall": 1,
+              "MRR": 1,
+              "NDCG": 1
+            }
+          },
+          {
+            "ID": "typed-filters",
+            "Sources": [
+              "model-api.md",
+              "typed-fields.md",
+              "parity-plan.md",
+              "connector-development.md",
+              "parity.md"
+            ],
+            "Metrics": {
+              "Recall": 1,
+              "MRR": 0.5,
+              "NDCG": 0.6309297535714574
+            }
+          },
+          {
+            "ID": "float16-output",
+            "Sources": [
+              "embedding-outputs.md",
+              "parity-plan.md",
+              "model-api.md",
+              "migrations.md",
+              "redis.md"
+            ],
+            "Metrics": {
+              "Recall": 1,
+              "MRR": 1,
+              "NDCG": 1
+            }
+          },
+          {
+            "ID": "provider-capabilities",
+            "Sources": [
+              "parity.md",
+              "sqlite-vector-design.md",
+              "redis.md",
+              "sqlite.md",
+              "model-api.md"
+            ],
+            "Metrics": {
+              "Recall": 1,
+              "MRR": 1,
+              "NDCG": 0.9327783893101108
+            }
+          }
+        ],
+        "Seconds": 0.143109875
+      },
+      "Load": {
+        "Concurrency": 4,
+        "Requests": 100,
+        "Failures": 0,
+        "Seconds": 1.056873875,
+        "RequestsPerSecond": 94.61866961183046,
+        "P50Millis": 31.666,
+        "P95Millis": 76.127,
+        "MaxMillis": 135.837
+      },
+      "HeapBeforeIngestion": {
+        "AllocBytes": 4291496,
+        "TotalAllocatedBytes": 10696248,
+        "NumGC": 4
+      },
+      "HeapAfterLoad": {
+        "AllocBytes": 3679592,
+        "TotalAllocatedBytes": 1071964608,
+        "NumGC": 391
+      },
+      "Restore": {
+        "FileSHA256": "50c57319f0c9f331dba99aec3ad0faf1e4d7308ca954019efe2af1e509780bd3",
+        "RecordSHA256": "5d6d685fef98420c4a6baa2c21cfef53c56c46d4600c9255f4782a9e855bcb7f",
+        "Bytes": 13414400,
+        "Records": 1307,
+        "IdenticalRankings": true,
+        "Seconds": 0.494327292
+      }
+    },
+    "reused": {
+      "Completed": true,
+      "Stage": "complete",
+      "Error": "",
+      "StartedUTC": "2026-11-20T11:16:37Z",
+      "Environment": {
+        "Library": "v0.5.0",
+        "Go": "go1.26.1",
+        "OS": "darwin",
+        "Arch": "arm64",
+        "Revision": "008da565a80ad9e96e1fa54c74e2c69d945a80b5",
+        "OllamaVersion": "0.40.16",
+        "CPUs": 11
+      },
+      "Config": {
+        "Corpus": "../../docs",
+        "Queries": "queries.json",
+        "Output": "data/measured",
+        "URL": "http://127.0.0.1:11435",
+        "Model": "all-minilm:22m",
+        "Revision": "008da565a80ad9e96e1fa54c74e2c69d945a80b5",
+        "Dimensions": 384,
+        "ContextTokens": 512,
+        "ChunkRunes": 400,
+        "OverlapRunes": 80,
+        "Threads": 2,
+        "K": 5,
+        "Candidates": 100,
+        "Workers": 4,
+        "PerWorker": 25,
+        "Timeout": 600000000000,
+        "OperationTimeout": 5000000000
+      },
+      "Identity": {
+        "Format": 1,
+        "Model": {
+          "Name": "all-minilm:22m",
+          "Digest": "1b226e2802dbb772b5fc32a58f103ca1804ef7501331012de126ab22f67475ef",
+          "Dimensions": 384,
+          "ContextTokens": 512,
+          "Threads": 2
+        },
+        "ChunkRunes": 400,
+        "OverlapRunes": 80,
+        "Metric": "cosine"
+      },
+      "CorpusSHA256": "30c0def50aa19232cb0286a4ace3ff33fdcbc96a7dafdabb63b906c87fd6f633",
+      "QueriesSHA256": "435f191ca2242943a2f96578d1f3451a2769f0de24489c83e31bdbe654c27506",
+      "Ingestion": {
+        "Files": 25,
+        "Chunks": 1307,
+        "Reused": 1307,
+        "Upserted": 0,
+        "Deleted": 0,
+        "Seconds": 0.155825291
+      },
+      "QueryEmbeddingSeconds": 0.055445416,
+      "Quality": {
+        "K": 5,
+        "CandidateChunks": 100,
+        "Mean": {
+          "Recall": 0.8999999999999999,
+          "MRR": 0.725,
+          "NDCG": 0.7534102844402657
+        },
+        "Queries": [
+          {
+            "ID": "sqlite-backup",
+            "Sources": [
+              "production.md",
+              "sqlite.md",
+              "stores-implementation.md",
+              "performance.md",
+              "upgrading.md"
+            ],
+            "Metrics": {
+              "Recall": 1,
+              "MRR": 1,
+              "NDCG": 1
+            }
+          },
+          {
+            "ID": "model-identity",
+            "Sources": [
+              "migrations.md",
+              "embedding-outputs.md",
+              "ai-guide.md",
+              "upgrading.md",
+              "model-api.md"
+            ],
+            "Metrics": {
+              "Recall": 0,
+              "MRR": 0,
+              "NDCG": 0
+            }
+          },
+          {
+            "ID": "redis-capacity",
+            "Sources": [
+              "performance.md",
+              "redis.md",
+              "parity.md",
+              "stores-implementation.md",
+              "production.md"
+            ],
+            "Metrics": {
+              "Recall": 1,
+              "MRR": 0.5,
+              "NDCG": 0.6309297535714574
+            }
+          },
+          {
+            "ID": "qdrant-unknown-write",
+            "Sources": [
+              "qdrant.md",
+              "qdrant-design.md",
+              "qdrant-publication-proof.md",
+              "parity-plan.md",
+              "sqlite-vector-design.md"
+            ],
+            "Metrics": {
+              "Recall": 1,
+              "MRR": 1,
+              "NDCG": 0.9639404333166534
+            }
+          },
+          {
+            "ID": "sqlite-native-distance",
+            "Sources": [
+              "sqlitevec.md",
+              "stores-implementation.md",
+              "parity.md",
+              "sqlite-vector-design.md",
+              "parity-plan.md"
+            ],
+            "Metrics": {
+              "Recall": 1,
+              "MRR": 1,
+              "NDCG": 0.9448479565595861
+            }
+          },
+          {
+            "ID": "postgres-migration",
+            "Sources": [
+              "release-0.5.md",
+              "upgrading.md",
+              "stores-implementation.md",
+              "migrations.md",
+              "connector-development.md"
+            ],
+            "Metrics": {
+              "Recall": 1,
+              "MRR": 0.25,
+              "NDCG": 0.4306765580733931
+            }
+          },
+          {
+            "ID": "native-keys",
+            "Sources": [
+              "model-api.md",
+              "connector-development.md",
+              "upgrading.md",
+              "sqlite.md",
+              "parity-plan.md"
+            ],
+            "Metrics": {
+              "Recall": 1,
+              "MRR": 1,
+              "NDCG": 1
+            }
+          },
+          {
+            "ID": "typed-filters",
+            "Sources": [
+              "model-api.md",
+              "typed-fields.md",
+              "parity-plan.md",
+              "connector-development.md",
+              "parity.md"
+            ],
+            "Metrics": {
+              "Recall": 1,
+              "MRR": 0.5,
+              "NDCG": 0.6309297535714574
+            }
+          },
+          {
+            "ID": "float16-output",
+            "Sources": [
+              "embedding-outputs.md",
+              "parity-plan.md",
+              "model-api.md",
+              "migrations.md",
+              "redis.md"
+            ],
+            "Metrics": {
+              "Recall": 1,
+              "MRR": 1,
+              "NDCG": 1
+            }
+          },
+          {
+            "ID": "provider-capabilities",
+            "Sources": [
+              "parity.md",
+              "sqlite-vector-design.md",
+              "redis.md",
+              "sqlite.md",
+              "model-api.md"
+            ],
+            "Metrics": {
+              "Recall": 1,
+              "MRR": 1,
+              "NDCG": 0.9327783893101108
+            }
+          }
+        ],
+        "Seconds": 0.107757958
+      },
+      "Load": {
+        "Concurrency": 4,
+        "Requests": 100,
+        "Failures": 0,
+        "Seconds": 1.170880125,
+        "RequestsPerSecond": 85.40583947481387,
+        "P50Millis": 31.152,
+        "P95Millis": 106.456,
+        "MaxMillis": 168.161
+      },
+      "HeapBeforeIngestion": {
+        "AllocBytes": 4547272,
+        "TotalAllocatedBytes": 10633096,
+        "NumGC": 4
+      },
+      "HeapAfterLoad": {
+        "AllocBytes": 5758056,
+        "TotalAllocatedBytes": 1059044064,
+        "NumGC": 389
+      },
+      "Restore": {
+        "FileSHA256": "50c57319f0c9f331dba99aec3ad0faf1e4d7308ca954019efe2af1e509780bd3",
+        "RecordSHA256": "5d6d685fef98420c4a6baa2c21cfef53c56c46d4600c9255f4782a9e855bcb7f",
+        "Bytes": 13414400,
+        "Records": 1307,
+        "IdenticalRankings": true,
+        "Seconds": 0.473639875
+      }
+    }
+  }
+}

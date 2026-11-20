@@ -9,6 +9,9 @@ with packed vector projections and exact cosine search, plus the local
 The vector store provides persistent typed chunks, automatic batched embeddings,
 incremental writes, concurrent retrieval and reopening after restore.
 
+See the [first measured results](results/README.md) for a completed fresh/reuse
+run, per-query judgments, observed latency and a documented retrieval miss.
+
 ## Run
 
 From this directory, with Go 1.25+, Docker and Compose v2:
