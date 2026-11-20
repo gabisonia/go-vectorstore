@@ -677,20 +677,60 @@ REDIS_TEST_RECOVERY=true REDIS_REQUIRE_SEARCH=true REDIS_REQUIRE_JSON=true \
   -run '^TestIntegrationRecovery' ./stores/redis
 ```
 
-Recovery mode explicitly enables AOF with `appendfsync always`, disables automatic
-RDB saves and uses `noeviction`. It refuses supplied server addresses. For each
-snapshot/HASH/JSON and native HASH/JSON layout, the test writes/updates/deletes
-records, rejects an invalid batch, creates an RDB backup, then acknowledges another
-update before SIGKILL. Restart must recover the newer AOF state through a fresh
-client without Ensure/rebuild. A separate fresh server restores the earlier RDB
-without a conflicting AOF. Fixtures require a PONG after loading, rather than
-only an open port, and retain bounded server state/logs on failure. Both verify
-canonical int64/vector values, deletion,
-generated-key continuation, filters, vector ranking and native TEXT reads.
-Redis 7.4 runs snapshot/HASH cases and missing-module skips; Redis 8.2 CI requires
-all five layouts. These are process-crash and fixture-backup checks, not power-loss,
-replication/failover, filesystem-corruption or production-backup guarantees. The
-stronger test fsync policy does not make the sample's every-second AOF lossless.
+Recovery mode configures the owned server with AOF enabled, `appendfsync always`,
+automatic RDB saves disabled and `noeviction`. Each layout starts with generated
+keys 1–3, updates key 1, deletes key 2, rejects an invalid batch and takes an
+explicit RDB snapshot using `SAVE`. Two writes follow the snapshot. Redis
+acknowledges another update to key 1, then publishes a generated-key insert.
+For that insert a client hook replaces the successful publication reply with
+`context.DeadlineExceeded`. The caller receives no keys. The drill counts one
+publication attempt and reopens with a fresh client to determine the stored state.
+
+| Recovery point | State observed on reopen | First insert after recovery |
+| --- | --- | --- |
+| AOF after SIGKILL and restart | Key 1 has the later update. The insert with the lost reply is present once as key 4. | Key 5 |
+| RDB loaded into a fresh server with AOF disabled | Key 1 has the earlier update. Key 4 is absent. | Key 4, allocated independently |
+
+Both drills reject an incompatible vector dimension and check the original
+registration, exact int64 value `9007199254740993`, vectors, acknowledged
+deletion, filtered retrieval and squared-L2 ranks. After inserting the new
+record they read back every survivor and the new key. Native HASH and JSON
+also execute a guarded TEXT query on the recovered index before writing.
+Reopening uses the persisted registration without creating or rebuilding indexes.
+
+### Observed recovery intervals
+
+| Redis version | Layout | AOF restart | RDB restore |
+| --- | --- | ---: | ---: |
+| 8.2.11 | Snapshot | 331 ms | 373 ms |
+| 8.2.11 | HASH | 373 ms | 432 ms |
+| 8.2.11 | JSON | 364 ms | 585 ms |
+| 8.2.11 | HASH with native indexes | 389 ms | 527 ms |
+| 8.2.11 | JSON with native indexes | 396 ms | 443 ms |
+| 7.4.12 | Snapshot | 378 ms | 418 ms |
+| 7.4.12 | HASH | 400 ms | 394 ms |
+
+Each interval is one local Docker Desktop observation with a tiny collection.
+AOF timing starts before killing the owned container. RDB timing starts with
+the backup bytes already available, before creating the restore container.
+Both end after the fresh client writes and verifies all surviving rows.
+The drills cover a Redis process crash and an isolated backup restore.
+Host power loss, filesystem corruption, replication failover, production-scale
+restore times and the loss window of the sample's every-second fsync policy
+require separate validation. A lost reply alone cannot tell an application
+whether a write committed. Reconcile against the intended recovery point.
+
+To reproduce only these measurements, leave `REDIS_TEST_ADDR` unset:
+
+```sh
+REDIS_TEST_IMAGE=redis:8.2 REDIS_TEST_RECOVERY=true REDIS_REQUIRE_SEARCH=true REDIS_REQUIRE_JSON=true \
+  go test -count=1 -race -v -tags=integration -timeout=5m -run '^TestIntegrationRecoveryRestartAndRestore$' ./stores/redis
+REDIS_TEST_IMAGE=redis:7.4 REDIS_TEST_RECOVERY=true \
+  go test -count=1 -race -v -tags=integration -timeout=5m -run '^TestIntegrationRecoveryRestartAndRestore$' ./stores/redis
+```
+
+The plain Redis 7.4 image skips the three layouts requiring JSON or Search.
+The Redis 8.2 run requires all five.
 
 The mixed workload uses 64 records with 16-dimensional vectors per layout, two
 writers publishing disjoint two-record batches and two readers checking complete

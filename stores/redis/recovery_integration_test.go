@@ -21,6 +21,7 @@ import (
 
 	"github.com/gabisonia/go-vectorstore/vectordata"
 	dockerclient "github.com/moby/moby/client"
+	goredis "github.com/redis/go-redis/v9"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 )
@@ -220,19 +221,40 @@ func restoreRedis(t *testing.T, backup []byte) string {
 	return redisContainerAddr(t, c)
 }
 
-func assertRecovered(t *testing.T, c *Collection, firstValue string) {
+func assertRecovered(t *testing.T, c *Collection, firstValue string, hasUnacknowledged bool) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(t.Context(), 15*time.Second)
 	defer cancel()
-	if count, err := c.Count(ctx, nil); err != nil || count != 2 {
-		t.Fatalf("recovered count: %d %v", count, err)
+	definition := recoveryDefinition(c.store.nativeIndexes)
+	definition.Vectors[0].Dimensions++
+	incompatible, err := c.store.GetModelCollection(c.name, definition, vectordata.ModelCollectionOptions{})
+	if err != nil {
+		t.Fatal(err)
 	}
-	for _, expected := range []vectordata.ModelRecord{recoveryRow(1, firstValue), recoveryRow(3, "original")} {
-		got, err := c.Get(ctx, expected.Key, vectordata.RetrievalOptions{IncludeVectors: true})
-		if err != nil || !reflect.DeepEqual(got, expected) {
-			t.Fatalf("recovered record: got %+v, expected %+v: %v", got, expected, err)
+	if _, err := incompatible.Count(ctx, nil); !errors.Is(err, vectordata.ErrSchemaMismatch) {
+		t.Fatalf("incompatible restored registration: %v", err)
+	}
+	expected := []vectordata.ModelRecord{recoveryRow(1, firstValue), recoveryRow(3, "original")}
+	nextKey := int64(4)
+	if hasUnacknowledged {
+		expected = append(expected, recoveryRow(4, "unacknowledged"))
+		nextKey++
+	} else if _, err := c.Get(ctx, int64(4), vectordata.RetrievalOptions{}); !errors.Is(err, vectordata.ErrNotFound) {
+		t.Fatalf("post-backup insert in RDB: %v", err)
+	}
+	checkRows := func(rows []vectordata.ModelRecord) {
+		t.Helper()
+		if count, err := c.Count(ctx, nil); err != nil || count != int64(len(rows)) {
+			t.Fatalf("recovered count: %d want %d: %v", count, len(rows), err)
+		}
+		for _, want := range rows {
+			got, err := c.Get(ctx, want.Key, vectordata.RetrievalOptions{IncludeVectors: true})
+			if err != nil || !reflect.DeepEqual(got, want) {
+				t.Fatalf("recovered record: got %+v, expected %+v: %v", got, want, err)
+			}
 		}
 	}
+	checkRows(expected)
 	if _, err := c.Get(ctx, int64(2), vectordata.RetrievalOptions{}); !errors.Is(err, vectordata.ErrNotFound) {
 		t.Fatalf("deleted record returned after recovery: %v", err)
 	}
@@ -248,11 +270,13 @@ func assertRecovered(t *testing.T, c *Collection, firstValue string) {
 	if hits, err := c.Search(ctx, recoveryRow(1, "").Vectors["Vector"], 2, vectordata.ModelSearchOptions{}); err != nil || len(hits) != 2 || hits[0].Record.Key != int64(1) || hits[0].Distance != 0 || hits[1].Record.Key != int64(3) || hits[1].Distance != 4 {
 		t.Fatalf("recovered vector ranking: %+v %v", hits, err)
 	}
-	row := recoveryRow(4, "after recovery")
+	row := recoveryRow(nextKey, "after recovery")
 	row.Key = nil
-	if keys, err := c.Insert(ctx, []vectordata.ModelRecord{row}); err != nil || len(keys) != 1 || keys[0] != int64(4) {
+	if keys, err := c.Insert(ctx, []vectordata.ModelRecord{row}); err != nil || len(keys) != 1 || keys[0] != nextKey {
 		t.Fatalf("recovered generated sequence: %v %v", keys, err)
 	}
+	row.Key = nextKey
+	checkRows(append(expected, row))
 }
 
 func TestIntegrationRecoveryRestartAndRestore(t *testing.T) {
@@ -261,7 +285,7 @@ func TestIntegrationRecoveryRestartAndRestore(t *testing.T) {
 		ctx, cancel := context.WithTimeout(t.Context(), time.Minute)
 		defer cancel()
 		// Assert the durability policy rather than relying on an image default.
-		for key, value := range map[string]string{"appendonly": "yes", "appendfsync": "always", "maxmemory-policy": "noeviction"} {
+		for key, value := range map[string]string{"appendonly": "yes", "appendfsync": "always", "maxmemory-policy": "noeviction", "save": ""} {
 			got, err := s.client.ConfigGet(ctx, key).Result()
 			if err != nil || got[key] != value {
 				t.Fatalf("fixture %s: %v %v", key, got, err)
@@ -278,8 +302,8 @@ func TestIntegrationRecoveryRestartAndRestore(t *testing.T) {
 		if _, err := c.Upsert(ctx, []vectordata.ModelRecord{recoveryRow(1, "updated")}); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := c.Delete(ctx, []any{int64(2)}); err != nil {
-			t.Fatal(err)
+		if n, err := c.Delete(ctx, []any{int64(2)}); err != nil || n != 1 {
+			t.Fatalf("delete: %d %v", n, err)
 		}
 		invalid := recoveryRow(5, "must not appear")
 		invalid.Vectors["Vector"] = []float32{1}
@@ -303,18 +327,51 @@ func TestIntegrationRecoveryRestartAndRestore(t *testing.T) {
 		if _, err := c.Upsert(ctx, []vectordata.ModelRecord{recoveryRow(1, "postbackup")}); err != nil {
 			t.Fatal(err)
 		}
+		// Drop only the successful publication reply. The caller has no key or
+		// success acknowledgement and does not retry this logical insert.
+		script := map[StorageMode]string{StorageSnapshot: compareSwap, StorageHash: publishHash, StorageJSON: publishJSON}[opts.StorageMode]
+		publications := 0
+		s.client.AddHook(processHook{run: func(ctx context.Context, cmd goredis.Cmder, next goredis.ProcessHook) error {
+			err := next(ctx, cmd)
+			if scriptIs(cmd, script) {
+				publications++
+				if err == nil {
+					return context.DeadlineExceeded
+				}
+			}
+			return err
+		}})
+		uncertain := recoveryRow(4, "unacknowledged")
+		uncertain.Key = nil
+		keys, err := c.Insert(ctx, []vectordata.ModelRecord{uncertain})
+		if !errors.Is(err, context.DeadlineExceeded) || keys != nil || publications != 1 {
+			t.Fatalf("lost publication reply: keys=%v err=%v attempts=%d", keys, err, publications)
+		}
 		if err := s.Close(); err != nil {
 			t.Fatal(err)
 		}
+		start := time.Now()
 		restartRedis(t)
 		opts.Addr = integrationAddr
 		reopened := recoveryStore(t, opts)
-		assertRecovered(t, recoveryHandle(t, reopened, false), "postbackup")
-		// The live server now has key 4. The isolated backup must restore the
-		// earlier point-in-time state and independently resume its sequence at 4.
+		assertRecovered(t, recoveryHandle(t, reopened, false), "postbackup", true)
+		aofElapsed := time.Since(start)
+		start = time.Now()
 		opts.Addr = restoreRedis(t, backup)
 		restored := recoveryStore(t, opts)
-		assertRecovered(t, recoveryHandle(t, restored, false), "updated")
+		assertRecovered(t, recoveryHandle(t, restored, false), "updated", false)
+		rdbElapsed := time.Since(start)
+		info, err := restored.client.Info(ctx, "server").Result()
+		if err != nil {
+			t.Fatal(err)
+		}
+		for line := range strings.Lines(info) {
+			if version, ok := strings.CutPrefix(line, "redis_version:"); ok {
+				t.Logf("Redis %s AOF restart %s, RDB restore %s", strings.TrimSpace(version), aofElapsed, rdbElapsed)
+				return
+			}
+		}
+		t.Fatal("missing Redis server version")
 	})
 }
 
