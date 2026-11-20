@@ -3,15 +3,20 @@
 package cosmosparity
 
 import (
+	"context"
 	"crypto/tls"
 	"errors"
+	"io"
 	"math"
 	"net/http"
 	"os"
 	"os/exec"
 	"slices"
+	"strings"
+	"sync/atomic"
 	"testing"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/data/azcosmos"
 	"github.com/gabisonia/go-vectorstore/stores/cosmosnosql"
 	"github.com/gabisonia/go-vectorstore/vectordata"
@@ -25,7 +30,7 @@ func TestSharedContainer(t *testing.T) {
 	}
 	opts := azcosmos.ClientOptions{}
 	// Only the loopback gateway in this disposable emulator uses a self-signed certificate.
-	opts.Transport = &http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}}
+	opts.Transport = faultTransport{&http.Client{Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}}}
 	client, err := azcosmos.NewClientWithKey("https://localhost:8081", cred, &opts)
 	if err != nil {
 		t.Fatal(err)
@@ -73,6 +78,7 @@ func TestSharedContainer(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			t.Run("write_outcomes", func(t *testing.T) { checkWriteOutcomes(t, c) })
 			doc, err := c.Get(ctx, "shared")
 			if err != nil || doc.Text != "initial" || !slices.Equal(doc.Vector, []float32{-1, 0}) {
 				t.Fatalf("seed: %+v %v", doc, err)
@@ -97,5 +103,72 @@ func TestSharedContainer(t *testing.T) {
 				t.Fatalf("Go delete: %v", err)
 			}
 		})
+	}
+}
+
+// The fault applies only to the marked write. Point reads and SDK metadata
+// requests use the real emulator connection.
+type faultKey struct{}
+type writeFault struct {
+	method   string
+	status   int
+	attempts atomic.Int32
+}
+type faultTransport struct{ client *http.Client }
+
+var errLostReply = errors.New("fixture discarded successful write reply")
+
+func (f faultTransport) Do(req *http.Request) (*http.Response, error) {
+	fault, _ := req.Context().Value(faultKey{}).(*writeFault)
+	if fault == nil || req.Method != fault.method {
+		return f.client.Do(req)
+	}
+	if fault.attempts.Add(1) > 1 {
+		return nil, errors.New("fixture observed a replay")
+	}
+	if fault.status != 0 {
+		return &http.Response{Request: req, StatusCode: fault.status, Status: http.StatusText(fault.status), Header: http.Header{}, Body: io.NopCloser(strings.NewReader(`{"message":"injected gateway response"}`))}, nil
+	}
+	resp, err := f.client.Do(req)
+	if err != nil || resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return resp, err
+	}
+	resp.Body.Close()
+	return nil, errLostReply
+}
+
+func checkWriteOutcomes(t *testing.T, c *cosmosnosql.NativeCollection) {
+	ctx := t.Context()
+	doc := cosmosnosql.NativeDocument{ID: "outcome", Text: "fault fixture", Vector: []float32{0, 1}}
+	throttle := &writeFault{method: http.MethodPost, status: http.StatusTooManyRequests}
+	err := c.Upsert(context.WithValue(ctx, faultKey{}, throttle), doc)
+	var rejection *azcore.ResponseError
+	if !errors.As(err, &rejection) || rejection.StatusCode != 429 || errors.Is(err, cosmosnosql.ErrNativeOutcomeUnknown) || throttle.attempts.Load() != 1 {
+		t.Fatalf("throttled upsert: %v (%d attempts)", err, throttle.attempts.Load())
+	}
+	if _, err := c.Get(ctx, doc.ID); !errors.Is(err, vectordata.ErrNotFound) {
+		t.Fatalf("after throttle: %v", err)
+	}
+	timeout := &writeFault{method: http.MethodPost, status: http.StatusRequestTimeout}
+	err = c.Upsert(context.WithValue(ctx, faultKey{}, timeout), doc)
+	if !errors.As(err, &rejection) || rejection.StatusCode != 408 || !errors.Is(err, cosmosnosql.ErrNativeOutcomeUnknown) || timeout.attempts.Load() != 1 {
+		t.Fatalf("gateway timeout: %v (%d attempts)", err, timeout.attempts.Load())
+	}
+	lost := &writeFault{method: http.MethodPost}
+	err = c.Upsert(context.WithValue(ctx, faultKey{}, lost), doc)
+	if !errors.Is(err, cosmosnosql.ErrNativeOutcomeUnknown) || !errors.Is(err, errLostReply) || lost.attempts.Load() != 1 {
+		t.Fatalf("lost upsert reply: %v (%d attempts)", err, lost.attempts.Load())
+	}
+	got, err := c.Get(ctx, doc.ID)
+	if err != nil || got.ID != doc.ID || got.Text != doc.Text || !slices.Equal(got.Vector, doc.Vector) {
+		t.Fatalf("after lost upsert reply: %+v %v", got, err)
+	}
+	lost = &writeFault{method: http.MethodDelete}
+	err = c.Delete(context.WithValue(ctx, faultKey{}, lost), doc.ID)
+	if !errors.Is(err, cosmosnosql.ErrNativeOutcomeUnknown) || !errors.Is(err, errLostReply) || lost.attempts.Load() != 1 {
+		t.Fatalf("lost delete reply: %v (%d attempts)", err, lost.attempts.Load())
+	}
+	if _, err := c.Get(ctx, doc.ID); !errors.Is(err, vectordata.ErrNotFound) {
+		t.Fatalf("after lost delete reply: %v", err)
 	}
 }

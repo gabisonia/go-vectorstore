@@ -13,6 +13,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/Azure/azure-sdk-for-go/sdk/data/azcosmos"
 	"github.com/gabisonia/go-vectorstore/vectordata"
 )
@@ -129,6 +130,12 @@ func writeError(err error) error {
 	return errors.Join(ErrNativeOutcomeUnknown, err)
 }
 
+// The generic Azure retry layer can replay a write after a transport loses
+// the acknowledgement. Cosmos-specific routing still belongs to the SDK.
+func writeContext(ctx context.Context) context.Context {
+	return policy.WithRetryOptions(ctx, policy.RetryOptions{MaxRetries: -1})
+}
+
 // Upsert replaces the entire item with the three mapped properties.
 func (c *NativeCollection) Upsert(ctx context.Context, d NativeDocument) error {
 	if !validID(d.ID) || !utf8.ValidString(d.Text) {
@@ -144,7 +151,7 @@ func (c *NativeCollection) Upsert(ctx context.Context, d NativeDocument) error {
 	if err != nil {
 		return err
 	}
-	_, err = c.container.UpsertItem(ctx, azcosmos.NewPartitionKeyString(d.ID), body, nil)
+	_, err = c.container.UpsertItem(writeContext(ctx), azcosmos.NewPartitionKeyString(d.ID), body, nil)
 	return writeError(err)
 }
 
@@ -188,7 +195,7 @@ func (c *NativeCollection) Delete(ctx context.Context, id string) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	_, err := c.container.DeleteItem(ctx, azcosmos.NewPartitionKeyString(id), id, nil)
+	_, err := c.container.DeleteItem(writeContext(ctx), azcosmos.NewPartitionKeyString(id), id, nil)
 	if hasStatus(err, 404) {
 		return nil
 	}

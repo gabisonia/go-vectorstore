@@ -296,3 +296,11 @@ and both matching items in score order at top 3 on this emulator. This
 underfilled page limits the filtered-search parity claim. Hosted behavior, multi-partition
 query execution, authentication enforcement and larger-scale recall remain
 unverified.
+
+Cosmos NoSQL upserts and deletes disable the generic Azure HTTP retry policy.
+The adapter returns throttling (HTTP 429) to the caller. HTTP 408 or a lost
+write reply carries `ErrNativeOutcomeUnknown`. The fixture injects both
+status codes and discards successful emulator responses for an upsert and a
+delete. It counts transport attempts and uses separate point reads to check
+the applied state. A read shows the current item in this single-writer fixture.
+Concurrent writers and regional failover require separate evidence.
