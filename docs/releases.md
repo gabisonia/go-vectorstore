@@ -3,9 +3,8 @@
 `VERSION` selects the source version being prepared or tagged. A version is
 available to consumers only after its immutable tag/release is published; consult
 [GitHub releases](https://github.com/gabisonia/go-vectorstore/releases). Source on
-master may be newer than the latest tag. **v0.5.0 is published**, adding providers
-and model workflows plus correctness fixes. Use its immutable tag for released
-source and consult the changelog for later changes on master. See the
+master may be newer than the latest tag. The v0.6.0 source adds native connectors and requires Go 1.26+.
+Consult the changelog for changes since the previous tag. See the
 [v0.5.0 compatibility review](release-0.5.md) and [upgrade guide](upgrading.md).
 
 ## Compatibility policy
@@ -72,7 +71,6 @@ are separate from workflow code and must be verified after configuration.
 Redis jobs also have a 30-minute overall limit covering build/startup and samples,
 in addition to their individual Go test timeouts.
 
-VERSION currently identifies the published 0.5.0 baseline; newer master commits
-can contain unreleased changes. Merging a PR never publishes a new version. Use
+VERSION identifies the source version for the release workflow. Merging a PR never publishes a new version. Use
 `go get github.com/gabisonia/go-vectorstore@latest` for the latest published release
 and inspect/pin the resolved version in your application's go.mod.

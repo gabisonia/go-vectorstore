@@ -2,8 +2,8 @@
 
 > Go vector-store library inspired by Microsoft.Extensions.VectorData, with typed model collections, native keys/data, named vectors and automatic embeddings across memory, SQLite, Redis, bounded Qdrant snapshots and PostgreSQL/pgvector.
 
-Published v0.5.0 requires Go 1.25+. The unreleased root module requires Go 1.26+; check GitHub
-releases for later tags. Master can include unreleased changes. Run repository
+v0.6.0 requires Go 1.26+. v0.5.0 supports Go 1.25. Check GitHub
+releases for available tags. Master can include unreleased changes. Run repository
 samples from the matching source checkout and check isolated modules' own go.mod.
 Prefer typed model APIs for new applications. Original PostgreSQL Record APIs remain supported. Choose a
 provider using its reported capabilities; accepted schema hints do not imply ANN
@@ -13,7 +13,7 @@ indexes or hybrid support. Deterministic sample embeddings are instructional.
 
 - [AI usage guide](https://raw.githubusercontent.com/gabisonia/go-vectorstore/master/docs/ai-guide.md): Version guidance, complete runnable quickstart, task recipes and common mistakes.
 - [Sample index](https://raw.githubusercontent.com/gabisonia/go-vectorstore/master/samples/README.md): Prerequisites, runnable commands and verification.
-- [Released API reference](https://pkg.go.dev/github.com/gabisonia/go-vectorstore@v0.5.0/vectordata): Public types and executable examples in v0.5.0.
+- [Released API reference](https://pkg.go.dev/github.com/gabisonia/go-vectorstore@v0.6.0/vectordata): Public types and executable examples in v0.6.0.
 - [Changelog](https://raw.githubusercontent.com/gabisonia/go-vectorstore/master/CHANGELOG.md): Published and unreleased behavior.
 
 ## Usage and limits
