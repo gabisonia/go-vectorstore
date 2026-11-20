@@ -1,5 +1,11 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <NoWarn>$(NoWarn);SKEXP0020</NoWarn>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
   <ItemGroup>
+    <Compile Remove="vendor/**" />
     <PackageReference Include="Elastic.SemanticKernel.Connectors.Elasticsearch" Version="[0.3.1]" />
   </ItemGroup>
 </Project>

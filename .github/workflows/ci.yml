@@ -86,7 +86,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        provider: [weaviate, chroma]
+        provider: [weaviate, chroma, elasticsearch]
     steps:
       - uses: actions/checkout@v4
       - run: bash scripts/test-${{ matrix.provider }}-parity.sh

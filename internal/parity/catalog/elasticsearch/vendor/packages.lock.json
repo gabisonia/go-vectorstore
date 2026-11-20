@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "dependencies": {
+    "net10.0": {
+      "Elastic.SemanticKernel.Connectors.Elasticsearch": {
+        "type": "Direct",
+        "requested": "[0.3.1, 0.3.1]",
+        "resolved": "0.3.1",
+        "contentHash": "yzjc4aNMx5Fd0K87mZ0Lrhuy/0q0EPE0KDq3mneRFfRDoDBJArXvFM+3d3fab7QCN28kXhBQCtzsh6XgnGrjwA==",
+        "dependencies": {
+          "Elastic.Clients.Elasticsearch": "8.19.9",
+          "Microsoft.Extensions.AI.Abstractions": "9.10.0",
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "9.0.10",
+          "Microsoft.Extensions.VectorData.Abstractions": "9.7.0",
+          "MinVer": "6.0.0"
+        }
+      },
+      "Microsoft.Extensions.VectorData.Abstractions": {
+        "type": "Direct",
+        "requested": "[9.7.0, 9.7.0]",
+        "resolved": "9.7.0",
+        "contentHash": "Vth/omSCX2vR0JabzSRU/hdPhr0CvUVZlaS2lJPWHrEwvak8ntrQLDtLMtMiWKSvviGBe/WmjUW8gA3qqn9tjw==",
+        "dependencies": {
+          "Microsoft.Extensions.AI.Abstractions": "9.5.0"
+        }
+      },
+      "Elastic.Clients.Elasticsearch": {
+        "type": "Transitive",
+        "resolved": "8.19.9",
+        "contentHash": "IC/n34FIt/77yIVbGQ3szxux9ZsUe12tds7YKUc/0sZB0YLd2xbUcQFI+H18oTE2PTCeiTgrT0GmtpHvhs7Wnw==",
+        "dependencies": {
+          "Elastic.Transport": "0.10.1"
+        }
+      },
+      "Elastic.Transport": {
+        "type": "Transitive",
+        "resolved": "0.10.1",
+        "contentHash": "8qUyxd4LzMiR+wtNEzdHHnu+iEpbKfoA001NyYgZZT0YZaNE9fWmFeZMxcTz7HMcYUidZSeT6vvongjZh1j/hQ=="
+      },
+      "Microsoft.Extensions.AI.Abstractions": {
+        "type": "Transitive",
+        "resolved": "9.10.0",
+        "contentHash": "oBdh3TDNN+F28L2ZKOF1NfobJF3BbKWrpta+HI9dz8OcwIiIkFGvP8n1GNPO92upNQ9gofMX1O+MXtopW6tR1A=="
+      },
+      "Microsoft.Extensions.DependencyInjection.Abstractions": {
+        "type": "Transitive",
+        "resolved": "9.0.10",
+        "contentHash": "r9waLiOPe9ZF1PvzUT+RDoHvpMmY8MW+lb4lqjYGObwKpnyPMLI3odVvlmshwuZcdoHynsGWOrCPA0hxZ63lIA=="
+      },
+      "MinVer": {
+        "type": "Transitive",
+        "resolved": "6.0.0",
+        "contentHash": "+/SsmiySsXJlvQLCGBqaZKNVt3s/Y/HbAdwtop7Km2CnuZbaScoqkWJEBQ5Cy9ebkn6kCYKrHsXgwrFdTgcb3g=="
+      }
+    }
+  }
+}
