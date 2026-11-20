@@ -69,6 +69,20 @@ jobs:
       - name: Vet probe
         run: go vet -tags=sqlitevecprobe ./internal/sqlitevecprobe ./stores/sqlitevec
 
+  qdrant-dotnet-parity:
+    name: Native Qdrant and .NET interoperability
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.400'
+      - run: bash scripts/test-qdrant-parity.sh
+
   qdrant-probe:
     name: Qdrant 1.20.2 probe (Go ${{ matrix.go }})
     runs-on: ubuntu-latest
@@ -347,7 +361,7 @@ jobs:
   required:
     name: Required CI
     if: always()
-    needs: [test, sqlite-vec-probe, qdrant-probe, integration-postgres, integration-redis, local-doc-agent, docs-retrieval-pilot, aspire, vulnerabilities, api-compatibility]
+    needs: [test, sqlite-vec-probe, qdrant-probe, qdrant-dotnet-parity, integration-postgres, integration-redis, local-doc-agent, docs-retrieval-pilot, aspire, vulnerabilities, api-compatibility]
     runs-on: ubuntu-latest
     steps:
       - name: Require every verification job to succeed
