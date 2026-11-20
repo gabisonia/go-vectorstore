@@ -1,5 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="Newtonsoft.Json" Version="[13.0.4]" />
     <PackageReference Include="CommunityToolkit.VectorData.CosmosNoSql" Version="[1.0.0]" />
   </ItemGroup>
 </Project>

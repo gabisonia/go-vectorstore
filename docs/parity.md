@@ -17,7 +17,11 @@ for attaching to externally managed collections. The Elasticsearch adapter targe
 provisioned Search indexes. The [Couchbase fixture](../internal/parity/README.md#couchbase-server-800)
 tracks the pinned connector’s collection and filter limitations. Pinecone has
 Docker interoperability coverage on its retired local emulator. Hosted Pinecone
-behavior requires live validation.
+behavior requires live validation. Azure DocumentDB and Cosmos DB for NoSQL each
+have a public Go adapter for externally managed collections. The two Docker
+fixtures exercise both Go- and C#-created schemas. The Cosmos emulator can
+return a short filtered page. See the [DocumentDB](../internal/parity/README.md#azure-documentdb-connector-on-documentdb-local)
+and [Cosmos NoSQL](../internal/parity/README.md#cosmos-db-for-nosql-on-the-linux-vnext-emulator) fixtures.
 
 | Workflow | Go implementation | Status |
 | --- | --- | --- |

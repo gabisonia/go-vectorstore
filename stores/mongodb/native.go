@@ -8,10 +8,10 @@ import (
 	"regexp"
 	"unicode/utf8"
 
+	"github.com/gabisonia/go-vectorstore/internal/nativebson"
 	"github.com/gabisonia/go-vectorstore/vectordata"
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
-	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
 // NativeSchema maps a named vector search index, one indexed string field
@@ -101,94 +101,27 @@ func AttachNative(ctx context.Context, c *mongo.Collection, s NativeSchema) (*Na
 	return &NativeCollection{c, s}, nil
 }
 
-func (c *NativeCollection) validate(v []float32) error {
-	_, err := vectordata.NormalizeModelVector(v, vectordata.VectorProperty{Dimensions: c.schema.Dimensions, Metric: vectordata.DistanceCosine})
-	return err
-}
-func validID(id string) bool { return id != "" && utf8.ValidString(id) }
-
-// A per-document write rejection settles this single-document operation.
-// A write-concern or transport error can arrive after the write was applied.
-func writeError(err error) error {
-	var rejected mongo.WriteException
-	if errors.As(err, &rejected) && len(rejected.WriteErrors) > 0 && rejected.WriteConcernError == nil {
-		return err
-	}
-	return errors.Join(ErrNativeOutcomeUnknown, err)
+func (c *NativeCollection) documents() nativebson.Collection {
+	return nativebson.Collection{Mongo: c.collection, Text: c.schema.Text, Vector: c.schema.Vector, Dimensions: c.schema.Dimensions, Unknown: ErrNativeOutcomeUnknown}
 }
 
 // Upsert sets the mapped fields and preserves unrelated BSON fields.
 func (c *NativeCollection) Upsert(ctx context.Context, d NativeDocument) error {
-	if !validID(d.ID) || !utf8.ValidString(d.Text) {
-		return vectordata.ErrInvalidRecord
-	}
-	if err := c.validate(d.Vector); err != nil {
-		return err
-	}
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	result, err := c.collection.UpdateOne(ctx, bson.M{"_id": d.ID}, bson.M{"$set": bson.M{c.schema.Text: d.Text, c.schema.Vector: d.Vector}}, options.UpdateOne().SetUpsert(true))
-	if err != nil {
-		return writeError(err)
-	}
-	if !result.Acknowledged || (result.MatchedCount != 1 && result.UpsertedID != d.ID) {
-		return ErrNativeOutcomeUnknown
-	}
-	return nil
+	docs := c.documents()
+	return docs.Upsert(ctx, nativebson.Document(d))
 }
 
 // Get returns ErrNotFound for a missing _id.
 func (c *NativeCollection) Get(ctx context.Context, id string) (NativeDocument, error) {
-	if !validID(id) {
-		return NativeDocument{}, vectordata.ErrInvalidRecord
-	}
-	raw, err := c.collection.FindOne(ctx, bson.M{"_id": id}, options.FindOne().SetProjection(bson.M{c.schema.Text: 1, c.schema.Vector: 1})).Raw()
-	if errors.Is(err, mongo.ErrNoDocuments) {
-		return NativeDocument{}, vectordata.ErrNotFound
-	}
-	if err != nil {
-		return NativeDocument{}, err
-	}
-	text, ok := raw.Lookup(c.schema.Text).StringValueOK()
-	array, hasVector := raw.Lookup(c.schema.Vector).ArrayOK()
-	if !ok || !hasVector {
-		return NativeDocument{}, vectordata.ErrInvalidRecord
-	}
-	values, err := array.Values()
-	if err != nil || len(values) != c.schema.Dimensions {
-		return NativeDocument{}, vectordata.ErrInvalidRecord
-	}
-	v := make([]float32, len(values))
-	for i, value := range values {
-		n, ok := value.DoubleOK()
-		if !ok {
-			return NativeDocument{}, vectordata.ErrInvalidRecord
-		}
-		v[i] = float32(n)
-	}
-	if err := c.validate(v); err != nil {
-		return NativeDocument{}, err
-	}
-	return NativeDocument{id, text, v}, nil
+	docs := c.documents()
+	d, err := docs.Get(ctx, id)
+	return NativeDocument(d), err
 }
 
 // Delete removes one matching document, including successful no-op deletes.
 func (c *NativeCollection) Delete(ctx context.Context, id string) error {
-	if !validID(id) {
-		return vectordata.ErrInvalidRecord
-	}
-	if err := ctx.Err(); err != nil {
-		return err
-	}
-	result, err := c.collection.DeleteOne(ctx, bson.M{"_id": id})
-	if err != nil {
-		return writeError(err)
-	}
-	if !result.Acknowledged {
-		return ErrNativeOutcomeUnknown
-	}
-	return nil
+	docs := c.documents()
+	return docs.Delete(ctx, id)
 }
 
 // Search uses exact vector search on the asynchronously maintained index.
@@ -197,7 +130,8 @@ func (c *NativeCollection) Search(ctx context.Context, v []float32, top int, tex
 	if top <= 0 || (textEquals != nil && !utf8.ValidString(*textEquals)) {
 		return nil, vectordata.ErrInvalidRecord
 	}
-	if err := c.validate(v); err != nil {
+	docs := c.documents()
+	if err := docs.Validate(v); err != nil {
 		return nil, err
 	}
 	query := bson.M{"index": c.schema.Index, "path": c.schema.Vector, "queryVector": v, "limit": top, "exact": true}

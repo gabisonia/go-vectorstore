@@ -9,17 +9,6 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo"
 )
 
-func TestWriteOutcomes(t *testing.T) {
-	rejected := mongo.WriteException{WriteErrors: mongo.WriteErrors{{Code: 121, Message: "document validation failed"}}}
-	if errors.Is(writeError(rejected), ErrNativeOutcomeUnknown) {
-		t.Fatal("single-row validation rejection marked uncertain")
-	}
-	uncertain := writeError(context.DeadlineExceeded)
-	if !errors.Is(uncertain, ErrNativeOutcomeUnknown) || !errors.Is(uncertain, context.DeadlineExceeded) {
-		t.Fatal(uncertain)
-	}
-}
-
 func TestValidateBeforeIO(t *testing.T) {
 	c := &NativeCollection{schema: NativeSchema{Dimensions: 2}}
 	ctx := t.Context()

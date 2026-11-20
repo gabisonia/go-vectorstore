@@ -253,3 +253,42 @@ supplies the API key. The adapter verifies the data host against the control
 plane and checks readiness, dimensions and metric. Requests use the 2025-01
 vectors API. Upsert replaces the vector and all metadata for that ID. Search
 returns native similarity scores and optionally filters by metadata equality.
+
+## Azure DocumentDB connector on DocumentDB Local
+
+Run `bash scripts/test-documentdb-parity.sh` with Docker. The fixture starts
+a disposable, digest-pinned DocumentDB Local pg17-1.0.0 server. The clients
+connect over loopback in the server's network namespace using its self-signed
+TLS certificate. The script publishes no ports and removes the server and its
+anonymous volumes on exit.
+
+Use `documentdb.AttachNative` with a caller-owned MongoDB collection, a
+named HNSW cosine index, a string field with an ascending index, the vector
+field and dimensions. Upsert sets the two fields and preserves other fields.
+Search supports string equality inside the native vector query and returns
+cosine similarity. The fixture covers both collection creators with
+CommunityToolkit.VectorData.AzureDocumentDB 1.1.1 on VectorData 11.0.0.
+Hosted Azure DocumentDB, larger-scale recall and recovery remain unverified.
+
+## Cosmos DB for NoSQL on the Linux vNext emulator
+
+Run `bash scripts/test-cosmos-nosql-parity.sh` with Docker. The fixture uses a
+digest-pinned emulator in HTTPS gateway mode, publishes no ports and removes
+its server and volumes on exit.
+
+Use `cosmosnosql.AttachNative` with a caller-owned Go SDK container client.
+The adapter checks for a single `/id` partition key, a float32 cosine vector
+policy and a DiskANN index. Point reads return the vector. Upsert replaces
+the item. Search binds vector and optional text operands and requests native
+ranking through the gateway. Cross-partition gateway query errors propagate.
+The fixture uses both Go- and C#-created containers and the locked
+CommunityToolkit.VectorData.CosmosNoSql 1.0.0 on VectorData 11.0.0.
+The connector accepts `CosineSimilarity` and rejects `CosineDistance`
+during container creation.
+
+The three-item fixture includes two matching items and an excluded item with
+the best cosine score. C# filtered search returns one matching item at top 2
+and both matching items in score order at top 3 on this emulator. This
+underfilled page limits the filtered-search parity claim. Hosted behavior, multi-partition
+query execution, authentication enforcement and larger-scale recall remain
+unverified.
