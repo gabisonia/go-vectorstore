@@ -30,8 +30,9 @@ the same records. The memory fixture compares filtered cosine ranking, vector
 retrieval and deletion. The SQLite fixture opens the same file with both sqlite-vec
 implementations. Each creator supplies an integer key and a named cosine-distance
 vector. The Go fixture writes the payload and vector in one transaction. C#
-checks nearest-neighbor order and deletes from both physical tables. This is
-a file-format test. A public SQLite native adapter is still pending.
+checks nearest-neighbor order and deletes from both physical tables. The Go
+fixture calls the public native adapter and checks rollback after the second
+statement of a two-table delete fails.
 
 The MongoDB, Couchbase and Oracle reference projects
 pin patched transitive dependencies flagged by NuGet audit. Their live service
