@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add native access to C#-created Qdrant collections, SQLite vec0 tables and
+  Redis Search hash/JSON indexes. Add Docker interoperability checks for those
+  providers, the existing PostgreSQL typed model API and in-memory operations.
+  Add an opt-in Azure AI Search fixture using a local Azure CLI identity.
+
 - Add an isolated v0.5.0 documentation retrieval pilot with small local MiniLM
   embeddings, graded retrieval evaluation, bounded concurrent searches, model
   identity checks, incremental ingestion and verified offline SQLite restores.

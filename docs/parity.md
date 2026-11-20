@@ -6,6 +6,12 @@ and its [data operations guide](https://learn.microsoft.com/en-us/dotnet/ai/vect
 It is a workflow comparison, not a claim of API or feature equivalence with every
 .NET connector. Provider capabilities differ in both ecosystems.
 
+The [connector interoperability guide](../internal/parity/README.md) lists the
+locked C# packages, physical schemas, local Docker commands and live-service
+coverage for the unreleased native APIs. The PostgreSQL fixture uses the
+existing typed model API. Qdrant, SQLite and Redis have explicit entry points
+for attaching to externally managed collections.
+
 | Workflow | Go implementation | Status |
 | --- | --- | --- |
 | Declare key/data/vector properties | Struct tags, explicit CollectionDefinition, StructCodec and custom codecs | Implemented |
