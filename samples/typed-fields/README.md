@@ -1,6 +1,6 @@
 # Generated typed filters and ordering
 
-Run from the repository root with Go 1.25+; no credentials are needed:
+Run from the repository root with Go 1.26+; no credentials are needed:
 
 ```sh
 go generate ./samples/typed-fields

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Raise the root module minimum to Go 1.26 and update golang.org/x/crypto
+  to v0.59.0. The published v0.5.0 release still supports Go 1.25.
+
 - Add native MongoDB Atlas Vector Search access for string keys and dense
   cosine vectors, including exact search with a text equality prefilter.
 

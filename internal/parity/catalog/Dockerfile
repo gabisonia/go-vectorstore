@@ -1,4 +1,4 @@
-FROM golang:1.25-bookworm AS tests
+FROM golang:1.26-bookworm AS tests
 ARG provider
 WORKDIR /src
 COPY go.mod go.sum ./

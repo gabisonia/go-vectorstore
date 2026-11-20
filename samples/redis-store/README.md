@@ -1,6 +1,6 @@
 # Redis model collections
 
-Run from the repository root with Go 1.25+ and a standalone Redis server. This
+Run from the repository root with Go 1.26+ and a standalone Redis server. This
 sample is on master after v0.4.1 and needs no model download or cloud API key.
 
 ```sh

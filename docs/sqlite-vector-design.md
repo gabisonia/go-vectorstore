@@ -66,7 +66,7 @@ The tag links the extension only into this test binary. The probe checks the
 bundled version, three dense metrics, filtering inside KNN, complete tie ordering,
 the base provider's dependency graph, and a separate writer whose binary omits
 the extension. CI executes the CGo-free probe on Linux amd64, macOS arm64 and
-Windows amd64 with minimum Go 1.25, plus current stable Go on Linux. Other targets
+Windows amd64 with minimum Go 1.26, plus current stable Go on Linux. Other targets
 in the driver's source are not a tested platform promise from this project.
 
 The local darwin/arm64 probe reports SQLite 3.53.4 and sqlite-vec v0.1.9.

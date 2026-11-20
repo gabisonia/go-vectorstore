@@ -1,6 +1,6 @@
 # Runnable samples
 
-Run commands from the repository root with Go 1.25+. Start with a credential-free
+Run commands from the repository root with Go 1.26+. Start with a credential-free
 model sample; then select SQLite or PostgreSQL when persistence is needed.
 
 | Goal | Sample | Requirements |

@@ -16,7 +16,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        go: ['1.25.x', stable]
+        go: ['1.26.x', stable]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -50,10 +50,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - {os: ubuntu-latest, go: '1.25.x'}
+          - {os: ubuntu-latest, go: '1.26.x'}
           - {os: ubuntu-latest, go: stable}
-          - {os: macos-latest, go: '1.25.x'}
-          - {os: windows-latest, go: '1.25.x'}
+          - {os: macos-latest, go: '1.26.x'}
+          - {os: windows-latest, go: '1.26.x'}
     env:
       CGO_ENABLED: '0'
     steps:
@@ -113,7 +113,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        go: ['1.25.x', stable]
+        go: ['1.26.x', stable]
     services:
       qdrant:
         image: qdrant/qdrant:v1.20.2
@@ -148,7 +148,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        go: ['1.25.x', stable]
+        go: ['1.26.x', stable]
         postgres: ['16', '18']
     steps:
       - uses: actions/checkout@v4
@@ -173,7 +173,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        go: ['1.25.x', stable]
+        go: ['1.26.x', stable]
         redis: ['7.4', '8.2']
     services:
       redis:

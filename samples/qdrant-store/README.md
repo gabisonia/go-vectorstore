@@ -1,6 +1,6 @@
 # Bounded Qdrant model collections
 
-Run from the repository root with Go 1.25+. The [shared Aspire services](../aspire-services/README.md)
+Run from the repository root with Go 1.26+. The [shared Aspire services](../aspire-services/README.md)
 require Aspire 17, Go 1.26+ and Docker:
 
 ```sh

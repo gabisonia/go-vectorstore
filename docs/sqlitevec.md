@@ -32,7 +32,7 @@ and the rerunnable [sample](../samples/sqlitevec-store/README.md).
 
 The native path covers Linux/macOS/Windows on amd64/arm64, which share the reviewed
 generated scalar kernel. CI executes Linux/amd64, macOS/arm64 and Windows/amd64
-with CGo disabled, including minimum Go 1.25; other combinations are not a separate
+with CGo disabled, including minimum Go 1.26; other combinations are not a separate
 CI platform promise. Float16 uses the already-rounded canonical float32 values.
 All portable keys, optional/named vectors, storage-name mappings, embeddings and
 typed/dynamic operations retain the shared provider behavior.

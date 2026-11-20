@@ -33,7 +33,7 @@ binary understands a newer storage format.
 An intentional breaking change before v1 requires a minor-version increase,
 release notes and upgrade guidance. A storage format change requires an explicit
 version and migration/backup procedure; Ensure does not silently convert data.
-Go/driver/database support changes must be called out. The Go minimum is 1.25;
+Go/driver/database support changes must be called out. The Go minimum is 1.26;
 CI tests minimum/current stable Go, PostgreSQL 16/18, Redis 7.4/8.2 and the pinned
 standalone Qdrant server. Optional sqlite-vec checks run CGo-free on Linux, macOS
 and Windows. Deployed pgvector operators,

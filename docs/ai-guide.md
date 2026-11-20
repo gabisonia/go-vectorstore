@@ -15,7 +15,7 @@ releases and pin the version used by your application's go.mod:
 go get github.com/gabisonia/go-vectorstore@v0.5.0
 ```
 
-Go 1.25+ is required. Check your application's `go.mod` before choosing APIs.
+Published v0.5.0 requires Go 1.25+. The unreleased root module requires Go 1.26+. Check your application's `go.mod` before choosing APIs.
 Master may include unpublished changes listed in [CHANGELOG.md](../CHANGELOG.md).
 Run repository samples from a checkout of the matching source. Isolated sample
 modules pin their own dependencies; check their go.mod before choosing newer APIs.
