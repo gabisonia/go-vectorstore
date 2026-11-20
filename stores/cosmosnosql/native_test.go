@@ -3,6 +3,7 @@ package cosmosnosql
 import (
 	"context"
 	"errors"
+	"net/http"
 	"slices"
 	"testing"
 
@@ -44,6 +45,32 @@ func ExampleAttachNative() {
 		return c.Search(ctx, []float32{1, 0}, 5, nil)
 	}
 	_ = search
+}
+
+// Each new handle owns its HTTP connections. The application can retire it
+// after in-flight requests complete and use a fresh handle for new operations.
+func ExampleAttachNative_regionalRecovery() {
+	open := func(ctx context.Context, endpoint string, key azcosmos.KeyCredential) (*NativeCollection, func(), error) {
+		transport := http.DefaultTransport.(*http.Transport).Clone()
+		opts := azcosmos.ClientOptions{PreferredRegions: []string{"France Central", "Germany West Central"}}
+		opts.Transport = &http.Client{Transport: transport}
+		client, err := azcosmos.NewClientWithKey(endpoint, key, &opts)
+		if err != nil {
+			return nil, nil, err
+		}
+		container, err := client.NewContainer("articles", "items")
+		if err != nil {
+			transport.CloseIdleConnections()
+			return nil, nil, err
+		}
+		collection, err := AttachNative(ctx, container, NativeSchema{Text: "body", Vector: "direction", Dimensions: 128})
+		if err != nil {
+			transport.CloseIdleConnections()
+			return nil, nil, err
+		}
+		return collection, transport.CloseIdleConnections, nil
+	}
+	_ = open
 }
 
 func TestProvisionedPolicies(t *testing.T) {

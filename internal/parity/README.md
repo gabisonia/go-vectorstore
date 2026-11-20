@@ -273,7 +273,7 @@ On 2026-11-20 the same three-item fixture passed on a hosted North Europe
 M30 cluster with one shard and 32 GiB storage. Both index creators passed
 schema checks, shared reads, updates and deletes, and filtered HNSW ranking.
 The clients used native credentials and TLS with certificate verification.
-Larger-scale recall, latency under load and recovery remain unmeasured.
+The hosted workload below measures filtered recall and latency on a larger fixture.
 
 ## Cosmos DB for NoSQL on the Linux vNext emulator
 
@@ -306,7 +306,9 @@ write reply carries `ErrNativeOutcomeUnknown`. The fixture injects both
 status codes and discards successful emulator responses for an upsert and a
 delete. It counts transport attempts and uses separate point reads to check
 the applied state. A read shows the current item in this single-writer fixture.
-Concurrent writers and regional failover require separate evidence.
+A second writer also replaces the same ID while the first writer awaits its lost
+acknowledgement. Its acknowledged update survives, with one transport attempt
+for the uncertain request.
 
 ### Hosted Cosmos NoSQL result, 2026-11-20
 
@@ -323,8 +325,10 @@ ordering, bound the same text and vector, projected
 `VectorDistance(c.direction, @v, true)`, and sorted the two scores in Go.
 It observed 0.8 for `shared` and 0 for `second`. This probe reads every
 eligible score. The public adapter propagates the original gateway error.
-Physical partition fan-out, Entra RBAC, scale and regional failover remain
-unverified.
+The explicit `SearchExact` API uses this projection. It retains k hits and one
+SDK page (128 rows requested), with descending scores and ascending ID ties.
+Each continuation uses the client’s configured consistency. Concurrent changes
+can affect later pages. Entra RBAC remains unverified.
 
 ### Opt-in hosted Azure search workload
 
@@ -344,3 +348,56 @@ search. The Cosmos test also cancels a live scan at its first continuation
 and requires an error with no partial hits. These figures describe a small
 interactive retrieval workload. Larger collections require fresh measurements,
 especially for the Cosmos exact scan.
+
+### Hosted workload results, 2026-11-20
+
+On two physical Cosmos partitions across Germany West Central and France Central,
+all 600 returned ranks matched the independent cosine reference per run.
+Across four runs of the workload above, p95 ranged from 248 to 272 ms.
+Cancellation at a real continuation returned no hits. Both C#- and Go-created
+containers passed strict attachment, filtered search with an excluded nearest
+item, equal-score ID ordering, and the overlapping lost-acknowledgement test.
+On DocumentDB M30 in North Europe, p95 was 119 ms with 99.5% recall.
+With a Germany West Central replica, p95 was 113 ms with 99.7% recall.
+
+At two queries per second continuously, the provisioned compute/throughput
+and storage estimates used here allocate about €0.00025 per query on the
+two-region Cosmos configuration and €0.000071 on the single DocumentDB M30.
+These figures exclude network charges, tax and idle time. A DocumentDB replica
+adds capacity cost. The workload target was €0.001 per query.
+
+#### Cosmos regional recovery
+
+The single-write-region account was promoted in each direction under a stream
+of new uniquely keyed writes and point reads. The application gave each
+operation ten seconds. After a failed operation it opened a fresh SDK client
+with its own HTTP transport, configured both preferred regions, and reattached
+the schema before issuing a **new** write. It never replayed an uncertain write.
+The largest intervals between successful write/read pairs were 24.3 s toward
+Germany and 12.6 s toward France, within the 60 s target. Every acknowledged
+ID (19 and 31, respectively) was readable after promotion, and a filtered
+top-10 search succeeded in each new primary region.
+
+Client configuration mattered. A default client failed to complete the first
+recovery probe within 90 s after promotion. A separate trial using new SDK
+clients with a shared default transport and four-second deadlines recorded a
+128 s gap. Use the tested configuration as a unit. The trials did not isolate
+the effect of the transport from the deadline. See
+[the regional client example](../../stores/cosmosnosql/native_test.go).
+
+#### DocumentDB regional recovery
+
+The M30 primary in North Europe replicated to Germany West Central. During
+forced replica promotion, a client using the global read-write endpoint
+continuously issued uniquely keyed upserts and point reads. After Azure
+reported the new primary, a point read for a previously acknowledged ID
+returned `vectordata.ErrNotFound`. The drill failed its acknowledgement
+check before it reported a recovery interval. It did not determine whether
+the item later became visible.
+
+This configuration fails the production criterion that every acknowledged
+write must be readable after forced regional promotion. Microsoft documents
+possible data loss during forced promotion because regional replication is
+asynchronous. Graceful promotion requires a reachable primary and a drained
+replication queue. This drill did not test graceful promotion.
+See [DocumentDB failover modes](https://learn.microsoft.com/en-us/azure/documentdb/failover-modes).
