@@ -13,7 +13,9 @@ existing typed model API. SQL Server, Azure AI Search, Qdrant, SQLite, Redis, We
 for attaching to externally managed collections. The Elasticsearch adapter targets
 8.19.9 indexes shared with Elastic’s connector on VectorData 9.7.0. Connector
 0.3.1 fails at collection construction on the 11.0.0 target. MongoDB connector
-1.74.0-preview fails at search on 11.0.0. Its live fixture uses 10.1.0.
+1.74.0-preview fails at search on 11.0.0. Its live fixture uses 10.1.0. Couchbase has a Go adapter for externally
+provisioned Search indexes. The [Couchbase fixture](../internal/parity/README.md#couchbase-server-800)
+tracks the pinned connector’s collection and filter limitations.
 
 | Workflow | Go implementation | Status |
 | --- | --- | --- |

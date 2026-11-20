@@ -45,8 +45,7 @@ Each client creates the search index, reads the other client's record and
 checks native FLAT cosine retrieval. The Go fixture uses `Store.AttachNativeCosine` and its public native document methods.
 
 The MongoDB, Couchbase and Oracle reference projects pin patched transitive
-dependencies flagged by NuGet audit. Couchbase and Oracle still need live
-service validation.
+dependencies flagged by NuGet audit. Oracle still needs live service validation.
 
 ## Qdrant checkpoint
 
@@ -190,3 +189,25 @@ set the two mapped fields. Go search uses exact vector search and returns
 MongoDB's normalized scores. The search index updates asynchronously, so the
 fixture waits for known records to be visible before comparing clients.
 Hosted Atlas, multi-node failover and approximate recall are unverified.
+
+## Couchbase Server 8.0.0
+
+Run `bash scripts/test-couchbase-parity.sh` with Docker. The fixture provisions
+a bucket, scope, collection and scoped Search index on a disposable Enterprise
+server. It publishes no host ports. The fixture exercises Couchbase Search
+(FTS) with a cosine vector and a keyword-analyzed string field.
+
+`couchbase.AttachNative` accepts the Query and Search service origins, a
+`NativeSchema` and a transport for authentication and TLS. It checks the
+collection and both index mappings. CRUD uses SQL++ with bound keys and JSON
+values. Upsert replaces the entire document body. Search uses an optional
+keyword predicate inside the KNN request. Index updates are asynchronous.
+
+CouchbaseConnector.SemanticKernel 0.2.5 references VectorData 9.7.0. The
+fixture runs separate locked executables for 11.0.0 and 9.7.0. The connector
+does not implement collection creation. Its Search path builds the filter but
+omits it from the KNN request. The fixture includes an excluded document
+with the best cosine match to distinguish native Go prefiltering from the C#
+behavior. Use the external document key when writing a retrieved C# record.
+Capella, SQL++ vector indexes, multi-node recovery and large-scale recall are
+outside this fixture.

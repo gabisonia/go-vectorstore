@@ -47,7 +47,8 @@ var ErrNativeOutcomeUnknown = errors.New("Couchbase native write outcome unknown
 var identifier = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_-]*$`)
 
 type fieldMapping struct {
-	Fields []struct {
+	Enabled bool
+	Fields  []struct {
 		Name, Type, Similarity, Analyzer string
 		Index                            bool
 		Dims                             int
@@ -98,7 +99,11 @@ func AttachNative(ctx context.Context, queryOrigin, searchOrigin string, s Nativ
 	if index.Type != "fulltext-index" || index.SourceName != s.Bucket || index.Params.DocConfig.Mode != "scope.collection.type_field" || index.Params.Mapping.Default.Enabled || len(index.Params.Mapping.Types) != 1 || !m.Enabled {
 		return nil, vectordata.ErrSchemaMismatch
 	}
-	text, vector := m.Properties[s.Text].Fields, m.Properties[s.Vector].Fields
+	textProperty, vectorProperty := m.Properties[s.Text], m.Properties[s.Vector]
+	if !textProperty.Enabled || !vectorProperty.Enabled {
+		return nil, vectordata.ErrSchemaMismatch
+	}
+	text, vector := textProperty.Fields, vectorProperty.Fields
 	if len(text) != 1 || text[0].Name != s.Text || text[0].Type != "text" || !text[0].Index || text[0].Analyzer != "keyword" || len(vector) != 1 || vector[0].Name != s.Vector || vector[0].Type != "vector" || !vector[0].Index || vector[0].Similarity != "cosine" || vector[0].Dims != s.Dimensions {
 		return nil, vectordata.ErrSchemaMismatch
 	}

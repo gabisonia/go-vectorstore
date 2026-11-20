@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Add native Couchbase document reads and writes and scoped cosine Search
+  with an exact keyword prefilter. The adapter uses Query and Search REST endpoints.
+
 - Raise the root module minimum to Go 1.26 and update golang.org/x/crypto
   to v0.59.0. The published v0.5.0 release still supports Go 1.25.
 
