@@ -2,6 +2,8 @@
 
 The [PostgreSQL mixed-workload report](benchmarks/postgres-mixed/report.md) measures
 point reads and filtered exact searches while four clients update records.
+The [Redis comparison](benchmarks/redis-mixed/report.md) runs the same workload
+against the default snapshot layout with AOF persistence.
 
 ## Shared provider and SQLite verification
 
