@@ -161,6 +161,13 @@ jobs:
           REDIS_REQUIRE_SEARCH: ${{ matrix.redis == '8.2' }}
           REDIS_REQUIRE_JSON: ${{ matrix.redis == '8.2' }}
         run: go test -count=1 -race -tags=integration -timeout=10m -run 'TestIntegration(Native|JSONNative)' ./stores/redis
+      - name: Verify recovery on an owned persistent Redis fixture
+        env:
+          REDIS_TEST_IMAGE: redis:${{ matrix.redis }}
+          REDIS_TEST_RECOVERY: 'true'
+          REDIS_REQUIRE_SEARCH: ${{ matrix.redis == '8.2' }}
+          REDIS_REQUIRE_JSON: ${{ matrix.redis == '8.2' }}
+        run: go test -count=1 -race -v -tags=integration -timeout=5m -run '^TestIntegrationRecovery' ./stores/redis
       - name: Run persistent sample twice
         run: |
           go run ./samples/redis-store
@@ -295,3 +302,36 @@ jobs:
           cache: true
       - name: Scan production and integration dependencies
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 -test -tags=integration ./...
+
+  api-compatibility:
+    name: Public API compatibility
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache: true
+      - name: Compare against the reviewed published baseline
+        run: bash scripts/check-api.sh
+
+  required:
+    name: Required CI
+    if: always()
+    needs: [test, sqlite-vec-probe, qdrant-probe, integration-postgres, integration-redis, local-doc-agent, aspire, vulnerabilities, api-compatibility]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every verification job to succeed
+        env:
+          JOB_RESULTS: ${{ toJSON(needs) }}
+        run: |
+          python3 - <<'PY'
+          import json, os
+          jobs = json.loads(os.environ["JOB_RESULTS"])
+          failed = {name: job["result"] for name, job in jobs.items() if job["result"] != "success"}
+          if failed:
+              raise SystemExit(f"Required verification did not succeed: {failed}")
+          print("Every required verification job succeeded.")
+          PY

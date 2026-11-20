@@ -14,8 +14,8 @@ of the vulnerability.
 
 ## Supported versions and maintenance
 
-Security fixes target the latest published patch of the current minor release
-line (currently 0.4.x). Older lines do not have a promised backport schedule.
+Security fixes target the latest published patch of the latest published minor
+release line. Older lines do not have a promised backport schedule.
 `VERSION` may identify a release being prepared; consult
 [GitHub releases](https://github.com/gabisonia/go-vectorstore/releases) for available
 tags. Development master is not a supported release substitute.

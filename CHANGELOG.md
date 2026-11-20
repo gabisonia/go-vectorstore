@@ -1,6 +1,17 @@
 # Changelog
 
-## Unreleased
+## v0.5.0
+
+Release candidate in source; publish only after the release workflow passes.
+
+- Prepare the v0.5.0 minor release with reviewed API/storage compatibility and
+  explicit JSON/UUID upgrade guidance. Add a pinned API comparison against
+  v0.4.1 and a single Required CI gate for protected-branch enforcement.
+- Verify Redis AOF process-crash recovery and isolated RDB restores across
+  snapshot/HASH/JSON and native index layouts, including canonical records,
+  deletions, sequence continuation, filters and vector/TEXT reads. Add bounded
+  concurrent batch/query/search checks, cleanup validation and weekly workload
+  artifacts with latency and memory observations.
 
 - Decode native arrays with checked scalar conversions and owned output slices,
   avoiding application JSON methods on native slice/element types. Native boolean

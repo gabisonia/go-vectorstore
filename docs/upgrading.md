@@ -1,16 +1,31 @@
 # Upgrading model collections
 
-**v0.4.0 was published on November 15, 2026**, following v0.3.1.
-See the [release notes](https://github.com/gabisonia/go-vectorstore/releases/tag/v0.4.0)
+**v0.4.1 is published**, following v0.4.0 and v0.3.1.
+See the [release notes](https://github.com/gabisonia/go-vectorstore/releases/tag/v0.4.1)
 and [changelog](../CHANGELOG.md).
 
 ```sh
-go get github.com/gabisonia/go-vectorstore@v0.4.0
+go get github.com/gabisonia/go-vectorstore@v0.4.1
 ```
+
+## v0.5.0 source candidate
+
+This checkout prepares v0.5.0; check GitHub releases before requesting that tag.
+New Redis, bounded Qdrant, optional sqlite-vec, generated typed references and
+embedding/input workflows require the matching new source/release. Existing
+samples that intentionally pin v0.4.1 keep that baseline until separately upgraded.
+Review [API and storage compatibility](release-0.5.md) before deploying the candidate.
+
+`HybridSearchOptions` now contains a `KeywordTerms` slice and is no longer Go
+comparable. Replace `==`/`!=` comparisons and uses as a map key with an
+application-specific comparison or key. Use keyed literals for exported option
+and schema structs, which have gained fields. Required core provider interfaces
+and existing method signatures remain intact. The JSON and UUID behavior fixes
+below can expose invalid application data/bindings previously accepted.
 
 ## v0.4.1 hardening update
 
-This source prepares v0.4.1; consult GitHub releases for publication status.
+Published v0.4.1 contains the production-hardening update.
 The patch preserves public APIs and SQLite format 1, adds cancellation/recovery
 checks, optimizes memory/SQLite exact search and SQLite reads, and expands samples
 and AI documentation. Upgrade to the latest published 0.4.x patch, pin it, and
