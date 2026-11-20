@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")/.."
-runner=$(docker build -q --build-arg provider=mongodb -f internal/parity/catalog/Dockerfile .)
-docker run --rm --network none --entrypoint dotnet "$runner" /app/Reference.dll probe parity
+probe=$(docker build -q --target reference --build-arg provider=mongodb -f internal/parity/catalog/Dockerfile .)
+docker run --rm --network none --entrypoint dotnet "$probe" /app/Reference.dll probe parity
+runner=$(docker build -q --build-arg provider=mongodb --build-arg reference_dir=mongodb/vendor -f internal/parity/catalog/Dockerfile .)
 image=mongodb/mongodb-atlas-local:8.0@sha256:a58ea2c65424952e63beb56ebebb32a31f3ac3b13eb23c0b6e834c94388cec97
 server=$(docker run -d --hostname atlas "$image")
 trap 'docker rm -fv "$server" >/dev/null' EXIT

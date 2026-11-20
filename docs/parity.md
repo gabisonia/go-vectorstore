@@ -12,7 +12,8 @@ coverage for the unreleased native APIs. The PostgreSQL fixture uses the
 existing typed model API. SQL Server, Azure AI Search, Qdrant, SQLite, Redis, Weaviate, Chroma, Milvus and MongoDB have explicit entry points
 for attaching to externally managed collections. The Elasticsearch adapter targets
 8.19.9 indexes shared with Elastic’s connector on VectorData 9.7.0. Connector
-0.3.1 fails at collection construction on the 11.0.0 target.
+0.3.1 fails at collection construction on the 11.0.0 target. MongoDB connector
+1.74.0-preview fails at search on 11.0.0. Its live fixture uses 10.1.0.
 
 | Workflow | Go implementation | Status |
 | --- | --- | --- |

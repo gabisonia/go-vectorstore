@@ -173,9 +173,11 @@ search and other field types need separate interoperability tests.
 
 ## MongoDB Atlas Local 8.0
 
-Run `bash scripts/test-mongodb-parity.sh` with Docker. The script tests the
-locked C# connector on VectorData 11.0.0 against Atlas Local, including its
-vector search service. It publishes no ports and removes its container and
+Run `bash scripts/test-mongodb-parity.sh` with Docker. The pinned MongoDB connector 1.74.0-preview constructs a collection handle
+with VectorData 11.0.0, but its search method references the removed
+`VectorSearchFilter` type and throws `TypeLoadException`. The script checks
+this offline first. A separately locked VectorData 10.1.0 project exercises the
+connector against Atlas Local, including its vector search service. It publishes no ports and removes its container and
 anonymous volumes on exit. Go and C# each create a collection and vector index.
 Both clients read full vectors, update documents, run a string equality
 prefilter before cosine ranking, and observe the other client's deletes.
