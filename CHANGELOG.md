@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Add native Milvus access for explicit string keys, nullable text and dense
+  cosine vectors, with strongly consistent reads and bound text filters.
+
 - Add native Elasticsearch access for string document IDs and dense cosine
   vectors. The C# interoperability fixture uses VectorData 9.7.0. Elastic’s
   connector 0.3.1 cannot construct a collection with VectorData 11.0.0.

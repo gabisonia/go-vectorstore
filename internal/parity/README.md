@@ -151,3 +151,22 @@ The key is Elasticsearch's external `_id`. Go writes use `refresh=wait_for`
 and search returns the server's raw `_score`. The two-document fixture checks
 ordering and scores for known vectors. Filtered search, larger-scale recall
 and cluster recovery are outside its coverage.
+
+## Milvus 2.6.27
+
+Run `bash scripts/test-milvus-parity.sh` with Docker. The script opens a C#
+collection handle offline on the locked VectorData 11.0.0 graph, then starts a
+disposable standalone server with embedded etcd and local storage. Go creates
+one collection via REST and CommunityToolkit.VectorData.Milvus 1.0.0-preview
+creates another via gRPC. Both clients exercise row updates, deletes and
+filtered FLAT cosine search. The fixture includes a high-scoring excluded row
+and checks the two included scores against their known cosine similarities.
+
+Use `milvus.AttachNative` with the collection name, physical key, text and vector
+field names, and dimension. It accepts an existing three-field collection in
+the default database with explicit VarChar keys and a float cosine vector.
+Text supports NULL when the schema allows it. Get and Search request strong
+consistency. Search accepts an optional text equality filter as a bound value.
+An unconfirmed write returns `ErrNativeOutcomeUnknown`. Coverage is limited to
+standalone operation. Approximate-index recall, distributed recovery, hybrid
+search and other field types need separate interoperability tests.
