@@ -92,6 +92,10 @@ func TestSharedContainer(t *testing.T) {
 			if err != nil || len(hits) != 2 || hits[0].ID != "shared" || hits[1].ID != "second" || math.Abs(hits[0].Score-0.8) > 1e-5 || math.Abs(hits[1].Score-(0)) > 1e-5 {
 				t.Fatalf("filtered cosine hits: %+v %v", hits, err)
 			}
+			exact, err := c.SearchExact(ctx, []float32{1, 0}, 2, &doc.Text)
+			if err != nil || !slices.Equal(exact, hits) {
+				t.Fatalf("filtered exact search: %+v, %v; ranked: %+v", exact, err, hits)
+			}
 			ref("verify")
 			if _, err := c.Get(ctx, "shared"); !errors.Is(err, vectordata.ErrNotFound) {
 				t.Fatalf("C# delete: %v", err)

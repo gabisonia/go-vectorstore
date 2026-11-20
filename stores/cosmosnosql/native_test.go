@@ -3,6 +3,7 @@ package cosmosnosql
 import (
 	"context"
 	"errors"
+	"slices"
 	"testing"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
@@ -64,5 +65,61 @@ func TestProvisionedPolicies(t *testing.T) {
 	observed.IndexingPolicy = &azcosmos.IndexingPolicy{VectorIndexes: []azcosmos.VectorIndex{{Path: "/direction", Type: "flat"}}}
 	if err := s.checkPolicies(&observed, &creation); !errors.Is(err, vectordata.ErrSchemaMismatch) {
 		t.Fatalf("observable mismatch accepted: %v", err)
+	}
+}
+
+type testHitPager struct {
+	pages [][][]byte
+	final func() error
+}
+
+func (p *testHitPager) More() bool { return len(p.pages) > 0 || p.final != nil }
+func (p *testHitPager) NextPage(context.Context) (azcosmos.QueryItemsResponse, error) {
+	if len(p.pages) == 0 {
+		f := p.final
+		p.final = nil
+		return azcosmos.QueryItemsResponse{}, f()
+	}
+	items := p.pages[0]
+	p.pages = p.pages[1:]
+	return azcosmos.QueryItemsResponse{Items: items}, nil
+}
+func TestExactSearchAcrossPages(t *testing.T) {
+	pages := [][][]byte{
+		{[]byte(`{"id":"z","score":0}`), []byte(`{"id":"y","score":0}`)}, {},
+		{[]byte(`{"id":"a","score":0}`), []byte(`{"id":"b","score":1}`), []byte(`{"id":"c","score":-1}`)},
+	}
+	for _, tc := range []struct {
+		top  int
+		want []NativeHit
+	}{
+		{1, []NativeHit{{"b", 1}}}, {2, []NativeHit{{"b", 1}, {"a", 0}}}, {100, []NativeHit{{"b", 1}, {"a", 0}, {"y", 0}, {"z", 0}, {"c", -1}}},
+	} {
+		got, err := collectHits(t.Context(), &testHitPager{pages: pages}, tc.top, true)
+		if err != nil || !slices.Equal(got, tc.want) {
+			t.Fatalf("top %d: got %v, %v; want %v", tc.top, got, err, tc.want)
+		}
+	}
+}
+func TestExactSearchDiscardsIncompleteResults(t *testing.T) {
+	valid := [][]byte{[]byte(`{"id":"best","score":1}`)}
+	late := errors.New("late page failure")
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	for _, tc := range []struct {
+		name  string
+		pager testHitPager
+		err   error
+	}{
+		{"late error", testHitPager{[][][]byte{valid}, func() error { return late }}, late},
+		{"missing score", testHitPager{pages: [][][]byte{valid, {[]byte(`{"id":"bad"}`)}}}, vectordata.ErrInvalidRecord},
+		{"cancelled on final empty page", testHitPager{[][][]byte{valid}, func() error { cancel(); return nil }}, context.Canceled},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			hits, err := collectHits(ctx, &tc.pager, 1, true)
+			if hits != nil || !errors.Is(err, tc.err) {
+				t.Fatalf("got %v, %v", hits, err)
+			}
+		})
 	}
 }

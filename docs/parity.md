@@ -22,7 +22,9 @@ have a public Go adapter for externally managed collections. The two Docker
 fixtures exercise both Go- and C#-created schemas. A hosted run also passed
 DocumentDB filtered HNSW search. On hosted Cosmos NoSQL, C# returned the two
 eligible items and Go point operations passed. The Go gateway rejected the
-adapter's collection-wide ranked query with HTTP 400. See the [DocumentDB](../internal/parity/README.md#azure-documentdb-connector-on-documentdb-local)
+adapter's collection-wide ranked query with HTTP 400. For exact cosine search,
+call `SearchExact` explicitly. It reads every eligible score and retains the
+best k in Go. Equal scores use ascending item ID. See the [DocumentDB](../internal/parity/README.md#azure-documentdb-connector-on-documentdb-local)
 and [Cosmos NoSQL](../internal/parity/README.md#cosmos-db-for-nosql-on-the-linux-vnext-emulator) fixtures.
 
 | Workflow | Go implementation | Status |

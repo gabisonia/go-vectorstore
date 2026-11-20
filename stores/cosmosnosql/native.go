@@ -2,6 +2,8 @@
 package cosmosnosql
 
 import (
+	"cmp"
+	"container/heap"
 	"context"
 	"encoding/json"
 	"errors"
@@ -205,28 +207,79 @@ func (c *NativeCollection) Delete(ctx context.Context, id string) error {
 // Search requests a server-ranked page, optionally matching the text field.
 // Gateway cross-partition query errors are returned without partial results.
 func (c *NativeCollection) Search(ctx context.Context, v []float32, top int, textEquals *string) ([]NativeHit, error) {
+	return c.search(ctx, v, top, textEquals, false)
+}
+
+// SearchExact projects a brute-force cosine score for every matching item and
+// returns the highest scores, breaking ties by ascending ID. The scan consumes
+// request units for all eligible rows and follows the client's consistency
+// settings across pages. Concurrent writes can change what the scan observes.
+func (c *NativeCollection) SearchExact(ctx context.Context, v []float32, top int, textEquals *string) ([]NativeHit, error) {
+	return c.search(ctx, v, top, textEquals, true)
+}
+
+func (c *NativeCollection) search(ctx context.Context, v []float32, top int, textEquals *string, exact bool) ([]NativeHit, error) {
 	if top < 1 || (textEquals != nil && !utf8.ValidString(*textEquals)) {
 		return nil, vectordata.ErrInvalidRecord
 	}
 	if err := c.validate(v); err != nil {
 		return nil, err
 	}
-	score := fmt.Sprintf("VectorDistance(c[%q], @v)", c.schema.Vector)
-	params := []azcosmos.QueryParameter{{Name: "@v", Value: v}}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	params := []azcosmos.QueryParameter{{Name: "@v", Value: slices.Clone(v)}}
 	where := ""
 	if textEquals != nil {
 		where = fmt.Sprintf(" WHERE c[%q] = @text", c.schema.Text)
 		params = append(params, azcosmos.QueryParameter{Name: "@text", Value: *textEquals})
 	}
-	query := fmt.Sprintf("SELECT TOP %d c.id, %s AS score FROM c%s ORDER BY %s", top, score, where, score)
-	pager := c.container.NewQueryItemsPager(query, azcosmos.NewPartitionKey(), &azcosmos.QueryOptions{QueryParameters: params})
-	var hits []NativeHit
+
+	opts := azcosmos.QueryOptions{QueryParameters: params}
+	var query string
+	if exact {
+		query = fmt.Sprintf("SELECT c.id, VectorDistance(c[%q], @v, true) AS score FROM c%s", c.schema.Vector, where)
+		opts.PageSizeHint = 128
+	} else {
+		score := fmt.Sprintf("VectorDistance(c[%q], @v)", c.schema.Vector)
+		query = fmt.Sprintf("SELECT TOP %d c.id, %s AS score FROM c%s ORDER BY %s", top, score, where, score)
+	}
+	pager := c.container.NewQueryItemsPager(query, azcosmos.NewPartitionKey(), &opts)
+	return collectHits(ctx, pager, top, exact)
+}
+
+type hitPager interface {
+	More() bool
+	NextPage(context.Context) (azcosmos.QueryItemsResponse, error)
+}
+
+func compareHits(a, b NativeHit) int {
+	if order := cmp.Compare(b.Score, a.Score); order != 0 {
+		return order
+	}
+	return strings.Compare(a.ID, b.ID)
+}
+
+// The root is the worst retained hit, including the ID tie-break.
+type hitHeap []NativeHit
+
+func (h hitHeap) Len() int           { return len(h) }
+func (h hitHeap) Less(i, j int) bool { return compareHits(h[i], h[j]) > 0 }
+func (h hitHeap) Swap(i, j int)      { h[i], h[j] = h[j], h[i] }
+func (h *hitHeap) Push(x any)        { *h = append(*h, x.(NativeHit)) }
+func (h *hitHeap) Pop() any          { i := len(*h) - 1; x := (*h)[i]; *h = (*h)[:i]; return x }
+
+func collectHits(ctx context.Context, pager hitPager, top int, exact bool) ([]NativeHit, error) {
+	var hits hitHeap
 	for pager.More() {
 		page, err := pager.NextPage(ctx)
 		if err != nil {
 			return nil, err
 		}
 		for _, item := range page.Items {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
 			var hit struct {
 				ID    string
 				Score *float64
@@ -234,11 +287,28 @@ func (c *NativeCollection) Search(ctx context.Context, v []float32, top int, tex
 			if err := json.Unmarshal(item, &hit); err != nil {
 				return nil, err
 			}
-			if !validID(hit.ID) || hit.Score == nil || len(hits) >= top {
+			if !validID(hit.ID) || hit.Score == nil {
 				return nil, vectordata.ErrInvalidRecord
 			}
-			hits = append(hits, NativeHit{hit.ID, *hit.Score})
+			row := NativeHit{hit.ID, *hit.Score}
+			if !exact {
+				if len(hits) >= top {
+					return nil, vectordata.ErrInvalidRecord
+				}
+				hits = append(hits, row)
+			} else if len(hits) < top {
+				heap.Push(&hits, row)
+			} else if compareHits(row, hits[0]) < 0 {
+				hits[0] = row
+				heap.Fix(&hits, 0)
+			}
 		}
+	}
+	if exact {
+		slices.SortFunc(hits, compareHits)
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 	return hits, nil
 }
