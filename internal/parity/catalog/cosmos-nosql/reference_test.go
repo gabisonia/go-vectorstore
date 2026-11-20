@@ -51,12 +51,13 @@ func TestSharedContainer(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+			properties := azcosmos.ContainerProperties{ID: name, PartitionKeyDefinition: azcosmos.PartitionKeyDefinition{Paths: []string{"/id"}},
+				VectorEmbeddingPolicy: &azcosmos.VectorEmbeddingPolicy{VectorEmbeddings: []azcosmos.VectorEmbedding{{Path: "/direction", Dimensions: 2, DistanceFunction: "cosine", DataType: "float32"}}},
+				IndexingPolicy:        &azcosmos.IndexingPolicy{Automatic: true, IndexingMode: "consistent", IncludedPaths: []azcosmos.IncludedPath{{Path: "/*"}}, VectorIndexes: []azcosmos.VectorIndex{{Path: "/direction", Type: "diskANN"}}}}
 			if name == "csharp" {
 				ref("create")
 			} else {
-				_, err := db.CreateContainer(ctx, azcosmos.ContainerProperties{ID: name, PartitionKeyDefinition: azcosmos.PartitionKeyDefinition{Paths: []string{"/id"}},
-					VectorEmbeddingPolicy: &azcosmos.VectorEmbeddingPolicy{VectorEmbeddings: []azcosmos.VectorEmbedding{{Path: "/direction", Dimensions: 2, DistanceFunction: "cosine", DataType: "float32"}}},
-					IndexingPolicy:        &azcosmos.IndexingPolicy{Automatic: true, IndexingMode: "consistent", IncludedPaths: []azcosmos.IncludedPath{{Path: "/*"}}, VectorIndexes: []azcosmos.VectorIndex{{Path: "/direction", Type: "diskANN"}}}}, nil)
+				_, err := db.CreateContainer(ctx, properties, nil)
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -65,10 +66,10 @@ func TestSharedContainer(t *testing.T) {
 			schema := cosmosnosql.NativeSchema{Text: "body", Vector: "direction", Dimensions: 2}
 			wrong := schema
 			wrong.Dimensions++
-			if _, err := cosmosnosql.AttachNative(ctx, raw, wrong); !errors.Is(err, vectordata.ErrSchemaMismatch) {
+			if _, err := cosmosnosql.AttachProvisioned(ctx, raw, wrong, properties); !errors.Is(err, vectordata.ErrSchemaMismatch) {
 				t.Fatalf("dimension mismatch: %v", err)
 			}
-			c, err := cosmosnosql.AttachNative(ctx, raw, schema)
+			c, err := cosmosnosql.AttachProvisioned(ctx, raw, schema, properties)
 			if err != nil {
 				t.Fatal(err)
 			}

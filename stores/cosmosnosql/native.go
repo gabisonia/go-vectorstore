@@ -47,6 +47,17 @@ var fieldName = regexp.MustCompile("^[A-Za-z][A-Za-z0-9_]*$")
 
 // AttachNative reads the partition key, embedding policy and index policy.
 func AttachNative(ctx context.Context, container *azcosmos.ContainerClient, s NativeSchema) (*NativeCollection, error) {
+	return attach(ctx, container, s, nil)
+}
+
+// AttachProvisioned accepts the creation policies for gateways that omit vector
+// metadata from container reads. The caller must own or verify these policies
+// for this container. Visible vector policies always take precedence.
+func AttachProvisioned(ctx context.Context, container *azcosmos.ContainerClient, s NativeSchema, creation azcosmos.ContainerProperties) (*NativeCollection, error) {
+	return attach(ctx, container, s, &creation)
+}
+
+func attach(ctx context.Context, container *azcosmos.ContainerClient, s NativeSchema, creation *azcosmos.ContainerProperties) (*NativeCollection, error) {
 	if container == nil || s.Dimensions < 1 || !fieldName.MatchString(s.Text) || !fieldName.MatchString(s.Vector) || s.Text == s.Vector || s.Text == "id" || s.Vector == "id" {
 		return nil, vectordata.ErrSchemaMismatch
 	}
@@ -60,6 +71,17 @@ func AttachNative(ctx context.Context, container *azcosmos.ContainerClient, s Na
 	}
 	if !slices.Equal(p.PartitionKeyDefinition.Paths, []string{"/id"}) {
 		return nil, fmt.Errorf("%w: partition paths %q", vectordata.ErrSchemaMismatch, p.PartitionKeyDefinition.Paths)
+	}
+	if creation != nil {
+		if creation.ID != p.ID || !slices.Equal(creation.PartitionKeyDefinition.Paths, p.PartitionKeyDefinition.Paths) {
+			return nil, fmt.Errorf("%w: creation policies identify another container", vectordata.ErrSchemaMismatch)
+		}
+		if p.VectorEmbeddingPolicy == nil {
+			p.VectorEmbeddingPolicy = creation.VectorEmbeddingPolicy
+		}
+		if p.IndexingPolicy == nil || p.IndexingPolicy.VectorIndexes == nil {
+			p.IndexingPolicy = creation.IndexingPolicy
+		}
 	}
 	if p.VectorEmbeddingPolicy == nil || p.IndexingPolicy == nil {
 		return nil, fmt.Errorf("%w: missing policy (embedding present %t, indexing present %t)", vectordata.ErrSchemaMismatch, p.VectorEmbeddingPolicy != nil, p.IndexingPolicy != nil)
