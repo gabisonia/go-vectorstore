@@ -83,3 +83,39 @@ Longer runs and additional datasets are needed for general capacity or throughpu
 claims. Native scalar L1 still scans all vectors, and complete ties can return all
 vectors to Go. See the [precision proof and limits](../../docs/sqlitevec.md) and
 [parity plan](../../docs/parity-plan.md).
+
+## Concurrent WAL workload
+
+Run the measured profile with independent reader and writer handles on a fresh
+database for each layout and load condition:
+
+```sh
+SQLITE_WAL_PROFILE=measured go test -count=1 -v -run '^TestConcurrentWAL$' ./samples/sqlite-workload
+```
+
+Each successful run prints four JSON objects marked `WAL_RESULT`. Require the
+final Go test PASS because fresh reads verify the writes after metrics are
+printed. The default test runs eight rounds. The opt-in `large` profile runs
+200 rounds against 10,000 stable 128-dimensional vectors and 200 mutable rows.
+
+The measured fixture has 1,024 stable 32-dimensional vectors and 100 mutable
+rows. Four seeded queries rotate across 100 rounds with top 10 and L1 distance.
+The mutable vectors lie beyond the stable candidates before and after every
+update. This keeps the exact reference valid for every WAL snapshot and lets
+packed search use its unfiltered path. Each mixed round launches one search
+and one single-row upsert and waits for both. Overlap counts intersecting API
+call intervals. Latency percentiles use nearest ranks over API calls. Rates
+include round coordination and page verification. SQLite uses WAL, FULL
+synchronization and a zero SQLite busy timeout. Errors count final API outcomes.
+
+| Layout | Load | Search p50 / p95 (ms) | Write p50 / p95 (ms) | Searches/s |
+| --- | --- | ---: | ---: | ---: |
+| Canonical | Read only | 8.28 / 9.24 | — | 119 |
+| Canonical | Mixed | 8.34 / 8.77 | 0.21 / 0.34 | 120 |
+| Packed Go | Read only | 0.87 / 1.04 | — | 1,110 |
+| Packed Go | Mixed | 1.17 / 1.42 | 0.26 / 0.54 | 847 |
+
+Both mixed runs overlapped all 100 pairs, verified every search and final
+write, and reported zero lock errors, cancellations and unexpected failures.
+These single-run timings describe a paced writer on a small Darwin arm64
+fixture. See the [machine-readable measurements](concurrent-results.json).
