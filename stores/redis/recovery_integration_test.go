@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/gabisonia/go-vectorstore/vectordata"
+	dockerclient "github.com/moby/moby/client"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 )
@@ -165,16 +166,16 @@ func restartRedis(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer client.Close()
-	if err := client.ContainerKill(ctx, ownedRedisContainer.GetContainerID(), "SIGKILL"); err != nil {
+	if _, err := client.ContainerKill(ctx, ownedRedisContainer.GetContainerID(), dockerclient.ContainerKillOptions{Signal: "SIGKILL"}); err != nil {
 		t.Fatal(err)
 	}
-	done, failed := client.ContainerWait(ctx, ownedRedisContainer.GetContainerID(), "not-running")
+	waitResult := client.ContainerWait(ctx, ownedRedisContainer.GetContainerID(), dockerclient.ContainerWaitOptions{})
 	select {
-	case status := <-done:
+	case status := <-waitResult.Result:
 		if status.StatusCode != 137 {
 			t.Fatalf("expected SIGKILL exit 137, got %d", status.StatusCode)
 		}
-	case err := <-failed:
+	case err := <-waitResult.Error:
 		t.Fatal(err)
 	case <-ctx.Done():
 		t.Fatal(ctx.Err())

@@ -46,7 +46,7 @@ not establish numerical equivalence for a different build.
 
 Importing this adapter registers the extension process-wide on subsequently
 opened modernc connections, as described by the driver's
-[vec package](https://pkg.go.dev/modernc.org/sqlite@v1.59.0/vec).
+[vec package](https://pkg.go.dev/modernc.org/sqlite@v1.62.0/vec).
 Availability alone does not change ordinary SQLite handles' execution. The adapter
 selects `sqlite.VectorExecutionSQLiteVec`, which implies `VectorProjections`;
 advanced callers linking the extension themselves may select that same option on

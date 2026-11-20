@@ -11,8 +11,7 @@
 - Add native Couchbase document reads and writes and scoped cosine Search
   with an exact keyword prefilter. The adapter uses Query and Search REST endpoints.
 
-- Raise the root module minimum to Go 1.26 and update golang.org/x/crypto
-  to v0.59.0. The published v0.5.0 release still supports Go 1.25.
+- Update golang.org/x/crypto to v0.59.0.
 
 - Add native MongoDB Atlas Vector Search access for string keys and dense
   cosine vectors, including exact search with a text equality prefilter.
@@ -37,6 +36,8 @@
   Add native SQL Server 2025 and Azure AI Search adapters for the tested
   three-field schemas. Verify SQL Server in Docker and Azure AI Search locally
   using Azure CLI credentials.
+
+- Require Go 1.26 for the updated pgx, Redis, SQLite and Testcontainers dependency graph. The published v0.5.0 release continues to support Go 1.25.
 
 - Add an isolated v0.5.0 documentation retrieval pilot with small local MiniLM
   embeddings, graded retrieval evaluation, bounded concurrent searches, model
