@@ -3,8 +3,8 @@ WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY vectordata vectordata
-COPY internal/exactsearch internal/exactsearch
-COPY stores/qdrant stores/qdrant
+COPY internal internal
+COPY stores stores
 RUN go test -race -tags=qdrantparity -c -o /native.test ./stores/qdrant
 
 FROM mcr.microsoft.com/dotnet/sdk:10.0.400
