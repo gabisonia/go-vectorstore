@@ -278,7 +278,11 @@ its server and volumes on exit.
 
 Use `cosmosnosql.AttachNative` with a caller-owned Go SDK container client.
 The adapter checks for a single `/id` partition key, a float32 cosine vector
-policy and a DiskANN index. Point reads return the vector. Upsert replaces
+policy and a DiskANN index. The emulator omits the embedding policy from
+container reads. For that case, `AttachProvisioned` accepts the policies
+used at creation and checks the vector metadata the gateway does return.
+Use that entry point only with known policies for the same container.
+Point reads return the vector. Upsert replaces
 the item. Search binds vector and optional text operands and requests native
 ranking through the gateway. Cross-partition gateway query errors propagate.
 The fixture uses both Go- and C#-created containers and the locked

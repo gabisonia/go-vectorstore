@@ -65,16 +65,23 @@ func attach(ctx context.Context, container *azcosmos.ContainerClient, s NativeSc
 	if err != nil {
 		return nil, err
 	}
-	p := resp.ContainerProperties
-	if p == nil {
-		return nil, fmt.Errorf("%w: missing container properties", vectordata.ErrSchemaMismatch)
+	if err := s.checkPolicies(resp.ContainerProperties, creation); err != nil {
+		return nil, err
 	}
+	return &NativeCollection{container, s}, nil
+}
+
+func (s NativeSchema) checkPolicies(observed, creation *azcosmos.ContainerProperties) error {
+	if observed == nil {
+		return fmt.Errorf("%w: missing container properties", vectordata.ErrSchemaMismatch)
+	}
+	p := *observed
 	if !slices.Equal(p.PartitionKeyDefinition.Paths, []string{"/id"}) {
-		return nil, fmt.Errorf("%w: partition paths %q", vectordata.ErrSchemaMismatch, p.PartitionKeyDefinition.Paths)
+		return fmt.Errorf("%w: partition paths %q", vectordata.ErrSchemaMismatch, p.PartitionKeyDefinition.Paths)
 	}
 	if creation != nil {
 		if creation.ID != p.ID || !slices.Equal(creation.PartitionKeyDefinition.Paths, p.PartitionKeyDefinition.Paths) {
-			return nil, fmt.Errorf("%w: creation policies identify another container", vectordata.ErrSchemaMismatch)
+			return fmt.Errorf("%w: creation policies identify another container", vectordata.ErrSchemaMismatch)
 		}
 		if p.VectorEmbeddingPolicy == nil {
 			p.VectorEmbeddingPolicy = creation.VectorEmbeddingPolicy
@@ -84,7 +91,7 @@ func attach(ctx context.Context, container *azcosmos.ContainerClient, s NativeSc
 		}
 	}
 	if p.VectorEmbeddingPolicy == nil || p.IndexingPolicy == nil {
-		return nil, fmt.Errorf("%w: missing policy (embedding present %t, indexing present %t)", vectordata.ErrSchemaMismatch, p.VectorEmbeddingPolicy != nil, p.IndexingPolicy != nil)
+		return fmt.Errorf("%w: missing policy (embedding present %t, indexing present %t)", vectordata.ErrSchemaMismatch, p.VectorEmbeddingPolicy != nil, p.IndexingPolicy != nil)
 	}
 	path := "/" + s.Vector
 	embedded := slices.ContainsFunc(p.VectorEmbeddingPolicy.VectorEmbeddings, func(v azcosmos.VectorEmbedding) bool {
@@ -94,9 +101,9 @@ func attach(ctx context.Context, container *azcosmos.ContainerClient, s NativeSc
 		return v.Path == path && strings.EqualFold(string(v.Type), "diskANN")
 	})
 	if !embedded || !indexed {
-		return nil, fmt.Errorf("%w: expected %s float32 cosine DiskANN dimension %d, found embeddings %+v and indexes %+v", vectordata.ErrSchemaMismatch, path, s.Dimensions, p.VectorEmbeddingPolicy.VectorEmbeddings, p.IndexingPolicy.VectorIndexes)
+		return fmt.Errorf("%w: expected %s float32 cosine DiskANN dimension %d, found embeddings %+v and indexes %+v", vectordata.ErrSchemaMismatch, path, s.Dimensions, p.VectorEmbeddingPolicy.VectorEmbeddings, p.IndexingPolicy.VectorIndexes)
 	}
-	return &NativeCollection{container, s}, nil
+	return nil
 }
 
 func validID(id string) bool {

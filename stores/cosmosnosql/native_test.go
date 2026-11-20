@@ -44,3 +44,25 @@ func ExampleAttachNative() {
 	}
 	_ = search
 }
+
+func TestProvisionedPolicies(t *testing.T) {
+	s := NativeSchema{Text: "body", Vector: "direction", Dimensions: 2}
+	creation := azcosmos.ContainerProperties{ID: "articles", PartitionKeyDefinition: azcosmos.PartitionKeyDefinition{Paths: []string{"/id"}},
+		VectorEmbeddingPolicy: &azcosmos.VectorEmbeddingPolicy{VectorEmbeddings: []azcosmos.VectorEmbedding{{Path: "/direction", Dimensions: 2, DataType: "float32", DistanceFunction: "cosine"}}},
+		IndexingPolicy:        &azcosmos.IndexingPolicy{VectorIndexes: []azcosmos.VectorIndex{{Path: "/direction", Type: "diskANN"}}}}
+	observed := creation
+	if err := s.checkPolicies(&observed, nil); err != nil {
+		t.Fatal(err)
+	}
+	observed.VectorEmbeddingPolicy = nil
+	if err := s.checkPolicies(&observed, nil); !errors.Is(err, vectordata.ErrSchemaMismatch) {
+		t.Fatalf("missing policy accepted: %v", err)
+	}
+	if err := s.checkPolicies(&observed, &creation); err != nil || observed.VectorEmbeddingPolicy != nil {
+		t.Fatalf("creation policy fallback: %v", err)
+	}
+	observed.IndexingPolicy = &azcosmos.IndexingPolicy{VectorIndexes: []azcosmos.VectorIndex{{Path: "/direction", Type: "flat"}}}
+	if err := s.checkPolicies(&observed, &creation); !errors.Is(err, vectordata.ErrSchemaMismatch) {
+		t.Fatalf("observable mismatch accepted: %v", err)
+	}
+}
