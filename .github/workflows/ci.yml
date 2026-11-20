@@ -29,7 +29,7 @@ jobs:
         run: bash scripts/test-fuzz.sh 50000x
       - name: Retain failing fuzz inputs
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: failing-fuzz-corpus-${{ matrix.go }}
           path: '**/testdata/fuzz/**'
