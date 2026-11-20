@@ -2,19 +2,17 @@
 package weaviate
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
+
 	"net/http"
-	"net/url"
+
 	"regexp"
 	"strconv"
-	"strings"
-	"time"
 
+	"github.com/gabisonia/go-vectorstore/internal/nativehttp"
 	"github.com/gabisonia/go-vectorstore/vectordata"
 	"github.com/google/uuid"
 )
@@ -28,9 +26,8 @@ type NativeSchema struct {
 
 // NativeCollection uses the caller's transport for authentication and TLS.
 type NativeCollection struct {
-	endpoint string
-	schema   NativeSchema
-	client   *http.Client
+	api    *nativehttp.Client
+	schema NativeSchema
 }
 
 // NativePoint is a complete record in the attached collection.
@@ -55,11 +52,14 @@ var fieldName = regexp.MustCompile(`^[_A-Za-z][_0-9A-Za-z]*$`)
 // AttachNative checks the physical class and vector configuration before writes.
 // It accepts a single-tenant class with one text property and one self-provided vector.
 func AttachNative(ctx context.Context, endpoint string, s NativeSchema, transport http.RoundTripper) (*NativeCollection, error) {
-	u, err := url.Parse(endpoint)
-	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || strings.Trim(u.Path, "/") != "" || !className.MatchString(s.Class) || !fieldName.MatchString(s.Text) || !fieldName.MatchString(s.Vector) || s.Dimensions < 1 {
+	if !className.MatchString(s.Class) || !fieldName.MatchString(s.Text) || !fieldName.MatchString(s.Vector) || s.Dimensions < 1 {
 		return nil, vectordata.ErrSchemaMismatch
 	}
-	c := &NativeCollection{u.Scheme + "://" + u.Host + "/v1", s, &http.Client{Timeout: 30 * time.Second, Transport: transport, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}}
+	api, err := nativehttp.New(endpoint, "/v1", transport, func(code int) error { return &ResponseError{code} }, ErrNativeOutcomeUnknown)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", vectordata.ErrSchemaMismatch, err)
+	}
+	c := &NativeCollection{api, s}
 	var schema struct {
 		Class              string
 		MultiTenancyConfig struct{ Enabled bool }
@@ -76,7 +76,7 @@ func AttachNative(ctx context.Context, endpoint string, s NativeSchema, transpor
 			}
 		}
 	}
-	if err := c.request(ctx, http.MethodGet, "/schema/"+s.Class, nil, &schema, false); err != nil {
+	if err := c.api.Request(ctx, http.MethodGet, "/schema/"+s.Class, nil, &schema, false); err != nil {
 		return nil, err
 	}
 	if schema.Class != s.Class || schema.MultiTenancyConfig.Enabled || len(schema.Properties) != 1 || len(schema.VectorConfig) != 1 {
@@ -101,43 +101,6 @@ type ResponseError struct{ StatusCode int }
 
 func (e *ResponseError) Error() string { return fmt.Sprintf("Weaviate returned HTTP %d", e.StatusCode) }
 
-func (c *NativeCollection) request(ctx context.Context, method, path string, body, out any, write bool) error {
-	var data []byte
-	var err error
-	if body != nil {
-		data, err = json.Marshal(body)
-		if err != nil {
-			return err
-		}
-	}
-	req, err := http.NewRequestWithContext(ctx, method, c.endpoint+path, bytes.NewReader(data))
-	if err != nil {
-		return err
-	}
-	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
-	}
-	if err = ctx.Err(); err != nil {
-		return err
-	}
-	resp, err := c.client.Do(req)
-	if err == nil {
-		defer resp.Body.Close()
-		if resp.StatusCode/100 != 2 {
-			err = &ResponseError{resp.StatusCode}
-			if resp.StatusCode >= 400 && resp.StatusCode < 500 && resp.StatusCode != 408 {
-				return err
-			}
-		} else if out != nil {
-			err = json.NewDecoder(io.LimitReader(resp.Body, 32<<20)).Decode(out)
-		}
-	}
-	if write && err != nil {
-		return errors.Join(ErrNativeOutcomeUnknown, err)
-	}
-	return err
-}
-
 func (c *NativeCollection) validate(v []float32) error {
 	_, err := vectordata.NormalizeModelVector(v, vectordata.VectorProperty{Dimensions: c.schema.Dimensions, Metric: vectordata.DistanceCosine})
 	return err
@@ -156,7 +119,7 @@ func (c *NativeCollection) Upsert(ctx context.Context, p NativePoint) error {
 			Errors *struct{ Error []struct{ Message string } }
 		}
 	}
-	if err := c.request(ctx, http.MethodPost, "/batch/objects", map[string]any{"objects": []any{obj}}, &reply, true); err != nil {
+	if err := c.api.Request(ctx, http.MethodPost, "/batch/objects", map[string]any{"objects": []any{obj}}, &reply, true); err != nil {
 		return err
 	}
 	if len(reply) != 1 || reply[0].ID == nil || *reply[0].ID != p.ID {
@@ -182,7 +145,7 @@ func (c *NativeCollection) Get(ctx context.Context, id uuid.UUID) (NativePoint, 
 		Properties map[string]*string
 		Vectors    map[string][]float32
 	}
-	if err := c.request(ctx, http.MethodGet, "/objects/"+c.schema.Class+"/"+id.String()+"?include=vector", nil, &obj, false); err != nil {
+	if err := c.api.Request(ctx, http.MethodGet, "/objects/"+c.schema.Class+"/"+id.String()+"?include=vector", nil, &obj, false); err != nil {
 		return NativePoint{}, err
 	}
 	text := obj.Properties[c.schema.Text]
@@ -198,7 +161,7 @@ func (c *NativeCollection) Get(ctx context.Context, id uuid.UUID) (NativePoint, 
 
 // Delete removes one object from the named class.
 func (c *NativeCollection) Delete(ctx context.Context, id uuid.UUID) error {
-	return c.request(ctx, http.MethodDelete, "/objects/"+c.schema.Class+"/"+id.String(), nil, nil, true)
+	return c.api.Request(ctx, http.MethodDelete, "/objects/"+c.schema.Class+"/"+id.String(), nil, nil, true)
 }
 
 // Search returns up to top native hits ordered by cosine distance.
@@ -225,7 +188,7 @@ func (c *NativeCollection) Search(ctx context.Context, v []float32, top int) ([]
 		}
 		Errors []struct{ Message string }
 	}
-	if err := c.request(ctx, http.MethodPost, "/graphql", map[string]string{"query": query}, &reply, false); err != nil {
+	if err := c.api.Request(ctx, http.MethodPost, "/graphql", map[string]string{"query": query}, &reply, false); err != nil {
 		return nil, err
 	}
 	if len(reply.Errors) > 0 {
