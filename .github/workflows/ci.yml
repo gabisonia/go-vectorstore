@@ -18,7 +18,7 @@ jobs:
       matrix:
         go: ['1.25.x', stable]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go }}
@@ -29,7 +29,7 @@ jobs:
         run: bash scripts/test-fuzz.sh 50000x
       - name: Retain failing fuzz inputs
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: failing-fuzz-corpus-${{ matrix.go }}
           path: '**/testdata/fuzz/**'
@@ -57,7 +57,7 @@ jobs:
     env:
       CGO_ENABLED: '0'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go }}
@@ -84,7 +84,7 @@ jobs:
         env:
           QDRANT__TELEMETRY_DISABLED: 'true'
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go }}
@@ -113,7 +113,7 @@ jobs:
         go: ['1.25.x', stable]
         postgres: ['16', '18']
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go }}
@@ -146,7 +146,7 @@ jobs:
           --health-cmd "redis-cli ping"
           --health-interval 2s --health-timeout 2s --health-retries 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go }}
@@ -226,7 +226,7 @@ jobs:
       run:
         working-directory: samples/local-doc-agent
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go }}
@@ -251,7 +251,7 @@ jobs:
       run:
         working-directory: samples/docs-retrieval-pilot
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go }}
@@ -273,7 +273,7 @@ jobs:
       matrix:
         go: ['1.26.x', stable]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-go@v5
         with:
           go-version: ${{ matrix.go }}
@@ -322,7 +322,7 @@ jobs:
     name: Vulnerability scan
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/setup-go@v5
         with:
           go-version: stable
@@ -334,7 +334,7 @@ jobs:
     name: Public API compatibility
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - uses: actions/setup-go@v5
