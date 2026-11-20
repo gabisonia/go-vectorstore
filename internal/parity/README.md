@@ -204,7 +204,9 @@ values. Upsert replaces the entire document body. Search uses an optional
 keyword predicate inside the KNN request. Index updates are asynchronous.
 
 CouchbaseConnector.SemanticKernel 0.2.5 references VectorData 9.7.0. The
-fixture runs separate locked executables for 11.0.0 and 9.7.0. The connector
+fixture runs separate locked executables for 11.0.0 and 9.7.0. On 11.0.0,
+constructing the collection throws `MissingMethodException` for
+`CollectionModelBuilder.Build`. Shared document operations use 9.7.0. The connector
 does not implement collection creation. Its Search path builds the filter but
 omits it from the KNN request. The fixture includes an excluded document
 with the best cosine match to distinguish native Go prefiltering from the C#

@@ -9,14 +9,18 @@ var collection = store.GetCollection<string, Article>("articles", new CouchbaseS
 switch (args[0])
 {
     case "seed":
-        try { await collection.EnsureCollectionExistsAsync(); }
+        try
+        {
+            await collection.EnsureCollectionExistsAsync();
+            throw new InvalidOperationException("Connector collection creation changed. Test both collection creators.");
+        }
         catch (NotImplementedException) { Console.WriteLine("Collection creation requires external provisioning."); }
         await collection.UpsertAsync(new Article { Id = "seed", Body = "keep", Direction = [0, 1] });
         await collection.UpsertAsync(new Article { Id = "excluded", Body = "omit", Direction = [1, 0] });
         break;
     case "verify":
         var doc = await collection.GetAsync("go", new() { IncludeVectors = true });
-        if (doc?.Body != "keep" || !doc.Direction.SequenceEqual(new float[] { 0.8f, 0.6f }))
+        if (doc?.Id != "" || doc.Body != "keep" || !doc.Direction.SequenceEqual(new float[] { 0.8f, 0.6f }))
             throw new InvalidOperationException("Go update did not round-trip");
         var bodies = new List<string>();
         await foreach (var hit in collection.SearchAsync(new float[] { 1, 0 }, 3, new() { Filter = a => a.Body == "keep" }))
