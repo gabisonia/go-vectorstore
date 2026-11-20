@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Add native Oracle access for explicit numeric keys, nullable categories and
+  dense FLOAT32 vectors, with exact cosine ranking and numeric prefilters.
+
 - Add native Couchbase document reads and writes and scoped cosine Search
   with an exact keyword prefilter. The adapter uses Query and Search REST endpoints.
 

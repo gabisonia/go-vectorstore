@@ -68,6 +68,7 @@ WHERE c.table_name=:1 AND c.hidden_column='NO'`
 		return nil, err
 	}
 	defer rows.Close()
+	dense := fmt.Sprintf("VECTOR(%d,FLOAT32", s.Dimensions)
 	count := 0
 	var owner string
 	for rows.Next() {
@@ -76,9 +77,16 @@ WHERE c.table_name=:1 AND c.hidden_column='NO'`
 		if err := rows.Scan(&owner, &name, &typ, &precision, &scale, &info, &identity, &virtual, &primary); err != nil {
 			return nil, err
 		}
-		dense := fmt.Sprintf("VECTOR(%d,FLOAT32)", s.Dimensions)
 		info = strings.ToUpper(strings.ReplaceAll(info, " ", ""))
-		valid := name == s.Key && typ == "NUMBER" && precision == 19 && scale == 0 && primary == 1 || name == s.Category && typ == "NUMBER" && precision == 10 && scale == 0 || name == s.Vector && typ == "VECTOR" && (info == dense || info == strings.TrimSuffix(dense, ")")+",DENSE)")
+		var valid bool
+		switch name {
+		case s.Key:
+			valid = typ == "NUMBER" && precision == 19 && scale == 0 && primary == 1
+		case s.Category:
+			valid = typ == "NUMBER" && precision == 10 && scale == 0
+		case s.Vector:
+			valid = typ == "VECTOR" && (info == dense+")" || info == dense+",DENSE)")
+		}
 		if !valid || identity == "YES" || virtual == "YES" {
 			return nil, fmt.Errorf("%w: column %q (%s, precision %d, scale %d, %s)", vectordata.ErrSchemaMismatch, name, typ, precision, scale, info)
 		}

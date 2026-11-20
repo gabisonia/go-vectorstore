@@ -45,7 +45,7 @@ Each client creates the search index, reads the other client's record and
 checks native FLAT cosine retrieval. The Go fixture uses `Store.AttachNativeCosine` and its public native document methods.
 
 The MongoDB, Couchbase and Oracle reference projects pin patched transitive
-dependencies flagged by NuGet audit. Oracle still needs live service validation.
+dependencies flagged by NuGet audit.
 
 ## Qdrant checkpoint
 
@@ -213,3 +213,21 @@ with the best cosine match to distinguish native Go prefiltering from the C#
 behavior. Use the external document key when writing a retrieved C# record.
 Capella, SQL++ vector indexes, multi-node recovery and large-scale recall are
 outside this fixture.
+
+## Oracle AI Database Free
+
+Run `bash scripts/test-oracle-parity.sh` with Docker. The fixture starts a
+digest-pinned Oracle Free server with an application account and disposable
+storage. Go and C# each create a table with a NUMBER(19) primary key, nullable
+NUMBER(10) category and VECTOR(2,FLOAT32) embedding. The test checks shared
+reads, updates, deletes and filtered cosine ranking. An excluded row is the
+closest unfiltered result.
+
+`oracle.AttachNative` accepts a caller-owned `*sql.DB` and case-sensitive
+column names in a table owned by the session user. It checks the catalog before
+returning a handle. The root module leaves driver selection to the caller. The
+Docker fixture pins its own pure-Go driver. Go upserts use a transactional
+MERGE, and search orders by native cosine distance followed by primary key.
+An unacknowledged commit returns `ErrNativeOutcomeUnknown`. Approximate
+indexes, generated keys, RAC failover and hosted Oracle services need
+separate validation.

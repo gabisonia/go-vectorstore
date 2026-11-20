@@ -16,6 +16,8 @@ import (
 	_ "github.com/sijms/go-ora/v2"
 )
 
+const goID int64 = 9007199254740993
+
 func TestSharedTable(t *testing.T) {
 	db, err := sql.Open("oracle", os.Getenv("PARITY_ORACLE_URL"))
 	if err != nil {
@@ -53,11 +55,11 @@ func TestSharedTable(t *testing.T) {
 			if err != nil || seed.Category == nil || *seed.Category != 1 || !slices.Equal(seed.Vector, []float32{0, 1}) {
 				t.Fatalf("C# seed %+v %v", seed, err)
 			}
-			p := oracle.NativePoint{ID: 42, Vector: []float32{0, 1}}
+			p := oracle.NativePoint{ID: goID, Vector: []float32{0, 1}}
 			if err := c.Upsert(ctx, p); err != nil {
 				t.Fatal(err)
 			}
-			got, err := c.Get(ctx, 42)
+			got, err := c.Get(ctx, goID)
 			if err != nil || got.Category != nil {
 				t.Fatalf("null category: %+v %v", got, err)
 			}
@@ -72,18 +74,18 @@ func TestSharedTable(t *testing.T) {
 				t.Fatalf("unfiltered ranking: %+v %v", all, err)
 			}
 			hits, err := c.Search(ctx, v, 3, &category)
-			if err != nil || len(hits) != 2 || hits[0].ID != 42 || hits[1].ID != 7 || math.Abs(hits[0].Distance-0.2) > 1e-5 || math.Abs(hits[1].Distance-1) > 1e-5 {
+			if err != nil || len(hits) != 2 || hits[0].ID != goID || hits[1].ID != 7 || math.Abs(hits[0].Distance-0.2) > 1e-5 || math.Abs(hits[1].Distance-1) > 1e-5 {
 				t.Fatalf("filtered ranking: %+v %v", hits, err)
 			}
 			ref("verify")
-			got, err = c.Get(ctx, 42)
+			got, err = c.Get(ctx, goID)
 			if err != nil || got.Category == nil || *got.Category != 3 {
 				t.Fatalf("C# update %+v %v", got, err)
 			}
 			if _, err := c.Get(ctx, 7); !errors.Is(err, sql.ErrNoRows) {
 				t.Fatalf("C# delete: %v", err)
 			}
-			if err := c.Delete(ctx, 42); err != nil {
+			if err := c.Delete(ctx, goID); err != nil {
 				t.Fatal(err)
 			}
 			ref("verify-delete")
