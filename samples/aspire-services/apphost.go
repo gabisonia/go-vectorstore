@@ -126,7 +126,7 @@ func addAgent(builder aspire.DistributedApplicationBuilder) {
 		WithHttpEndpoint(aspire.HttpEndpointName("http"), aspire.HttpEndpointTargetPort(11434)).
 		WithHttpHealthCheck(aspire.HttpHealthCheckPath("/api/tags")).
 		WithLifetime(aspire.ContainerLifetimePersistent).
-		WithVolume("/root/.ollama", aspire.VolumeName("vector-doc-agent_models")).
+		WithVolume("/root/.ollama", aspire.VolumeName(env("AGENT_MODEL_VOLUME", "vector-doc-agent_models"))).
 		WithEnvironment("OLLAMA_HOST", "0.0.0.0:11434").WithEnvironment("OLLAMA_NO_CLOUD", "1").
 		WithEnvironment("OLLAMA_CONTEXT_LENGTH", "4096").WithEnvironment("OLLAMA_NUM_PARALLEL", "1").WithEnvironment("OLLAMA_MAX_LOADED_MODELS", "2")
 	models := builder.AddContainer("models", &aspire.AddContainerOptions{Image: "ollama/ollama", Tag: &version}).
@@ -149,7 +149,7 @@ func addAgent(builder aspire.DistributedApplicationBuilder) {
 		WithEnvironment("DOCS_DIR", "/docs").WithEnvironment("DATABASE_PATH", "/data/documents.db").
 		WithEnvironment("AGENT_FRAMEWORK_USER_AGENT_DISABLED", "true").
 		WithBindMount(filepath.Join(directory, "docs"), "/docs", aspire.BindMountIsReadOnly(true)).
-		WithVolume("/data", aspire.VolumeName("vector-doc-agent_index")).
+		WithVolume("/data", aspire.VolumeName(env("AGENT_INDEX_VOLUME", "vector-doc-agent_index"))).
 		WaitForCompletion(models)
 	if command == "chat" {
 		agent.WithTerminal()

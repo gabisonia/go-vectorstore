@@ -1,20 +1,19 @@
 # Upgrading model collections
 
-**v0.4.1 is published**, following v0.4.0 and v0.3.1.
-See the [release notes](https://github.com/gabisonia/go-vectorstore/releases/tag/v0.4.1)
+**v0.5.0 was published on November 20, 2026**, following v0.4.1.
+See the [release notes](https://github.com/gabisonia/go-vectorstore/releases/tag/v0.5.0)
 and [changelog](../CHANGELOG.md).
 
 ```sh
-go get github.com/gabisonia/go-vectorstore@v0.4.1
+go get github.com/gabisonia/go-vectorstore@v0.5.0
 ```
 
-## v0.5.0 source candidate
+## Upgrading to v0.5.0
 
-This checkout prepares v0.5.0; check GitHub releases before requesting that tag.
-New Redis, bounded Qdrant, optional sqlite-vec, generated typed references and
-embedding/input workflows require the matching new source/release. Existing
-samples that intentionally pin v0.4.1 keep that baseline until separately upgraded.
-Review [API and storage compatibility](release-0.5.md) before deploying the candidate.
+Redis, bounded Qdrant, optional sqlite-vec, generated typed references and the new
+embedding/input workflows are available in v0.5.0. Isolated sample modules pin
+their own versions; inspect their go.mod when upgrading an example. Review
+[API and storage compatibility](release-0.5.md) before upgrading applications.
 
 `HybridSearchOptions` now contains a `KeywordTerms` slice and is no longer Go
 comparable. Replace `==`/`!=` comparisons and uses as a map key with an
@@ -72,7 +71,7 @@ through errors.Is/As. See the [model guide](model-api.md) for supported types.
 
 ## Existing model collections
 
-On master after v0.4.1, typed fields mapped to JSON retain their Go
+In v0.5.0, typed fields mapped to JSON retain their Go
 representation during encoding. Earlier writes could quote `json.Number`, widen
 float32 before JSON serialization, or bypass scalar marshaler methods. New writes
 honor those representations and reject invalid numbers/marshaler failures. Native
@@ -96,7 +95,7 @@ mappings. Use an explicit JSON mapping when JSON decoder behavior is intended.
 Native arrays return independent slices, preserve SQL NULL/empty distinctions and
 reject integer/float narrowing errors. Stored formats and existing data are unchanged.
 
-On master after v0.4.1, non-string UUID key bindings require both value text
+In v0.5.0, non-string UUID key bindings require both value text
 formatting (`encoding.TextMarshaler` or `fmt.Stringer`) and pointer text decoding
 (`encoding.TextUnmarshaler`). This applies to model key fields and the typed key
 parameter `K`, including generated UUIDs. Older constructors could accept a
@@ -139,14 +138,16 @@ Review SQL NULL versus JSON null and empty operand behavior in the
 ## Release validation
 
 The release workflow runs the CI matrix before publishing: Go 1.25/current stable
-race tests (including SQLite), vet, release-tool tests, PostgreSQL 16/18 integration
-race tests, and vulnerability scanning. Local equivalents are in the repository
+race tests, vet, release-tool tests, PostgreSQL 16/18, Redis 7.4/8.2 and standalone
+Qdrant integration tests, SQLite/optional-adapter checks, API compatibility, sample
+checks and vulnerability scanning. Local equivalents are in the repository
 workflow and [performance guide](performance.md). Run the model sample for each
 provider you use and the persistent SQLite sample when adopting embedded storage.
 
-The [v0.4.0 release workflow](https://github.com/gabisonia/go-vectorstore/actions/runs/43704299961)
-passed all checks and published tag `v0.4.0` at commit
-`af25930d0e6f3bf3e69b1ee7b4c71a42ac93871d`. The module download was verified
-through the public Go proxy. For future releases, follow the
+The [v0.5.0 release workflow](https://github.com/gabisonia/go-vectorstore/actions/runs/44713607599)
+passed all 25 jobs and published tag `v0.5.0` at commit
+`50a9b02ad24682888585ed3d1bf37af6d463cbd9`. Public Go proxy/checksum verification and
+a separate Go 1.25 consumer exercised single-record APIs, exact search and SQLite
+reopen behavior. For future releases, follow the
 [release instructions](../README.md#release-automation) with a new version; published
 tags stay on their original commits.

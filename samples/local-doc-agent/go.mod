@@ -3,7 +3,7 @@ module github.com/gabisonia/go-vectorstore/samples/local-doc-agent
 go 1.26.0
 
 require (
-	github.com/gabisonia/go-vectorstore v0.4.1
+	github.com/gabisonia/go-vectorstore v0.5.0
 	github.com/microsoft/agent-framework-go v0.2.0
 	github.com/openai/openai-go/v3 v3.79.0
 )

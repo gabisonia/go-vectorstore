@@ -1,19 +1,23 @@
 # v0.5.0 compatibility review
 
-This source prepares v0.5.0 from published v0.4.1. It is a minor release because
+Published [v0.5.0](https://github.com/gabisonia/go-vectorstore/releases/tag/v0.5.0)
+follows v0.4.1. It is a minor release because
 it adds model APIs, provider options and connectors and includes the deliberate
 source incompatibility below. It is not a v1 long-term API stability commitment.
-Publishing remains a separate action after reviewed merge and full release CI.
+Its release workflow completed before publication on November 20, 2026.
 
 ## Public Go API
 
-`bash scripts/check-api.sh` builds a pinned golang.org/x/exp apidiff tool outside
-the root module and compares all exported module packages with the immutable
-v0.4.1 tag. The tool requires Go 1.26+; the library keeps Go 1.25. The checked-in
+The v0.5.0 release compared all exported module packages with immutable v0.4.1
+using a pinned golang.org/x/exp apidiff tool outside the root module. The archived
 [reviewed report](../scripts/api-v0.4.1-incompatible.txt) contains one incompatible
-change: `HybridSearchOptions` gains a slice and ceases to be comparable. CI fails
-if the incompatible report changes, including removal of this reviewed entry.
-Do not regenerate/accept it without reviewing API and upgrade consequences.
+change: `HybridSearchOptions` gained a slice and ceased to be comparable.
+
+`bash scripts/check-api.sh` now compares against the published v0.5.0 tag and
+requires zero incompatible API changes, including APIs introduced in v0.5.0.
+The historical report is not used to allow breaks in the current minor line.
+The tool requires Go 1.26+; the library keeps Go 1.25. Review API and upgrade
+consequences before advancing a published baseline.
 
 Existing required ModelStore/ModelCollection interfaces, original Record API
 and existing public method signatures remain supported. New workflows use
@@ -63,4 +67,4 @@ See [production operation](production.md) and [security support](../SECURITY.md)
 
 Before v1, review consumer feedback on exported contracts and provider limits,
 decide the long-term compatibility policy, and publish migration guidance for
-any further breaking changes. This candidate does not claim that review is done.
+any further breaking changes. The v1 compatibility review remains future work.

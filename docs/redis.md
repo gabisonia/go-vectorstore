@@ -6,7 +6,7 @@ in Go. Opt-in `NativeIndexes` adds Redis Search HNSW/FLAT indexes and scalar
 filtering and string full-text indexes over immutable HASH/JSON generations.
 Opt-in `StorageJSON` uses immutable RedisJSON documents with Go exact search or
 native vector indexes.
-It is included in the v0.5.0 source candidate; check releases before using a tag. The default encoded collection limit is
+It is available from published v0.5.0. The default encoded collection limit is
 16 MiB; writes still process the whole collection.
 
 ```go

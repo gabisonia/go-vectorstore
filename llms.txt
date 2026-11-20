@@ -1,10 +1,10 @@
 # go-vectorstore
 
-> Go vector-store library inspired by Microsoft.Extensions.VectorData, with typed model collections, native keys/data, named vectors and automatic embeddings across memory, SQLite, Redis snapshots and PostgreSQL/pgvector.
+> Go vector-store library inspired by Microsoft.Extensions.VectorData, with typed model collections, native keys/data, named vectors and automatic embeddings across memory, SQLite, Redis, bounded Qdrant snapshots and PostgreSQL/pgvector.
 
-Requires Go 1.25+. Source version: v0.5.0 (release preparation); check GitHub
-releases for published tags. Examples use v0.4.0 APIs; new sample commands are
-included in source versions from v0.4.1. Master can be newer than published tags.
+Requires Go 1.25+. Published version and source baseline: v0.5.0; check GitHub
+releases for later tags. Master can include unreleased changes. Run repository
+samples from the matching source checkout and check isolated modules' own go.mod.
 Prefer typed model APIs for new applications. Original PostgreSQL Record APIs remain supported. Choose a
 provider using its reported capabilities; accepted schema hints do not imply ANN
 indexes or hybrid support. Deterministic sample embeddings are instructional.
@@ -13,7 +13,7 @@ indexes or hybrid support. Deterministic sample embeddings are instructional.
 
 - [AI usage guide](https://raw.githubusercontent.com/gabisonia/go-vectorstore/master/docs/ai-guide.md): Version guidance, complete runnable quickstart, task recipes and common mistakes.
 - [Sample index](https://raw.githubusercontent.com/gabisonia/go-vectorstore/master/samples/README.md): Prerequisites, runnable commands and verification.
-- [Released API reference](https://pkg.go.dev/github.com/gabisonia/go-vectorstore/vectordata@v0.4.0): Public types and executable examples when present in that tag.
+- [Released API reference](https://pkg.go.dev/github.com/gabisonia/go-vectorstore@v0.5.0/vectordata): Public types and executable examples in v0.5.0.
 - [Changelog](https://raw.githubusercontent.com/gabisonia/go-vectorstore/master/CHANGELOG.md): Published and unreleased behavior.
 
 ## Usage and limits
@@ -30,7 +30,7 @@ indexes or hybrid support. Deterministic sample embeddings are instructional.
 - [Qdrant design](https://raw.githubusercontent.com/gabisonia/go-vectorstore/master/docs/qdrant-design.md): Real-server compatibility and bounded publication proof, recovery/retention limits; public connector pending.
 - [SQLite](https://raw.githubusercontent.com/gabisonia/go-vectorstore/master/docs/sqlite.md): Durability, concurrency and exact-scan costs.
 - [SQLite-vec](https://raw.githubusercontent.com/gabisonia/go-vectorstore/master/docs/sqlitevec.md): Optional exact scalar L1 candidates, numerical proof and fallback.
-- [Redis](https://raw.githubusercontent.com/gabisonia/go-vectorstore/master/docs/redis.md): Standalone atomic snapshot/hash/RedisJSON generations, optional HNSW/FLAT, scalar and string full-text indexes, exact fallback and size/write limits; v0.5.0 source; check release availability.
+- [Redis](https://raw.githubusercontent.com/gabisonia/go-vectorstore/master/docs/redis.md): Standalone atomic snapshot/hash/RedisJSON generations, optional HNSW/FLAT, scalar and string full-text indexes, exact fallback and size/write limits; available from v0.5.0.
 - [Migrations](https://raw.githubusercontent.com/gabisonia/go-vectorstore/master/docs/migrations.md): PostgreSQL planning, explicit additive application and limitations.
 - [Performance](https://raw.githubusercontent.com/gabisonia/go-vectorstore/master/docs/performance.md): Reproducible benchmarks and verification commands.
 

@@ -7,21 +7,19 @@ ensure that a tool reads its documentation or instruction files.
 
 ## Version and starting point
 
-The example API baseline is **v0.4.0**. This checkout prepares **v0.5.0**; check
-[GitHub releases](https://github.com/gabisonia/go-vectorstore/releases) for tags
-that have actually been published. Install the latest published version, then pin
-the resolved version in your application's go.mod:
+This guide targets published **v0.5.0**. Check
+[GitHub releases](https://github.com/gabisonia/go-vectorstore/releases) for later
+releases and pin the version used by your application's go.mod:
 
 ```sh
-go get github.com/gabisonia/go-vectorstore@latest
+go get github.com/gabisonia/go-vectorstore@v0.5.0
 ```
 
 Go 1.25+ is required. Check your application's `go.mod` before choosing APIs.
 Master may include unpublished changes listed in [CHANGELOG.md](../CHANGELOG.md).
-The typed-search, typed-rag and recipes commands are on master and included in
-source versions from v0.4.1; their library calls use v0.4.0 APIs. Run repository
-samples from a checkout of the matching source, rather than assuming they exist in every tag.
-[Versioned API reference](https://pkg.go.dev/github.com/gabisonia/go-vectorstore/vectordata@v0.4.0)
+Run repository samples from a checkout of the matching source. Isolated sample
+modules pin their own dependencies; check their go.mod before choosing newer APIs.
+[Versioned API reference](https://pkg.go.dev/github.com/gabisonia/go-vectorstore@v0.5.0/vectordata)
 and [upgrade notes](upgrading.md) describe the released contract.
 
 Use the model API for new applications. Import the provider you need and
@@ -87,11 +85,11 @@ part of CI. Replace panic with returned/handled errors in application code.
 | Single-record CRUD and optional lookup | [recipes](../samples/recipes/main.go) | InsertOne, UpsertOne, TryGet, DeleteOne |
 | Typed CRUD and generated keys | [model-store](../samples/model-store/main.go) | EnsureTypedModelCollection, Upsert, GetMany, Delete |
 | Persistent embedded data | [sqlite-store](../samples/sqlite-store/main.go), [SQLite example](../stores/sqlite/example_test.go) | sqlite.Open, GetTypedModelCollection, Get |
-| Redis collection snapshots | [redis-store](../samples/redis-store/README.md) | redis.New, exact dense search in Go; whole-collection transfers; v0.5.0 source; check tag availability |
+| Redis collection snapshots | [redis-store](../samples/redis-store/README.md) | redis.New, exact dense search in Go; whole-collection transfers |
 | Automatic embeddings and filtered retrieval | [typed-search](../samples/typed-search/main.go), [model and adapters](../samples/internal/demo/demo.go) | source tag, Embedder, SearchText, Column |
 | Bounded standalone Qdrant models | [Qdrant sample](../samples/qdrant-store/README.md) | Exact Go search; finite snapshot/receipt limits |
 | Local agent with model-selected tools | [Aspire demo](../samples/local-doc-agent/README.md) | Agent Framework function tools, SQLite, Ollama |
-| Custom/multimodal embedding inputs | [input-embeddings](../samples/input-embeddings/main.go) | InputEmbeddingFunc, vector,input tag, SearchInput; v0.5.0 source; check tag availability |
+| Custom/multimodal embedding inputs | [input-embeddings](../samples/input-embeddings/main.go) | InputEmbeddingFunc, vector,input tag, SearchInput |
 | Retrieve sources for generation | [typed-rag](../samples/typed-rag/main.go) | SearchText, TypedModelSearchResult.Item |
 | Named vectors and projections | [recipes](../samples/recipes/main.go), [executable examples](../vectordata/example_test.go) | VectorProperty, IncludeVectors |
 | Read iteration/cancellation | [recipes](../samples/recipes/main.go) | ListCollectionNamesIter, GetManyIter, SearchTextIter, SearchInputIter, context.WithCancel |
