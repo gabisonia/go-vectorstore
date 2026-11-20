@@ -166,6 +166,11 @@ metric labels. Track restore drills, migration results and scheduled scan failur
 
 Before rollout, measure your real dimensions/NNZ, filters, corpus size, write/read
 concurrency and ANN recall. Validate deadline/connection budgets and index plans.
+The [documentation retrieval pilot](../samples/docs-retrieval-pilot/README.md)
+provides a reproducible v0.5.0 consumer with local embeddings, manually judged
+retrieval queries, concurrent search measurements and an offline SQLite restore.
+Use it as a starting point; its small documentation corpus is not a substitute
+for evaluating your own data, traffic and recovery requirements.
 Deploy a pinned published version, canary it, and retain a rollback/restore plan.
 For schema changes follow [migration limits](migrations.md), including blocking
 DDL and explicit review. See [release compatibility](releases.md) and

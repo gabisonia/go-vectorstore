@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Add an isolated v0.5.0 documentation retrieval pilot with small local MiniLM
+  embeddings, graded retrieval evaluation, bounded concurrent searches, model
+  identity checks, incremental ingestion and verified offline SQLite restores.
+  Include a Compose model service, JSON reports and required consumer CI.
+
 - Protect the full published v0.5.0 API with a zero-incompatibility CI comparison,
   retain the earlier migration report as history, and refresh published-version
   documentation. Upgrade the isolated local agent to v0.5.0 and allow separate

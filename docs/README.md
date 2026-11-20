@@ -6,6 +6,7 @@ Redis and memory, plus the original PostgreSQL Record API.
 ## Using the library
 
 - [Production operation](production.md): connections, permissions, deadlines, retries, backups and workload validation
+- [Documentation retrieval pilot](../samples/docs-retrieval-pilot/README.md): published v0.5.0 consumer, local embeddings, quality/load reports and offline restore drill
 - [Compatibility and releases](releases.md): patch policy, storage compatibility and release validation
 - [v0.5.0 compatibility review](release-0.5.md): candidate API changes, persisted data and release evidence
 - [Security policy](../SECURITY.md): private reporting, supported versions and scheduled checks
