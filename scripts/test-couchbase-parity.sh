@@ -19,5 +19,21 @@ api -d name=docs http://localhost:8091/pools/default/buckets/parity/scopes
 api -d name=articles http://localhost:8091/pools/default/buckets/parity/scopes/docs/collections
 api --retry 45 --retry-all-errors --retry-delay 1 -X PUT -H 'Content-Type: application/json' \
   --data-binary @- http://localhost:8094/api/bucket/parity/scope/docs/index/vectors <internal/parity/catalog/couchbase/index.json
+# Bucket readiness precedes Query's discovery of a newly created collection.
+# Wait on the same read-only keyspace operation that the Go adapter uses.
+query_ready() {
+  local reply
+  reply=$(api --max-time 5 --data-urlencode 'statement=SELECT RAW META(d).id FROM `parity`.`docs`.`articles` AS d USE KEYS "readiness-probe"' \
+    -d readonly=true http://localhost:8093/query/service) || return 1
+  [[ $reply =~ \"status\"[[:space:]]*:[[:space:]]*\"success\" ]]
+}
+deadline=$((SECONDS + 90))
+until query_ready; do
+  if ((SECONDS >= deadline)); then
+    echo 'Couchbase Query could not read the fixture collection' >&2
+    exit 1
+  fi
+  sleep 1
+done
 docker run --rm --network "container:$server" "$probe" dotnet /app/Reference.dll
 docker run --rm --network "container:$server" "$runner"
