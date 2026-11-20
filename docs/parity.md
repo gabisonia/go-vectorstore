@@ -15,7 +15,9 @@ for attaching to externally managed collections. The Elasticsearch adapter targe
 0.3.1 fails at collection construction on the 11.0.0 target. MongoDB connector
 1.74.0-preview fails at search on 11.0.0. Its live fixture uses 10.1.0. Couchbase has a Go adapter for externally
 provisioned Search indexes. The [Couchbase fixture](../internal/parity/README.md#couchbase-server-800)
-tracks the pinned connector’s collection and filter limitations.
+tracks the pinned connector’s collection and filter limitations. Pinecone has
+Docker interoperability coverage on its retired local emulator. Hosted Pinecone
+behavior requires live validation.
 
 | Workflow | Go implementation | Status |
 | --- | --- | --- |

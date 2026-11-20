@@ -3,6 +3,7 @@ package pinecone
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -49,12 +50,25 @@ func (e *ResponseError) Error() string { return fmt.Sprintf("Pinecone HTTP %d", 
 
 var indexName = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]{0,43}[a-z0-9])?$`)
 
+// Keep the REST API version aligned with the reference SDK.
+type versionedTransport struct{ base http.RoundTripper }
+
+func (t versionedTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	r := req.Clone(req.Context())
+	r.Header.Set("X-Pinecone-API-Version", "2025-01")
+	return t.base.RoundTrip(r)
+}
+
 // AttachNative verifies that the control plane reports the supplied data host,
 // dimensions and cosine metric. The transport supplies API-key authentication.
 func AttachNative(ctx context.Context, controlOrigin, dataOrigin string, s NativeSchema, transport http.RoundTripper) (*NativeIndex, error) {
 	if !indexName.MatchString(s.Index) || s.Text == "" || strings.HasPrefix(s.Text, "$") || !utf8.ValidString(s.Text) || !utf8.ValidString(s.Namespace) || s.Dimensions <= 0 {
 		return nil, vectordata.ErrSchemaMismatch
 	}
+	if transport == nil {
+		transport = http.DefaultTransport
+	}
+	transport = versionedTransport{transport}
 	status := func(code int) error { return &ResponseError{code} }
 	control, err := nativehttp.New(controlOrigin, "", transport, status, ErrNativeOutcomeUnknown)
 	if err != nil {
@@ -150,11 +164,14 @@ func (c *NativeIndex) Delete(ctx context.Context, id string) error {
 	if !validID(id) {
 		return vectordata.ErrInvalidRecord
 	}
-	var reply map[string]any
+	var reply json.RawMessage
 	if err := c.api.Request(ctx, http.MethodPost, "/vectors/delete", map[string]any{"namespace": c.s.Namespace, "ids": []string{id}}, &reply, true); err != nil {
 		return err
 	}
-	if reply == nil {
+	// Pinecone Local encodes its empty response as a JSON string. The REST
+	// contract specifies an empty object. Validate either acknowledgement.
+	var object map[string]json.RawMessage
+	if string(reply) != `""` && (json.Unmarshal(reply, &object) != nil || object == nil || len(object) != 0) {
 		return ErrNativeOutcomeUnknown
 	}
 	return nil

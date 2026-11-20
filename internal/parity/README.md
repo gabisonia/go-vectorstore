@@ -231,3 +231,25 @@ MERGE, and search orders by native cosine distance followed by primary key.
 An unacknowledged commit returns `ErrNativeOutcomeUnknown`. Approximate
 indexes, generated keys, RAC failover and hosted Oracle services need
 separate validation.
+
+## Pinecone Local
+
+Run `bash scripts/test-pinecone-parity.sh` with Docker. The fixture pins the
+v1.0.0.rc0 emulator used by the upstream C# conformance suite. Pinecone retired
+the emulator on October 7, 2026. It stores data in memory for this test and
+requires no credentials or published ports. Hosted authentication, durability,
+index visibility delays, and approximate recall require a separate live test.
+[Pinecone local testing guidance](https://docs.pinecone.io/guides/production/mock-the-api)
+
+Go and CommunityToolkit.VectorData.Pinecone 1.0.0-preview.3 each create an
+index. The fixture checks shared string IDs, metadata, vector replacement,
+filtered cosine ranking and deletion on the locked VectorData 11.0.0 graph.
+It writes the same ID to two namespaces and verifies that editing and deleting
+one leaves the other intact.
+
+Use `pinecone.AttachNative` with trusted control and data service origins,
+a namespace, a string metadata field, dimensions and an HTTP transport that
+supplies the API key. The adapter verifies the data host against the control
+plane and checks readiness, dimensions and metric. Requests use the 2025-01
+vectors API. Upsert replaces the vector and all metadata for that ID. Search
+returns native similarity scores and optionally filters by metadata equality.

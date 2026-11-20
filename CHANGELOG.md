@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Add native Pinecone access for namespace-scoped dense cosine vectors, string
+  metadata and equality filters. Docker interoperability uses Pinecone Local.
+
 - Add native Oracle access for explicit numeric keys, nullable categories and
   dense FLOAT32 vectors, with exact cosine ranking and numeric prefilters.
 
