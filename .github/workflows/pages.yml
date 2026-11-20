@@ -1,0 +1,30 @@
+name: Documentation site
+on:
+  push:
+    branches: [master]
+    paths: ['docs/**', 'mkdocs.yml', 'scripts/pages/**', '.github/workflows/pages*.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    uses: ./.github/workflows/pages-build.yml
+    with:
+      upload: true
+
+  deploy:
+    if: github.ref == 'refs/heads/master'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    concurrency: github-pages
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

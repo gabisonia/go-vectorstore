@@ -7,6 +7,8 @@
 
 A lightweight Go vector-store library inspired by `Microsoft.Extensions.VectorData`.
 
+[Read the documentation](https://gabisonia.dev/go-vectorstore/)
+
 Scope:
 - Go 1.26+
 - PostgreSQL + `pgvector`, embedded SQLite, standalone Redis, bounded Qdrant snapshots and in-memory model storage

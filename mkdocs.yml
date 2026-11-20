@@ -1,0 +1,59 @@
+site_name: go-vectorstore
+site_description: Go vector-store documentation, provider capabilities, and production guidance.
+site_url: https://gabisonia.dev/go-vectorstore/
+repo_url: https://github.com/gabisonia/go-vectorstore
+repo_name: gabisonia/go-vectorstore
+edit_uri: blob/master/docs/
+theme:
+  name: material
+  font: false
+  palette:
+    primary: blue grey
+    accent: teal
+  features:
+    - content.code.copy
+    - navigation.sections
+    - navigation.top
+    - search.highlight
+plugins:
+  - search
+markdown_extensions:
+  - tables
+  - pymdownx.superfences
+  - toc:
+      permalink: true
+hooks:
+  - scripts/pages/links.py
+validation:
+  links:
+    anchors: warn
+nav:
+  - Overview: README.md
+  - Using the library:
+    - Quickstart and recipes: ai-guide.md
+    - Model API: model-api.md
+    - Typed fields: typed-fields.md
+    - Embedding outputs: embedding-outputs.md
+    - Schema migrations: migrations.md
+  - Providers:
+    - Capabilities and connector parity: parity.md
+    - SQLite: sqlite.md
+    - SQLite vector extension: sqlitevec.md
+    - Redis: redis.md
+    - Qdrant: qdrant.md
+  - Operations:
+    - Production: production.md
+    - Upgrading: upgrading.md
+    - Compatibility and releases: releases.md
+    - Performance: performance.md
+    - SQLite workload results: benchmarks/sqlite-workload/report.md
+    - Benchmark artifacts: benchmarks/sqlite-workload/README.md
+  - Development:
+    - Architecture: architecture.md
+    - Store implementation: stores-implementation.md
+    - Connector development: connector-development.md
+    - SQLite vector design: sqlite-vector-design.md
+    - Qdrant design: qdrant-design.md
+    - Qdrant publication proof: qdrant-publication-proof.md
+    - Parity plan: parity-plan.md
+    - v0.5.0 compatibility review: release-0.5.md
