@@ -13,6 +13,7 @@ WORKDIR /src/$provider
 COPY internal/parity/catalog/Directory.Build.props /src/
 COPY internal/parity/catalog/$provider/Reference.csproj internal/parity/catalog/$provider/packages.lock.json ./
 RUN dotnet restore --locked-mode
+COPY internal/parity/catalog/ArticleFixture.cs /src/
 COPY internal/parity/catalog/$provider/Program.cs ./
 RUN dotnet publish --no-restore -o /app
 COPY --from=tests /reference.test /app/reference.test

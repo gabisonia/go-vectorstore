@@ -70,12 +70,13 @@ jobs:
         run: go vet -tags=sqlitevecprobe ./internal/sqlitevecprobe ./stores/sqlitevec
 
   reference-catalog:
-    name: Locked .NET catalog and in-memory interoperability
+    name: Locked .NET catalog and native provider interoperability
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - run: bash scripts/test-reference-catalog.sh
+      - run: bash scripts/test-postgres-parity.sh
 
   qdrant-dotnet-parity:
     name: Native Qdrant and .NET interoperability

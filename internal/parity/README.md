@@ -34,6 +34,12 @@ checks nearest-neighbor order and deletes from both physical tables. The Go
 fixture calls the public native adapter and checks rollback after the second
 statement of a two-table delete fails.
 
+Run `bash scripts/test-postgres-parity.sh` for the shared-table fixture on
+PostgreSQL 16 and 18 with pgvector. The Go typed model API and the C# connector
+can each create the table, retrieve the other client's written record, rank the
+same two points by cosine distance and observe deletion. The C#-created table
+uses `GetTypedModelCollection` with explicitly mapped column names.
+
 The MongoDB, Couchbase and Oracle reference projects
 pin patched transitive dependencies flagged by NuGet audit. Their live service
 behavior still needs validation.
