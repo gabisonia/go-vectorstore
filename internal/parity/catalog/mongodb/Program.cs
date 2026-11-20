@@ -10,8 +10,10 @@ switch (args[0])
 {
     case "probe":
         break;
-    case "seed":
+    case "create":
         await collection.EnsureCollectionExistsAsync();
+        break;
+    case "seed":
         await collection.UpsertAsync(new Article { Id = "seed", Body = "keep", Direction = [0, 1] });
         await collection.UpsertAsync(new Article { Id = "excluded", Body = "omit", Direction = [1, 0] });
         break;

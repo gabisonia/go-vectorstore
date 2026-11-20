@@ -44,9 +44,9 @@ Run `bash scripts/test-redis-parity.sh` for Redis 8.2 hash and JSON storage.
 Each client creates the search index, reads the other client's record and
 checks native FLAT cosine retrieval. The Go fixture uses `Store.AttachNativeCosine` and its public native document methods.
 
-The MongoDB, Couchbase and Oracle reference projects
-pin patched transitive dependencies flagged by NuGet audit. Their live service
-behavior still needs validation.
+The MongoDB, Couchbase and Oracle reference projects pin patched transitive
+dependencies flagged by NuGet audit. Couchbase and Oracle still need live
+service validation.
 
 ## Qdrant checkpoint
 
@@ -170,3 +170,21 @@ consistency. Search accepts an optional text equality filter as a bound value.
 An unconfirmed write returns `ErrNativeOutcomeUnknown`. Coverage is limited to
 standalone operation. Approximate-index recall, distributed recovery, hybrid
 search and other field types need separate interoperability tests.
+
+## MongoDB Atlas Local 8.0
+
+Run `bash scripts/test-mongodb-parity.sh` with Docker. The script tests the
+locked C# connector on VectorData 11.0.0 against Atlas Local, including its
+vector search service. It publishes no ports and removes its container and
+anonymous volumes on exit. Go and C# each create a collection and vector index.
+Both clients read full vectors, update documents, run a string equality
+prefilter before cosine ranking, and observe the other client's deletes.
+
+`mongodb.AttachNative` takes a caller-managed MongoDB collection and checks
+the named search index's readiness, metric, dimensions and filter mapping.
+The fixture uses string BSON `_id` keys and arrays of doubles for dense float
+vectors. Map the C# properties with `BsonId` and `BsonElement`. Go upserts
+set the two mapped fields. Go search uses exact vector search and returns
+MongoDB's normalized scores. The search index updates asynchronously, so the
+fixture waits for known records to be visible before comparing clients.
+Hosted Atlas, multi-node failover and approximate recall are unverified.

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Add native MongoDB Atlas Vector Search access for string keys and dense
+  cosine vectors, including exact search with a text equality prefilter.
+
 - Add native Milvus access for explicit string keys, nullable text and dense
   cosine vectors, with strongly consistent reads and bound text filters.
 

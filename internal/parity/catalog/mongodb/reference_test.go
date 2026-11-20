@@ -43,6 +43,8 @@ func TestSharedCollection(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
+			} else {
+				ref("create")
 			}
 			ref("seed")
 			s := mongodb.NativeSchema{Index: "vector_index", Text: "body", Vector: "direction", Dimensions: 2}

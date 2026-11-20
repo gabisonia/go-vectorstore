@@ -107,6 +107,16 @@ func (c *NativeCollection) validate(v []float32) error {
 }
 func validID(id string) bool { return id != "" && utf8.ValidString(id) }
 
+// A per-document write rejection settles this single-document operation.
+// A write-concern or transport error can arrive after the write was applied.
+func writeError(err error) error {
+	var rejected mongo.WriteException
+	if errors.As(err, &rejected) && len(rejected.WriteErrors) > 0 && rejected.WriteConcernError == nil {
+		return err
+	}
+	return errors.Join(ErrNativeOutcomeUnknown, err)
+}
+
 // Upsert sets the mapped fields and preserves unrelated BSON fields.
 func (c *NativeCollection) Upsert(ctx context.Context, d NativeDocument) error {
 	if !validID(d.ID) || !utf8.ValidString(d.Text) {
@@ -120,7 +130,7 @@ func (c *NativeCollection) Upsert(ctx context.Context, d NativeDocument) error {
 	}
 	result, err := c.collection.UpdateOne(ctx, bson.M{"_id": d.ID}, bson.M{"$set": bson.M{c.schema.Text: d.Text, c.schema.Vector: d.Vector}}, options.UpdateOne().SetUpsert(true))
 	if err != nil {
-		return errors.Join(ErrNativeOutcomeUnknown, err)
+		return writeError(err)
 	}
 	if !result.Acknowledged || (result.MatchedCount != 1 && result.UpsertedID != d.ID) {
 		return ErrNativeOutcomeUnknown
@@ -173,7 +183,7 @@ func (c *NativeCollection) Delete(ctx context.Context, id string) error {
 	}
 	result, err := c.collection.DeleteOne(ctx, bson.M{"_id": id})
 	if err != nil {
-		return errors.Join(ErrNativeOutcomeUnknown, err)
+		return writeError(err)
 	}
 	if !result.Acknowledged {
 		return ErrNativeOutcomeUnknown
