@@ -5,12 +5,14 @@ package sqlserverparity
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
+	"errors"
 	"os"
 	"os/exec"
 	"slices"
 	"testing"
 
+	"github.com/gabisonia/go-vectorstore/stores/sqlserver"
+	"github.com/gabisonia/go-vectorstore/vectordata"
 	_ "github.com/microsoft/go-mssqldb"
 )
 
@@ -49,47 +51,44 @@ func TestSharedTable(t *testing.T) {
 				}
 			})
 			ref("seed")
-			read := func(id int64) (string, []float32) {
-				t.Helper()
-				var body, raw string
-				if err := db.QueryRowContext(ctx, "SELECT body,CAST(direction AS varchar(max)) FROM "+table+" WHERE id=@p1", id).Scan(&body, &raw); err != nil {
-					t.Fatal(err)
-				}
-				var vector []float32
-				if err := json.Unmarshal([]byte(raw), &vector); err != nil {
-					t.Fatal(err)
-				}
-				return body, vector
+			schema := sqlserver.NativeSchema{Table: name, Key: "id", Text: "body", Vector: "direction", Dimensions: 2}
+			wrong := schema
+			wrong.Dimensions = 3
+			if _, err := sqlserver.AttachNative(ctx, db, wrong); !errors.Is(err, vectordata.ErrSchemaMismatch) {
+				t.Fatalf("incorrect dimensions: %v", err)
 			}
-			if body, v := read(7); body != "reference" || !slices.Equal(v, []float32{0, 1}) {
-				t.Fatalf("C# seed: %s %v", body, v)
-			}
-			execSQL("INSERT INTO "+table+" (id,body,direction) VALUES(@p1,@p2,CAST(@p3 AS vector(2)))", int64(42), "initial", "[0,1]")
-			execSQL("UPDATE "+table+" SET body=@p1,direction=CAST(@p2 AS vector(2)) WHERE id=@p3", "from Go", "[1,0]", int64(42))
-			rows, err := db.QueryContext(ctx, "SELECT TOP(2) id FROM "+table+" ORDER BY VECTOR_DISTANCE('cosine',direction,CAST(@p1 AS vector(2))),id", "[1,0]")
+			c, err := sqlserver.AttachNative(ctx, db, schema)
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer rows.Close()
-			var ids []int64
-			for rows.Next() {
-				var id int64
-				if err = rows.Scan(&id); err != nil {
-					t.Fatal(err)
-				}
-				ids = append(ids, id)
+			seed, err := c.Get(ctx, 7)
+			if err != nil || seed.Text != "reference" || !slices.Equal(seed.Vector, []float32{0, 1}) {
+				t.Fatalf("C# seed: %+v %v", seed, err)
 			}
-			if err = rows.Err(); err != nil {
+			seed.Text = "Go update"
+			if err = c.Upsert(ctx, seed); err != nil {
 				t.Fatal(err)
 			}
-			if !slices.Equal(ids, []int64{42, 7}) {
-				t.Fatalf("Go ranking: %v", ids)
+			ref("update")
+			seed, err = c.Get(ctx, 7)
+			if err != nil || seed.Text != "C# update" {
+				t.Fatalf("C# update: %+v %v", seed, err)
+			}
+			if err = c.Upsert(ctx, sqlserver.NativePoint{ID: 42, Text: "from Go", Vector: []float32{1, 0}}); err != nil {
+				t.Fatal(err)
+			}
+			hits, err := c.Search(ctx, []float32{1, 0}, 2)
+			if err != nil || len(hits) != 2 || hits[0].ID != 42 || hits[1].ID != 7 || hits[0].Distance != 0 || hits[1].Distance != 1 {
+				t.Fatalf("Go ranking: %+v %v", hits, err)
 			}
 			ref("verify")
-			var n int
-			if err = db.QueryRowContext(ctx, "SELECT count(*) FROM "+table+" WHERE id=42").Scan(&n); err != nil || n != 0 {
-				t.Fatalf("read after C# delete: %d %v", n, err)
+			if _, err := c.Get(ctx, 42); !errors.Is(err, sql.ErrNoRows) {
+				t.Fatalf("C# delete: %v", err)
 			}
+			if err := c.Delete(ctx, 7); err != nil {
+				t.Fatal(err)
+			}
+			ref("verify-empty")
 		})
 	}
 }
