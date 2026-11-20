@@ -115,3 +115,19 @@ For a C# property mapped to a different physical name, configure its JSON
 property name as well. The fixture disables automatic schema creation to detect
 mapping drift. Search returns raw cosine distances. A lost or incomplete write
 acknowledgement returns `ErrNativeOutcomeUnknown`.
+
+## Chroma 1.5.9
+
+Run `bash scripts/test-chroma-parity.sh` for standalone Docker interoperability.
+Go and C# each create a collection in the default tenant and database. The test
+checks document, metadata and embedding reads, native cosine ranking and
+bidirectional delete visibility.
+
+`chroma.AttachNative` checks the collection's cosine HNSW configuration and
+binds to its physical ID. It also checks the persisted dimension when available.
+An empty collection gets its server-side dimension on the first embedding write.
+`UpdateDocument` sends only the document. Use it for text edits to avoid
+rewriting the index. The reference model stores its single full-text string
+property as the Chroma document and its category as metadata. The two-point
+test covers standalone retrieval. Distributed BM25, Chroma Cloud behavior and
+recall after embedding replacement still require separate evidence.

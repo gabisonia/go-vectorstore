@@ -9,7 +9,7 @@ It is a workflow comparison, not a claim of API or feature equivalence with ever
 The [connector interoperability guide](../internal/parity/README.md) lists the
 locked C# packages, physical schemas, local Docker commands and live-service
 coverage for the unreleased native APIs. The PostgreSQL fixture uses the
-existing typed model API. SQL Server, Azure AI Search, Qdrant, SQLite, Redis and Weaviate have explicit entry points
+existing typed model API. SQL Server, Azure AI Search, Qdrant, SQLite, Redis, Weaviate and Chroma have explicit entry points
 for attaching to externally managed collections.
 
 | Workflow | Go implementation | Status |

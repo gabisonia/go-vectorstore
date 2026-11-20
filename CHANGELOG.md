@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Add native access to standalone Chroma v2 collections with cosine embeddings,
+  documents and metadata. Text-only updates preserve the stored embedding.
+
 - Add native Weaviate access for UUID-keyed objects with a text field and a
   named dense cosine vector. Verify FLAT and HNSW retrieval against the locked
   C# connector on Weaviate 1.40.7.
