@@ -76,6 +76,14 @@ func TestSharedCollection(t *testing.T) {
 			if err != nil || seed.Text == nil || *seed.Text != "keep" || !slices.Equal(seed.Vector, []float32{0, 1}) {
 				t.Fatalf("C# seed: %+v %v", seed, err)
 			}
+			nullable := milvus.NativeDocument{ID: "null-text", Vector: []float32{-1, 0}}
+			if err := c.Upsert(ctx, nullable); err != nil {
+				t.Fatal(err)
+			}
+			gotNull, err := c.Get(ctx, nullable.ID)
+			if err != nil || gotNull.Text != nil || !slices.Equal(gotNull.Vector, nullable.Vector) {
+				t.Fatalf("NULL text round-trip: %+v %v", gotNull, err)
+			}
 			initial, keep := "initial", "keep"
 			p := milvus.NativeDocument{ID: "go", Text: &initial, Vector: []float32{0, 1}}
 			if err := c.Upsert(ctx, p); err != nil {

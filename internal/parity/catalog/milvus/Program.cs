@@ -17,6 +17,9 @@ switch (args[0])
         var doc = await collection.GetAsync("go", new() { IncludeVectors = true });
         if (doc?.Body != "keep" || !doc.Direction.ToArray().SequenceEqual(new float[] { 1, 0 }))
             throw new InvalidOperationException("Go update did not round-trip");
+        var nullable = await collection.GetAsync("null-text", new() { IncludeVectors = true });
+        if (nullable == null || nullable.Body != null || !nullable.Direction.ToArray().SequenceEqual(new float[] { -1, 0 }))
+            throw new InvalidOperationException("NULL text did not round-trip");
         var ids = new List<string>();
         await foreach (var hit in collection.SearchAsync(new ReadOnlyMemory<float>(new float[] { 1, 0 }), 3,
             new() { Filter = a => a.Body == "keep" }))
