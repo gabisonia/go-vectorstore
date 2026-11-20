@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <PackageReference Include="CommunityToolkit.VectorData.Milvus" Version="[1.0.0-preview]" />
+  </ItemGroup>
+</Project>

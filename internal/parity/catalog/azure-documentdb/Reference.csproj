@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <PackageReference Include="CommunityToolkit.VectorData.AzureDocumentDB" Version="[1.1.1]" />
+  </ItemGroup>
+</Project>

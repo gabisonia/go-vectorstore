@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <PackageReference Include="CommunityToolkit.VectorData.PgVector" Version="[1.0.2]" />
+  </ItemGroup>
+</Project>

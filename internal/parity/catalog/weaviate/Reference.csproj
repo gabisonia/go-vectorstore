@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <PackageReference Include="CommunityToolkit.VectorData.Weaviate" Version="[1.0.1]" />
+  </ItemGroup>
+</Project>

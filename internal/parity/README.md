@@ -24,6 +24,13 @@ Neon shares the PostgreSQL connector. The deprecated volatile store maps to in-m
 | Chroma | CommunityToolkit.VectorData.Chroma | 1.1.0-preview |
 | Milvus | CommunityToolkit.VectorData.Milvus | 1.0.0-preview |
 
+Run `bash scripts/test-reference-catalog.sh` with Docker to restore the other
+16 reference projects in locked mode and exercise the in-memory stores against
+the same records. The memory fixture compares filtered cosine ranking, vector
+retrieval and deletion. The MongoDB, Couchbase and Oracle reference projects
+pin patched transitive dependencies flagged by NuGet audit. Their live service
+behavior still needs validation.
+
 ## Qdrant checkpoint
 
 Run `bash scripts/test-qdrant-parity.sh` with Docker. The script builds the Go

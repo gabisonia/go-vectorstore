@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <PackageReference Include="CommunityToolkit.VectorData.Pinecone" Version="[1.0.0-preview.3]" />
+  </ItemGroup>
+</Project>
