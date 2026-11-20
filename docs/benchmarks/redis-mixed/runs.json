@@ -1,0 +1,137 @@
+[
+  {
+    "client_heap_alloc_bytes": 24863032,
+    "database_cgroup_bytes": 127086592,
+    "dimensions": 128,
+    "duration_seconds": 5.340346958,
+    "errors": 0,
+    "expected_cancellations": 1,
+    "go": "go1.26.1",
+    "logical_cpus": 11,
+    "native_indexes": false,
+    "operations": {
+      "get": {
+        "completed": 122,
+        "ops_per_second": 22.84495763280705,
+        "p50_us": 21024.333,
+        "p95_us": 32584.666
+      },
+      "search": {
+        "completed": 61,
+        "ops_per_second": 11.422478816403524,
+        "p50_us": 82611.041,
+        "p95_us": 107791.167
+      },
+      "upsert": {
+        "completed": 61,
+        "ops_per_second": 11.422478816403524,
+        "p50_us": 182034.458,
+        "p95_us": 429688.75
+      }
+    },
+    "platform": "darwin/arm64",
+    "records": 4096,
+    "redis": "8.2.11",
+    "redis_config": {
+      "appendfsync": "always",
+      "appendonly": "yes",
+      "maxmemory-policy": "noeviction",
+      "save": ""
+    },
+    "revision": "0892cb7e41ab60763518b365bc5a7d3f57a3ed80",
+    "seed": 94,
+    "storage_layout": "snapshot",
+    "top": 8,
+    "workers": 4
+  },
+  {
+    "client_heap_alloc_bytes": 16590368,
+    "database_cgroup_bytes": 107180032,
+    "dimensions": 128,
+    "duration_seconds": 5.803179791,
+    "errors": 0,
+    "expected_cancellations": 1,
+    "go": "go1.26.1",
+    "logical_cpus": 11,
+    "native_indexes": false,
+    "operations": {
+      "get": {
+        "completed": 112,
+        "ops_per_second": 19.299763928337683,
+        "p50_us": 18819.959,
+        "p95_us": 33045.709
+      },
+      "search": {
+        "completed": 56,
+        "ops_per_second": 9.649881964168841,
+        "p50_us": 79070.625,
+        "p95_us": 91922.542
+      },
+      "upsert": {
+        "completed": 56,
+        "ops_per_second": 9.649881964168841,
+        "p50_us": 144190.417,
+        "p95_us": 622497.125
+      }
+    },
+    "platform": "darwin/arm64",
+    "records": 4096,
+    "redis": "8.2.11",
+    "redis_config": {
+      "appendfsync": "always",
+      "appendonly": "yes",
+      "maxmemory-policy": "noeviction",
+      "save": ""
+    },
+    "revision": "0892cb7e41ab60763518b365bc5a7d3f57a3ed80",
+    "seed": 94,
+    "storage_layout": "snapshot",
+    "top": 8,
+    "workers": 4
+  },
+  {
+    "client_heap_alloc_bytes": 25132040,
+    "database_cgroup_bytes": 106479616,
+    "dimensions": 128,
+    "duration_seconds": 5.288050459,
+    "errors": 0,
+    "expected_cancellations": 1,
+    "go": "go1.26.1",
+    "logical_cpus": 11,
+    "native_indexes": false,
+    "operations": {
+      "get": {
+        "completed": 124,
+        "ops_per_second": 23.449095458035607,
+        "p50_us": 20571.833,
+        "p95_us": 29876.375
+      },
+      "search": {
+        "completed": 62,
+        "ops_per_second": 11.724547729017804,
+        "p50_us": 80447.166,
+        "p95_us": 100240.375
+      },
+      "upsert": {
+        "completed": 62,
+        "ops_per_second": 11.724547729017804,
+        "p50_us": 202681.292,
+        "p95_us": 489650.958
+      }
+    },
+    "platform": "darwin/arm64",
+    "records": 4096,
+    "redis": "8.2.11",
+    "redis_config": {
+      "appendfsync": "always",
+      "appendonly": "yes",
+      "maxmemory-policy": "noeviction",
+      "save": ""
+    },
+    "revision": "0892cb7e41ab60763518b365bc5a7d3f57a3ed80",
+    "seed": 94,
+    "storage_layout": "snapshot",
+    "top": 8,
+    "workers": 4
+  }
+]

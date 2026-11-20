@@ -19,6 +19,8 @@ window includes client-side result checks and draining the last complete cycle.
 Workers submit their next operation after completing the previous one. These
 figures describe a small, warm dataset at four-way concurrency.
 
+See the [Redis and PostgreSQL comparison](../redis-mixed/report.md) for results on the same workload.
+
 ## Common profile for Redis comparison
 
 - Seed 4,096 int64 IDs from 0 through 4,095, each with a 128-dimensional
