@@ -11,5 +11,7 @@ docker run --rm -v "$PWD/internal/parity/catalog:/catalog:ro" mcr.microsoft.com/
     cp "$project" "$dir/packages.lock.json" "$target/"
     dotnet restore "$target/Reference.csproj" --locked-mode -warnaserror
   done'
-image=$(docker build -q -f internal/parity/catalog/memory/Dockerfile .)
-docker run --rm "$image"
+for provider in memory sqlite; do
+  image=$(docker build -q --build-arg "provider=$provider" -f internal/parity/catalog/Dockerfile .)
+  docker run --rm "$image"
+done

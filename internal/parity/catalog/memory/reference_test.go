@@ -1,4 +1,4 @@
-//go:build memoryparity
+//go:build referenceparity
 
 package memoryparity
 

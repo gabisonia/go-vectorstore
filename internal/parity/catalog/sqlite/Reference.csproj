@@ -1,4 +1,8 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.VectorData.SqliteVec" Version="[1.0.4-preview]" />
   </ItemGroup>

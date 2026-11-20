@@ -27,7 +27,13 @@ Neon shares the PostgreSQL connector. The deprecated volatile store maps to in-m
 Run `bash scripts/test-reference-catalog.sh` with Docker to restore the other
 16 reference projects in locked mode and exercise the in-memory stores against
 the same records. The memory fixture compares filtered cosine ranking, vector
-retrieval and deletion. The MongoDB, Couchbase and Oracle reference projects
+retrieval and deletion. The SQLite fixture opens the same file with both sqlite-vec
+implementations. Each creator supplies an integer key and a named cosine-distance
+vector. The Go fixture writes the payload and vector in one transaction. C#
+checks nearest-neighbor order and deletes from both physical tables. This is
+a file-format test. A public SQLite native adapter is still pending.
+
+The MongoDB, Couchbase and Oracle reference projects
 pin patched transitive dependencies flagged by NuGet audit. Their live service
 behavior still needs validation.
 
