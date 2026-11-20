@@ -59,19 +59,20 @@ func TestSharedIndex(t *testing.T) {
 		t.Fatal(err)
 	}
 	query := []float32{1, 0}
-	for deadline := time.Now().Add(time.Minute); ; {
-		hits, err := c.Search(ctx, query, 3, nil)
-		if err == nil && len(hits) == 3 && hits[0].ID == "excluded" && hits[1].ID == "go" && hits[2].ID == "seed" {
+	// Vector and keyword changes can become searchable at different times.
+	// Poll reads only, until both reflect the same acknowledged document update.
+	for deadline := time.Now().Add(90 * time.Second); ; {
+		all, allErr := c.Search(ctx, query, 3, nil)
+		filtered, filterErr := c.Search(ctx, query, 3, &p.Text)
+		allReady := allErr == nil && len(all) == 3 && all[0].ID == "excluded" && all[1].ID == "go" && all[2].ID == "seed"
+		filterReady := filterErr == nil && len(filtered) == 2 && filtered[0].ID == "go" && filtered[1].ID == "seed" && filtered[0].Score > filtered[1].Score
+		if allReady && filterReady {
 			break
 		}
 		if time.Now().After(deadline) {
-			t.Fatalf("unfiltered ranking %+v %v", hits, err)
+			t.Fatalf("search visibility: all=%+v (%v), filtered=%+v (%v)", all, allErr, filtered, filterErr)
 		}
 		time.Sleep(time.Second)
-	}
-	hits, err := c.Search(ctx, query, 3, &p.Text)
-	if err != nil || len(hits) != 2 || hits[0].ID != "go" || hits[1].ID != "seed" || hits[0].Score <= hits[1].Score {
-		t.Fatalf("filtered ranking %+v %v", hits, err)
 	}
 	ref("verify")
 	p, err = c.Get(ctx, "go")
