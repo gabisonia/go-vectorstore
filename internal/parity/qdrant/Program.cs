@@ -24,6 +24,10 @@ switch (args[0])
         record.Category = "updated";
         await collection.UpsertAsync(record);
         break;
+    case "verify-deletion":
+        if (await collection.GetAsync(ulong.MaxValue) is not null || await collection.GetAsync(7) is null)
+            throw new InvalidOperationException("Delete affected the wrong records");
+        break;
     default: throw new ArgumentException("Unknown phase");
 }
 
