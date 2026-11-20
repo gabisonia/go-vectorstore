@@ -1,0 +1,20 @@
+{
+  "type": "fulltext-index",
+  "name": "vectors",
+  "sourceType": "gocbcore",
+  "sourceName": "parity",
+  "params": {
+    "doc_config": {"mode": "scope.collection.type_field", "type_field": "type"},
+    "mapping": {
+      "default_mapping": {"enabled": false, "dynamic": false},
+      "types": {
+        "docs.articles": {"enabled": true, "dynamic": false, "properties": {
+          "Body": {"enabled": true, "dynamic": false, "fields": [{"name": "Body", "type": "text", "analyzer": "keyword", "index": true}]},
+          "Direction": {"enabled": true, "dynamic": false, "fields": [{"name": "Direction", "type": "vector", "dims": 2, "similarity": "cosine", "index": true}]}
+        }}
+      }
+    },
+    "store": {"indexType": "scorch", "segmentVersion": 16}
+  },
+  "planParams": {"indexPartitions": 1, "numReplicas": 0}
+}
