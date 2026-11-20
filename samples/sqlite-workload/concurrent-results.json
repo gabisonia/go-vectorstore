@@ -1,0 +1,115 @@
+{
+  "profile": "measured",
+  "source": "3309103 plus accompanying workload",
+  "platform": "darwin/arm64",
+  "go": "1.26.1",
+  "journal_mode": "WAL",
+  "synchronous": "FULL",
+  "busy_timeout_ms": 0,
+  "runs": [
+    {
+      "dimensions": 32,
+      "elapsed_ms": 837.413542,
+      "layout": "canonical",
+      "mixed": false,
+      "overlapping_pairs": 0,
+      "records": 1124,
+      "search": {
+        "Count": 100,
+        "LockErrors": 0,
+        "Cancellations": 0,
+        "UnexpectedErrors": 0,
+        "P50us": 8277.375,
+        "P95us": 9236.084,
+        "CallsPerSecond": 119.41531272729287
+      },
+      "write": {
+        "Count": 0,
+        "LockErrors": 0,
+        "Cancellations": 0,
+        "UnexpectedErrors": 0,
+        "P50us": 0,
+        "P95us": 0,
+        "CallsPerSecond": 0
+      }
+    },
+    {
+      "dimensions": 32,
+      "elapsed_ms": 836.535625,
+      "layout": "canonical",
+      "mixed": true,
+      "overlapping_pairs": 100,
+      "records": 1124,
+      "search": {
+        "Count": 100,
+        "LockErrors": 0,
+        "Cancellations": 0,
+        "UnexpectedErrors": 0,
+        "P50us": 8344.625,
+        "P95us": 8770.959,
+        "CallsPerSecond": 119.54063522399301
+      },
+      "write": {
+        "Count": 100,
+        "LockErrors": 0,
+        "Cancellations": 0,
+        "UnexpectedErrors": 0,
+        "P50us": 210.375,
+        "P95us": 341.667,
+        "CallsPerSecond": 119.54063522399301
+      }
+    },
+    {
+      "dimensions": 32,
+      "elapsed_ms": 90.075542,
+      "layout": "packed_go",
+      "mixed": false,
+      "overlapping_pairs": 0,
+      "records": 1124,
+      "search": {
+        "Count": 100,
+        "LockErrors": 0,
+        "Cancellations": 0,
+        "UnexpectedErrors": 0,
+        "P50us": 871.709,
+        "P95us": 1035.708,
+        "CallsPerSecond": 1110.1792759681646
+      },
+      "write": {
+        "Count": 0,
+        "LockErrors": 0,
+        "Cancellations": 0,
+        "UnexpectedErrors": 0,
+        "P50us": 0,
+        "P95us": 0,
+        "CallsPerSecond": 0
+      }
+    },
+    {
+      "dimensions": 32,
+      "elapsed_ms": 118.038708,
+      "layout": "packed_go",
+      "mixed": true,
+      "overlapping_pairs": 100,
+      "records": 1124,
+      "search": {
+        "Count": 100,
+        "LockErrors": 0,
+        "Cancellations": 0,
+        "UnexpectedErrors": 0,
+        "P50us": 1169.791,
+        "P95us": 1416.5,
+        "CallsPerSecond": 847.1797234513953
+      },
+      "write": {
+        "Count": 100,
+        "LockErrors": 0,
+        "Cancellations": 0,
+        "UnexpectedErrors": 0,
+        "P50us": 264.416,
+        "P95us": 538.709,
+        "CallsPerSecond": 847.1797234513953
+      }
+    }
+  ]
+}
