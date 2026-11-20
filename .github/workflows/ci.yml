@@ -130,6 +130,8 @@ jobs:
   integration-redis:
     name: Redis ${{ matrix.redis }} (Go ${{ matrix.go }})
     runs-on: ubuntu-latest
+    # Bound build/startup and sample execution as well as the Go test binaries.
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:

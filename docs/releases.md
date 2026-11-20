@@ -62,6 +62,8 @@ and deletion disabled and apply the protection to administrators. A solo-maintai
 repository can require PRs with zero approving reviews; this enforces tested
 changes without requiring authors to approve their own PRs. Repository settings
 are separate from workflow code and must be verified after configuration.
+Redis jobs also have a 30-minute overall limit covering build/startup and samples,
+in addition to their individual Go test timeouts.
 
 For this candidate, VERSION is 0.5.0. No tag is created by merging its PR. Use
 `go get github.com/gabisonia/go-vectorstore@latest` for the latest published release
