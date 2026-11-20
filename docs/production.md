@@ -111,6 +111,61 @@ write, terminate its PostgreSQL backend, and verify native error propagation,
 transaction rollback and subsequent operation through a replacement connection.
 They do not simulate every failover mode or the ambiguous-commit window.
 
+## PostgreSQL logical backup and restore
+
+The integration drill uses the public model API to insert three generated keys,
+delete the highest one, and take a custom-format logical backup. It acknowledges
+another insert on the source after the dump completes. The target is a separate
+empty database on the same disposable server. Inside the container, the harness
+runs these commands with its own source name, target name and archive path:
+
+```sh
+pg_dump -U postgres -Fc -f "$archive" "$source_db"
+createdb -U postgres -T template0 "$target_db"
+pg_restore -U postgres --exit-on-error --single-transaction -d "$target_db" "$archive"
+```
+
+A fresh pool lists the restored registration, rejects a changed vector dimension,
+and reopens the original definition. The drill checks both surviving records,
+including the exact bigint `9007199254740993` and their vectors. A filtered
+L2 search excludes a closer row whose bigint differs by one. Both the deleted
+key and the later source insert are absent at the backup cutoff.
+
+In both observed runs, keys 1 and 2 survived and key 3 stayed deleted. The next
+insert on the restored database returned 4 and was readable. The source had
+independently allocated 4 after the dump for different data. Generated keys can
+have gaps, and a key from the source's later history can identify a different
+record after restore. Reconcile external references against the recovery point.
+
+Run the restore and connection-loss drills together with Docker and an unset
+`PGVECTOR_TEST_DSN` so the suite owns the fixture:
+
+```sh
+for version in pg16 pg18; do
+  PGVECTOR_TEST_IMAGE="pgvector/pgvector:$version" go test -count=1 -race -v \
+    -tags=integration -timeout=5m \
+    -run '^TestIntegration(LogicalBackupRestore|ConnectionLossRollbackAndPoolRecovery)$' ./stores/postgres || exit 1
+done
+```
+
+| PostgreSQL | pgvector | Target creation through first verified new write |
+| --- | --- | ---: |
+| 16.16 | 0.8.7 | 161 ms |
+| 18.7 | 0.8.7 | 169 ms |
+
+These are single local observations on Docker Desktop 29.9.3 with the archive
+already available, both databases on one server, and two live records at the
+cutoff. The interval includes restore, reopening and application checks. Host
+provisioning, archive transfer, WAL replay and traffic cutover require separate
+timing on the deployment.
+
+The companion connection-loss test receives SQLSTATE `57P01` after terminating
+a backend blocked inside an uncommitted batch. Reads through the replacement
+connection confirm rollback, and a subsequent write succeeds. Losing a reply
+during commit can still leave the outcome unknown. Reconcile against the
+authoritative database before replaying a write. A restored backup only answers
+questions about state captured at its cutoff.
+
 ## SQLite files, recovery and backups
 
 Use a local filesystem with SQLite-compatible locking. Each Store has one pooled
