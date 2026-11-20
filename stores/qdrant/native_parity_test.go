@@ -3,13 +3,32 @@
 package qdrant
 
 import (
+	"errors"
+	"io"
 	"math"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
+	"sync/atomic"
 	"testing"
 )
+
+// lostNativeReply lets the real server complete a mutation before losing its
+// HTTP acknowledgement. It counts attempts on this client independently.
+type lostNativeReply struct{ attempts atomic.Int32 }
+
+func (r *lostNativeReply) RoundTrip(req *http.Request) (*http.Response, error) {
+	response, err := http.DefaultTransport.RoundTrip(req)
+	if err != nil || req.Method != http.MethodPut {
+		return response, err
+	}
+	r.attempts.Add(1)
+	_, _ = io.Copy(io.Discard, response.Body)
+	response.Body.Close()
+	return nil, io.ErrUnexpectedEOF
+}
 
 // TestNativeDotNetParity exercises the wire mapping against the locked C#
 // connector before any native storage contract is added to the public API.
@@ -63,6 +82,25 @@ func TestNativeDotNetParity(t *testing.T) {
 			hits, err := collection.SearchKeyword(ctx, []float32{1, 0}, 2, "category", "go")
 			if err != nil || len(hits) != 1 || hits[0].ID != id || math.Abs(hits[0].Score-1) > 1e-6 {
 				t.Fatalf("native query: %+v, %v", hits, err)
+			}
+			// Lose a real acknowledgement and verify that the client does not replay the write.
+			transport := new(lostNativeReply)
+			uncertainStore, err := New(StoreOptions{URL: url, HTTPClient: &http.Client{Transport: transport}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer uncertainStore.Close()
+			uncertain, err := uncertainStore.AttachNativeCosine(ctx, name, "direction", 2)
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = uncertain.UpsertPoint(ctx, NativePoint{9, map[string]any{"category": "uncertain"}, []float32{0, 1}})
+			if !errors.Is(err, ErrNativeOutcomeUnknown) || transport.attempts.Load() != 1 {
+				t.Fatalf("lost reply: attempts=%d, err=%v", transport.attempts.Load(), err)
+			}
+			observed, err := collection.GetPoint(ctx, 9)
+			if err != nil || observed.Payload["category"] != "uncertain" {
+				t.Fatalf("committed point after lost reply: %+v, %v", observed, err)
 			}
 			runner(t, "verify", name)
 			updated, err := collection.GetPoint(ctx, id)
