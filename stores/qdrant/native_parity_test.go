@@ -97,6 +97,21 @@ func TestNativeDotNetParity(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
+				threshold := -0.5
+				page, err := c.Search(ctx, "content", []float32{1, 0, 0}, 1, NativeSearchOptions{Skip: 1, ScoreThreshold: &threshold})
+				rawPage := runner(t, "named-dense", name)
+				var referencePage []NamedHit[uuid.UUID]
+				if decodeErr := json.Unmarshal(rawPage, &referencePage); decodeErr != nil {
+					t.Fatalf("reference page: %s: %v", rawPage, decodeErr)
+				}
+				if err != nil || len(page) != 1 || len(referencePage) != 1 || page[0].ID != id || referencePage[0].ID != id || math.Abs(page[0].Score-referencePage[0].Score) > 1e-6 {
+					t.Fatalf("dense page: %+v vs %+v: %v", page, referencePage, err)
+				}
+				threshold = 0.5
+				filtered, err := c.Search(ctx, "content", []float32{1, 0, 0}, 2, NativeSearchOptions{ScoreThreshold: &threshold})
+				if err != nil || len(filtered) != 1 || filtered[0].ID != seed {
+					t.Fatalf("score threshold: %+v %v", filtered, err)
+				}
 				hits, err := c.HybridSearch(ctx, "title", []float32{1, 0}, "body", []string{"retrieval"}, 2)
 				var reference []NamedHit[uuid.UUID]
 				raw := runner(t, "named-verify", name)

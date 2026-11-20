@@ -27,6 +27,13 @@ if (args[0].StartsWith("named-"))
                 hits.Add(new { ID = hit.Record.Id, Score = hit.Score });
             Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(hits));
             break;
+        case "named-dense":
+            var page = new List<object>();
+            await foreach (var hit in named.SearchAsync(new ReadOnlyMemory<float>(new float[] { 1, 0, 0 }), 1,
+                new() { VectorProperty = x => x.Content, Skip = 1, ScoreThreshold = -0.5 }))
+                page.Add(new { ID = hit.Record.Id, Score = hit.Score });
+            Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(page));
+            break;
         case "named-delete":
             await named.DeleteAsync(id);
             break;

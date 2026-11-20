@@ -17,7 +17,8 @@ The unreleased `qdrant.AttachNativePoints[K]` also opens externally managed
 Qdrant collections by physical name. Choose `uint64` or `uuid.UUID` for the
 point ID and supply the complete map of named dense cosine vectors to their
 dimensions. `UpsertPoint` requires all configured vectors and replaces the full
-payload. `GetPoint` retrieves the vectors and payload. `SearchKeyword` uses a
+payload. `GetPoint` retrieves the vectors and payload. `Search` selects a named
+vector and accepts a skip offset and minimum similarity. `SearchKeyword` uses a
 keyword index. `HybridSearch` accepts an indexed text field and fuses its keyword
 matches with the named vector search using Qdrant's reciprocal rank fusion.
 

@@ -206,13 +206,42 @@ func (c *NativeVectorCollection) SearchKeyword(ctx context.Context, vector []flo
 
 // SearchKeyword searches a selected vector with server-side keyword equality.
 func (c *NativePoints[K]) SearchKeyword(ctx context.Context, name string, vector []float32, top int, field, value string) ([]NamedHit[K], error) {
-	if !c.keywordFields[field] || !nativeName.MatchString(field) || top <= 0 {
-		return nil, fmt.Errorf("%w: expected indexed keyword and positive top", vectordata.ErrInvalidRecord)
+	return c.Search(ctx, name, vector, top, NativeSearchOptions{Keyword: &NativeKeywordFilter{Field: field, Value: value}})
+}
+
+// NativeKeywordFilter applies exact equality on an indexed keyword field.
+type NativeKeywordFilter struct{ Field, Value string }
+
+// NativeSearchOptions selects a page of native cosine hits. The threshold is
+// expressed in Qdrant's raw similarity units.
+type NativeSearchOptions struct {
+	Skip           int
+	ScoreThreshold *float64
+	Keyword        *NativeKeywordFilter
+}
+
+// Search ranks points on the selected physical vector. The zero options value
+// performs an unfiltered nearest-neighbor query.
+func (c *NativePoints[K]) Search(ctx context.Context, name string, vector []float32, top int, opts NativeSearchOptions) ([]NamedHit[K], error) {
+	if top < 1 || opts.Skip < 0 {
+		return nil, vectordata.ErrInvalidRecord
 	}
 	if err := c.validateVector(name, vector); err != nil {
 		return nil, err
 	}
-	query := map[string]any{"using": name, "query": vector, "limit": top, "filter": map[string]any{"must": []any{map[string]any{"key": field, "match": map[string]string{"value": value}}}}}
+	query := map[string]any{"using": name, "query": vector, "limit": top, "offset": opts.Skip}
+	if threshold := opts.ScoreThreshold; threshold != nil {
+		if math.IsNaN(*threshold) || math.IsInf(*threshold, 0) {
+			return nil, vectordata.ErrInvalidRecord
+		}
+		query["score_threshold"] = *threshold
+	}
+	if filter := opts.Keyword; filter != nil {
+		if !c.keywordFields[filter.Field] || !nativeName.MatchString(filter.Field) {
+			return nil, fmt.Errorf("%w: expected indexed keyword", vectordata.ErrInvalidRecord)
+		}
+		query["filter"] = map[string]any{"must": []any{map[string]any{"key": filter.Field, "match": map[string]string{"value": filter.Value}}}}
+	}
 	return c.query(ctx, query)
 }
 
