@@ -5,10 +5,12 @@ package azuresearchparity
 import (
 	"bytes"
 	"context"
-	"encoding/json"
+	"errors"
+	"net/http"
+
 	"fmt"
 	"io"
-	"net/http"
+
 	"os"
 	"os/exec"
 	"regexp"
@@ -16,6 +18,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gabisonia/go-vectorstore/stores/azuresearch"
 	"github.com/google/uuid"
 )
 
@@ -58,42 +61,20 @@ func TestLocalSearch(t *testing.T) {
 	if err := ref(ctx, "seed"); err != nil {
 		t.Fatal(err)
 	}
-	httpClient := http.Client{Timeout: 20 * time.Second, CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }}
-	post := func(path, body string, out any) {
-		t.Helper()
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint+"/indexes/"+index+"/docs/"+path+"?api-version=2025-09-01", strings.NewReader(body))
-		if err != nil {
-			t.Fatal(err)
-		}
-		req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(string(token)))
-		req.Header.Set("Content-Type", "application/json")
-		resp, err := httpClient.Do(req)
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer resp.Body.Close()
-		if resp.StatusCode/100 != 2 {
-			t.Fatalf("%s returned %s", path, resp.Status)
-		}
-		if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
-			t.Fatal(err)
-		}
+	collection, err := azuresearch.AttachNative(ctx, azuresearch.Options{Endpoint: endpoint, Token: func(context.Context) (string, error) { return strings.TrimSpace(string(token)), nil }}, index, azuresearch.NativeSchema{Key: "Id", Text: "Body", Vector: "Direction", Dimensions: 2})
+	if err != nil {
+		t.Fatal(err)
 	}
-	var write struct {
-		Value []struct {
-			Status bool
-			Key    string
-		}
-	}
-	post("index", `{"value":[{"@search.action":"upload","Id":"go","Body":"Go document","Direction":[1,0]}]}`, &write)
-	if len(write.Value) != 1 || write.Value[0].Key != "go" || !write.Value[0].Status {
-		t.Fatalf("upload: %+v", write)
+	if err := collection.Upsert(ctx, azuresearch.NativeDocument{ID: "go", Text: "Go document", Vector: []float32{1, 0}}); err != nil {
+		t.Fatal(err)
 	}
 	for {
-		var hits struct{ Value []struct{ Id, Body string } }
-		post("search", `{"select":"Id,Body","top":2,"vectorQueries":[{"kind":"vector","vector":[1,0],"fields":"Direction","k":2}]}`, &hits)
-		if len(hits.Value) == 2 {
-			if hits.Value[0].Id != "go" || hits.Value[1].Id != "seed" || hits.Value[1].Body != "reference" {
+		hits, err := collection.Search(ctx, []float32{1, 0}, 2)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(hits) == 2 {
+			if hits[0].ID != "go" || hits[1].ID != "seed" || hits[1].Text != "reference" || hits[0].Score <= hits[1].Score {
 				t.Fatalf("Go ranking: %+v", hits)
 			}
 			break
@@ -104,7 +85,32 @@ func TestLocalSearch(t *testing.T) {
 		case <-time.After(time.Second):
 		}
 	}
+	seedText, err := collection.GetText(ctx, "seed")
+	if err != nil || seedText != "reference" {
+		t.Fatalf("C# document read: %q %v", seedText, err)
+	}
 	if err := ref(ctx, "verify"); err != nil {
+		t.Fatal(err)
+	}
+	if err := collection.Delete(ctx, "go"); err != nil {
+		t.Fatal(err)
+	}
+	for {
+		_, err := collection.GetText(ctx, "go")
+		var status *azuresearch.ResponseError
+		if errors.As(err, &status) && status.StatusCode == http.StatusNotFound {
+			break
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		select {
+		case <-ctx.Done():
+			t.Fatal(ctx.Err())
+		case <-time.After(time.Second):
+		}
+	}
+	if err := ref(ctx, "verify-delete"); err != nil {
 		t.Fatal(err)
 	}
 }

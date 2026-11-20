@@ -23,6 +23,9 @@ switch (args[0])
             hits.Add(hit.Record.Id);
         if (!hits.SequenceEqual(new[] { "go", "seed" })) throw new InvalidOperationException("C# ranking differs");
         break;
+    case "verify-delete":
+        if (await collection.GetAsync("go") != null) throw new InvalidOperationException("Go deletion was not visible");
+        break;
     case "cleanup":
         await collection.EnsureCollectionDeletedAsync();
         break;
