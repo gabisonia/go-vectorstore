@@ -312,6 +312,9 @@ func TestPublicationLostReplyConfirmedAfterSupersedingWrite(t *testing.T) {
 		if err := p.publish(t.Context(), b); err != nil {
 			return nil, err
 		}
+		if err := p.reclaim(t.Context(), a); err != nil {
+			return nil, fmt.Errorf("cleanup after superseding write: %v", err)
+		}
 		return nil, dropped
 	})
 	if err := fault.publish(t.Context(), a); err != nil {
@@ -320,6 +323,9 @@ func TestPublicationLostReplyConfirmedAfterSupersedingWrite(t *testing.T) {
 	m, rows, err := p.snapshot(t.Context(), initial.Epoch)
 	if err != nil || !slices.Equal(rows, bRows) || m.Next != 3 || writes.Load() != 1 || len(m.Receipts) != 5 {
 		t.Fatalf("superseding publication: root=%+v writes=%d err=%v", m, writes.Load(), err)
+	}
+	if got := retrieve(t, p.path, a.id(0)); len(got) != 0 {
+		t.Fatal("superseded payload was not reclaimed")
 	}
 	if err := proofClient(t, p.path).confirm(t.Context(), a); err != nil {
 		t.Fatal("new client could not reconcile superseded A:", err)
@@ -530,6 +536,10 @@ func TestPublicationReaderPinsGenerationAcrossConcurrentPublication(t *testing.T
 					response.Body.Close()
 					return nil, err
 				}
+				if err := p.reclaim(t.Context(), old); !errors.Is(err, errProofConflict) {
+					response.Body.Close()
+					return nil, fmt.Errorf("cleanup while reader is paused: %v", err)
+				}
 			}
 		}
 		return response, err
@@ -542,13 +552,108 @@ func TestPublicationReaderPinsGenerationAcrossConcurrentPublication(t *testing.T
 	if err != nil || current.Head != next.Token || !slices.Equal(actual, newRows) {
 		t.Fatal("new reader missed publication:", err)
 	}
-	if !errors.Is(p.prune(t.Context()), vectordata.ErrUnsupported) {
-		t.Fatal("cleanup must not truncate old readers")
+	if err := p.reclaim(t.Context(), old); err != nil {
+		t.Fatal(err)
 	}
-	if actual, err := p.readGeneration(t.Context(), old); err != nil || !slices.Equal(actual, oldRows) {
-		t.Fatal("old generation no longer readable:", err)
+	if got := retrieve(t, p.path, old.id(0), old.id(1), old.id(2), old.id(3)); len(got) != 0 {
+		t.Fatal("retired points remain after confirmed cleanup")
 	}
 }
+
+func TestPublicationGuardedReaderPin(t *testing.T) {
+	p, initial, d := proofFixture(t)
+	oldRows := proofRows(t, d, "old", 4)
+	old := proofStage(t, p, oldRows, 5)
+	if err := p.publish(t.Context(), old); err != nil {
+		t.Fatal(err)
+	}
+	base := proofRead(t, p)
+	pin, err := p.pinHead(t.Context(), base)
+	if err != nil {
+		t.Fatal(err)
+	}
+	other := proofClient(t, p.path)
+	second, err := other.pinHead(t.Context(), proofRead(t, other))
+	if err != nil {
+		t.Fatal(err)
+	}
+	stale := proofRead(t, p)
+	newRows := proofRows(t, d, "new", 4)
+	next := proofStage(t, p, newRows, 9)
+	if err := p.publish(t.Context(), next); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.pinHead(t.Context(), stale); !errors.Is(err, errProofConflict) {
+		t.Fatalf("stale head pin: %v", err)
+	}
+	current := proofRead(t, p)
+	if current.Head != next.Token || !slices.Contains(current.Pins, pin) {
+		t.Fatal("publication lost reader pin")
+	}
+	if rows, err := p.readGeneration(t.Context(), old); err != nil || !slices.Equal(rows, oldRows) {
+		t.Fatalf("pinned reader: %v", err)
+	}
+	if err := p.releasePin(t.Context(), pin); err != nil {
+		t.Fatal(err)
+	}
+	if err := p.reclaim(t.Context(), old); !errors.Is(err, errProofConflict) {
+		t.Fatalf("cleanup with a second reader: %v", err)
+	}
+	if err := other.releasePin(t.Context(), second); err != nil {
+		t.Fatal(err)
+	}
+	if err := p.reclaim(t.Context(), old); err != nil {
+		t.Fatal(err)
+	}
+	current, rows, err := p.snapshot(t.Context(), initial.Epoch)
+	if err != nil || current.Head != next.Token || len(current.Pins) != 0 || !slices.Equal(rows, newRows) {
+		t.Fatalf("release or successor read: %v", err)
+	}
+}
+
+// Demonstrate why observing a newer head alone cannot authorize deletion.
+// This deliberately unsafe deletion is confined to the owned test collection.
+func TestPublicationNaiveCleanupBreaksPausedReader(t *testing.T) {
+	p, initial, d := proofFixture(t)
+	oldRows, newRows := proofRows(t, d, "old", 4), proofRows(t, d, "new", 4)
+	old := proofStage(t, p, oldRows, 5)
+	if err := p.publish(t.Context(), old); err != nil {
+		t.Fatal(err)
+	}
+	next := proofStage(t, p, newRows, 9)
+	pages := 0
+	reader := proofIntercept(p, func(r *http.Request, transport http.RoundTripper) (*http.Response, error) {
+		response, err := transport.RoundTrip(r)
+		if err == nil && proofDataRead(r) {
+			pages++
+			if pages == 1 {
+				if err := p.publish(t.Context(), next); err != nil {
+					response.Body.Close()
+					return nil, err
+				}
+				var result responseDelete
+				status, err := request(t.Context(), p.http, "POST", p.path+"/points/delete?wait=true&ordering=strong", map[string]any{"points": []int{old.id(0), old.id(1), old.id(2), old.id(3)}}, &result)
+				if err != nil || status != http.StatusOK || result.Result.Status != "completed" {
+					response.Body.Close()
+					return nil, fmt.Errorf("unsafe fixture deletion: status=%d result=%+v: %w", status, result, err)
+				}
+			}
+		}
+		return response, err
+	})
+	_, actual, err := reader.snapshot(t.Context(), initial.Epoch)
+	if !errors.Is(err, errProofCorrupt) || actual != nil || pages != 2 {
+		t.Fatalf("expected failed snapshot without partial results: pages=%d records=%v err=%v", pages, actual, err)
+	}
+	current, actual, err := p.snapshot(t.Context(), initial.Epoch)
+	if err != nil || current.Head != next.Token || !slices.Equal(actual, newRows) {
+		t.Fatalf("successor should remain readable: %v", err)
+	}
+}
+
+type responseDelete = response[struct {
+	Status string `json:"status"`
+}]
 
 func TestPublicationDeleteRecreateFencesStaleClients(t *testing.T) {
 	p, initial, d := proofFixture(t)

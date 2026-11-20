@@ -27,6 +27,7 @@ const (
 	proofGenerationBytes = 64 << 10
 	proofDefinitionBytes = 8 << 10
 	proofReceipts        = 128
+	proofReaderPins      = 16
 )
 
 var (
@@ -45,6 +46,10 @@ type generation struct {
 	Next                   int64
 }
 
+type readerPin struct {
+	Token, Generation string
+}
+
 type manifest struct {
 	Format                            int
 	Revision, Epoch, Definition, Head string
@@ -53,6 +58,8 @@ type manifest struct {
 	Slots                             []generation
 	// Stable generation tokens permit read-only reconciliation by a new client.
 	Published []string
+	// Experimental pins are bounded and retained across logical epochs.
+	Pins []readerPin
 	// Every confirmed transition retains its unique receipt for the lifetime
 	// of this root. Stop at the bound instead of evicting evidence of success.
 	Receipts []string
@@ -78,7 +85,7 @@ func proofPayload(m manifest) (map[string]any, error) {
 }
 
 func validateManifest(m manifest) error {
-	if m.Format != 1 || m.Revision == "" || len(m.Slots) > proofSlots || len(m.Published) > proofSlots || len(m.Receipts) > proofReceipts || len(m.Definition) > proofDefinitionBytes || m.Next < 1 {
+	if m.Format != 1 || m.Revision == "" || len(m.Slots) > proofSlots || len(m.Published) > proofSlots || len(m.Pins) > proofReaderPins || len(m.Receipts) > proofReceipts || len(m.Definition) > proofDefinitionBytes || m.Next < 1 {
 		return errProofCorrupt
 	}
 	if m.Active && (m.Epoch == "" || m.Definition == "") {
@@ -110,6 +117,12 @@ func validateManifest(m manifest) error {
 		}
 		seen["published:"+token] = true
 	}
+	for _, pin := range m.Pins {
+		if pin.Token == "" || seen["pin:"+pin.Token] || !seen["published:"+pin.Generation] {
+			return errProofCorrupt
+		}
+		seen["pin:"+pin.Token] = true
+	}
 	if !head {
 		return errProofCorrupt
 	}
@@ -129,6 +142,7 @@ func validateGeneration(g generation) error {
 func cloneManifest(m manifest) manifest {
 	m.Slots = slices.Clone(m.Slots)
 	m.Published = slices.Clone(m.Published)
+	m.Pins = slices.Clone(m.Pins)
 	m.Receipts = slices.Clone(m.Receipts)
 	return m
 }
@@ -380,6 +394,9 @@ func (p publicationProof) stage(ctx context.Context, g generation, records []str
 	if validateGeneration(g) != nil || g.Index >= len(root.Slots) || root.Slots[g.Index] != g {
 		return errProofCorrupt
 	}
+	if slices.Contains(root.Published, g.Token) {
+		return errProofConflict
+	}
 	digest, size := generationDigest(records)
 	if len(records) != g.Count || digest != g.Digest || size != g.Bytes {
 		return errProofCorrupt
@@ -495,6 +512,42 @@ func (p publicationProof) confirm(ctx context.Context, g generation) error {
 	return errProofUnknown
 }
 
+// pinHead registers the observed head using the same revision fence as writers.
+// On an unknown outcome the token is retained by the caller, but the reader
+// must not access the generation until positive registration is established.
+func (p publicationProof) pinHead(ctx context.Context, base manifest) (readerPin, error) {
+	if !base.Active || base.Head == "" {
+		return readerPin{}, errProofStale
+	}
+	if len(base.Pins) >= proofReaderPins {
+		return readerPin{}, errProofLimit
+	}
+	token, err := newProofToken()
+	if err != nil {
+		return readerPin{}, err
+	}
+	pin := readerPin{Token: token, Generation: base.Head}
+	next := cloneManifest(base)
+	next.Pins = append(next.Pins, pin)
+	return pin, p.transition(ctx, base, next)
+}
+
+// releasePin is called only after the reader has permanently stopped using the
+// generation. An uncertain release cannot justify another read by that reader.
+func (p publicationProof) releasePin(ctx context.Context, pin readerPin) error {
+	base, err := p.read(ctx)
+	if err != nil {
+		return err
+	}
+	index := slices.Index(base.Pins, pin)
+	if index < 0 {
+		return errProofStale
+	}
+	next := cloneManifest(base)
+	next.Pins = slices.Delete(next.Pins, index, index+1)
+	return p.transition(ctx, base, next)
+}
+
 func (p publicationProof) snapshot(ctx context.Context, epoch string) (manifest, []string, error) {
 	m, err := p.read(ctx)
 	if err != nil {
@@ -508,14 +561,55 @@ func (p publicationProof) snapshot(ctx context.Context, epoch string) (manifest,
 	}
 	for _, g := range m.Slots {
 		if g.Token == m.Head {
-			records, err := p.readGeneration(ctx, g)
-			return m, records, err
+			pin, err := p.pinHead(ctx, m)
+			if err != nil {
+				return m, nil, err
+			}
+			records, readErr := p.readGeneration(ctx, g)
+			if err := errors.Join(readErr, p.releasePin(ctx, pin)); err != nil {
+				return m, nil, err
+			}
+			return m, records, nil
 		}
 	}
 	return m, nil, errProofCorrupt
 }
 
-// There is intentionally no online deletion API. It must not infer ownership
+// reclaim deletes only the payload of an already superseded publication.
+// Published tokens can never become head again. A new pin requires a CAS on
+// the current head, so the absence of pins here remains true during deletion.
+func (p publicationProof) reclaim(ctx context.Context, g generation) error {
+	m, err := p.read(ctx)
+	if err != nil {
+		return err
+	}
+	if g.Index < 0 || g.Index >= len(m.Slots) || m.Slots[g.Index] != g {
+		return errProofCorrupt
+	}
+	if g.Token == m.Head || !slices.Contains(m.Published, g.Token) {
+		return errProofConflict
+	}
+	for _, pin := range m.Pins {
+		if pin.Generation == g.Token {
+			return errProofConflict
+		}
+	}
+	if g.Count == 0 {
+		return nil
+	}
+	ids := make([]int, g.Count)
+	for i := range ids {
+		ids[i] = g.id(i)
+	}
+	var out responseDelete
+	status, err := request(ctx, p.http, "POST", p.path+"/points/delete?wait=true&ordering=strong", map[string]any{"points": ids}, &out)
+	if err != nil || status != 200 || out.Result.Status != "completed" {
+		return errors.Join(errProofUnknown, err)
+	}
+	return nil
+}
+
+// Untargeted pruning stays disabled. It must not infer ownership
 // or quiescence from the currently visible head: old readers and pending/unknown
 // publications may still need every reserved slot. Exhaustion fails closed.
 func (publicationProof) prune(context.Context) error { return vectordata.ErrUnsupported }
