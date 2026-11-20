@@ -15,9 +15,9 @@ Fixes can tighten behavior that violates the documented contract, such as yieldi
 buffered records after cancellation. Applications must not depend on internal SQL,
 index names, undocumented error text, timing, or driver implementation details.
 
-CI compares all exported module packages against published v0.5.0 and requires
-zero incompatible changes, including the Redis, Qdrant and other APIs first
-published in that release. The archived v0.4.1-to-v0.5.0 report records that
+CI compares all exported module packages against published v0.6.0 and requires
+zero incompatible changes, including the native connector APIs first published
+in that release. The archived v0.4.1-to-v0.5.0 report records that
 minor-version transition; it is not a current compatibility exception list.
 Advance the baseline deliberately after a release, not to bypass an unexpected
 breaking change. See [API verification](../scripts/check-api.sh).
