@@ -21,8 +21,8 @@ func env(name, fallback string) string {
 
 func main() {
 	mode := env("VECTORSTORE_SAMPLE", "services")
-	if mode != "services" && mode != "semantic-search" && mode != "ragrimosa" && mode != "local-doc-agent" {
-		log.Fatal("VECTORSTORE_SAMPLE must be services, semantic-search, ragrimosa or local-doc-agent")
+	if mode != "services" && mode != "semantic-search" && mode != "ragrimosa" && mode != "local-doc-agent" && mode != "docs-retrieval-pilot" {
+		log.Fatal("VECTORSTORE_SAMPLE must be services, semantic-search, ragrimosa, local-doc-agent or docs-retrieval-pilot")
 	}
 	builder, err := aspire.CreateBuilder()
 	if err != nil {
@@ -30,6 +30,8 @@ func main() {
 	}
 	if mode == "local-doc-agent" {
 		addAgent(builder)
+	} else if mode == "docs-retrieval-pilot" {
+		addPilot(builder)
 	} else {
 		addPostgres(builder, mode)
 	}
@@ -57,6 +59,40 @@ func main() {
 	if err := app.Run(); err != nil {
 		log.Fatal(aspire.FormatError(err))
 	}
+}
+
+func addPilot(builder aspire.DistributedApplicationBuilder) {
+	directory, err := filepath.Abs(filepath.Join("..", "docs-retrieval-pilot"))
+	if err != nil {
+		log.Fatal(err)
+	}
+	model := env("PILOT_EMBED_MODEL", "all-minilm:22m")
+	version := "0.40.16"
+	ollama := builder.AddContainer("pilot-ollama", &aspire.AddContainerOptions{Image: "ollama/ollama", Tag: &version}).
+		WithHttpEndpoint(aspire.HttpEndpointName("http"), aspire.HttpEndpointTargetPort(11434)).
+		WithHttpHealthCheck(aspire.HttpHealthCheckPath("/api/tags")).
+		WithLifetime(aspire.ContainerLifetimePersistent).
+		WithVolume("/root/.ollama", aspire.VolumeName(env("PILOT_MODEL_VOLUME", "vectorstore-docs-pilot_models"))).
+		WithContainerRuntimeArgs([]string{"--cpus=2", "--memory=1g"}).
+		WithEnvironment("OLLAMA_HOST", "0.0.0.0:11434").WithEnvironment("OLLAMA_NO_CLOUD", "1").
+		WithEnvironment("OLLAMA_NUM_PARALLEL", "1").WithEnvironment("OLLAMA_MAX_LOADED_MODELS", "1")
+	// Only the embedding model is needed; do not initialize the agent's chat model.
+	models := builder.AddContainer("pilot-models", &aspire.AddContainerOptions{Image: "ollama/ollama", Tag: &version}).
+		WithEntrypoint("/bin/sh").
+		WithArgs([]string{"-ec", `ollama show "$EMBED_MODEL" >/dev/null 2>&1 || ollama pull "$EMBED_MODEL"`}).
+		WithEnvironment("OLLAMA_HOST", ollama.GetEndpoint("http")).
+		WithEnvironment("EMBED_MODEL", model).WaitFor(ollama)
+	builder.AddGoApp("docs-retrieval-pilot", directory).
+		WithAppArgs([]any{
+			"-ollama", ollama.GetEndpoint("http"),
+			"-model", model, "-dimensions", env("PILOT_EMBED_DIMENSIONS", "384"),
+			"-corpus", env("PILOT_CORPUS", filepath.Join(directory, "..", "..", "docs")),
+			"-queries", env("PILOT_QUERIES", filepath.Join(directory, "queries.json")),
+			"-output", env("PILOT_OUTPUT", filepath.Join(directory, "data", "pilot")),
+			"-revision", env("PILOT_REVISION", "unspecified"),
+			"-concurrency", env("PILOT_CONCURRENCY", "4"),
+			"-requests-per-worker", env("PILOT_REQUESTS_PER_WORKER", "25"),
+		}).WaitForCompletion(models)
 }
 
 func portEnv(name string, fallback int) int {

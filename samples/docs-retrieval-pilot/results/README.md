@@ -19,7 +19,14 @@ The fixed model was `all-minilm:22m`, 384 dimensions, reported manifest digest
 The reports contain the exact digest observed at runtime; compare it when
 reproducing, since model tags can change.
 
-From the sample directory with its Compose service/model ready:
+These measurements used the earlier Compose-based model service before the
+sample moved into the shared Aspire host. They remain historical evidence for
+the stated source revision and runtime, rather than a claim that these timings
+were measured through Aspire. The current workflow keeps the same pinned Ollama
+image, model and thread/resource limits; see the [Aspire run instructions](../README.md#run).
+
+To reproduce the historical native CLI measurements, from the sample directory
+with a compatible Ollama service available at the supplied origin:
 
 ```sh
 GOTOOLCHAIN=go1.27.4 go run . -ollama http://127.0.0.1:11435 -revision 4ffcec7f88bd9967d9837b845cfc060c8e7ac41f -output data/patched

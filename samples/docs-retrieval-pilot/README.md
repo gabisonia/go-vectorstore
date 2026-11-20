@@ -14,40 +14,61 @@ run, per-query judgments, observed latency and a documented retrieval miss.
 
 ## Run
 
-From this directory, with a current security-patched Go 1.25+ toolchain, Docker
-and Compose v2 (`go.mod` declares the API compatibility floor):
+Use the existing [shared Aspire AppHost](../aspire-services/README.md), Aspire CLI
+17.0.0, a current security-patched Go 1.26+ toolchain and Docker. The pilot itself
+remains a Go 1.25+ consumer; only the AppHost requires Go 1.26+. From the repository
+root:
 
 ```sh
-docker compose --project-name vectorstore-docs-pilot up -d --wait
-docker compose --project-name vectorstore-docs-pilot exec -T ollama ollama pull all-minilm:22m
-go run . -ollama http://127.0.0.1:11435 -revision "$(git rev-parse HEAD)"
+VECTORSTORE_SAMPLE=docs-retrieval-pilot PILOT_REVISION="$(git rev-parse HEAD)" \
+  aspire run --apphost samples/aspire-services/apphost.go
 ```
 
 Run with a clean checkout when recording a revision. Otherwise append an explicit
-dirty label to `-revision`. The report always includes hashes of the actual corpus
-and query file. The Compose service binds only loopback, uses a separate model
-volume, reuses Docker's default bridge and limits the service to two CPUs and
-1 GiB of memory. Embedding requests explicitly use two CPU threads, recorded in
-the identity/report, to avoid excessive threading overhead for this small model. It does
-not use the shared Aspire services or their volumes. Set `PILOT_OLLAMA_PORT` on
-Compose commands and the matching `-ollama` origin if port 11435 is occupied.
-An existing local Ollama service can be used instead after pulling the same model.
+dirty label to `PILOT_REVISION`. The report also includes hashes of the actual
+corpus and query file. Select one mode per shared AppHost run; stop it before
+switching modes. For concurrent checkouts, use distinct AppHost profile ports and
+`PILOT_MODEL_VOLUME`/`PILOT_OUTPUT` values; see the shared host's operating notes.
+
+Aspire manages three resources:
+
+| Resource | Purpose |
+| --- | --- |
+| `pilot-ollama` | Pinned local Ollama, health check, dynamic endpoint, two CPUs/1 GiB and a separate persistent model cache |
+| `pilot-models` | Downloads only `all-minilm:22m` if missing, then exits successfully |
+| `docs-retrieval-pilot` | Host Go application; waits for model setup, receives the Ollama endpoint and runs the complete drill |
+
+The model cache defaults to `vectorstore-docs-pilot_models`; the agent's chat model
+and index volumes are not used. Embedding requests explicitly use two CPU threads,
+recorded in the identity/report. No database services are started in this mode.
 
 The first run embeds roughly a few thousand small chunks, depending on the
-checkout. Allow several minutes on a CPU. There are no automatic downloads from
-the Go program. Model setup needs internet access; inference stays at the
-configured Ollama origin. Keep that service and model tag unchanged during a run.
+checkout. Allow several minutes on a CPU. Aspire's model setup needs internet
+access; the Go program performs inference at the injected local Ollama endpoint.
+Keep that service and model tag unchanged during a run.
+
+In the dashboard, model setup should be `Exited` and the Go pilot `Finished`, both
+with exit code zero. In another terminal at the repo
+root, inspect logs or verify successful completion:
 
 ```sh
-# Same corpus/model/config: stored chunks are reused; only queries are embedded.
-go run . -ollama http://127.0.0.1:11435 -revision "$(git rev-parse HEAD)"
+aspire logs docs-retrieval-pilot --apphost samples/aspire-services/apphost.go --tail 20
+python3 scripts/wait-aspire-exit.py --apphost samples/aspire-services/apphost.go \
+  --resource docs-retrieval-pilot --timeout 600
 
-# A larger, still bounded store-only workload.
-go run . -ollama http://127.0.0.1:11435 -concurrency 8 -requests-per-worker 100
-go run . -help
+# Rerun with the same inputs: stored chunks are reused; only queries are embedded.
+aspire resource docs-retrieval-pilot restart --apphost samples/aspire-services/apphost.go
 ```
 
-Default output is the ignored `data/pilot` directory:
+Set `PILOT_CONCURRENCY=8 PILOT_REQUESTS_PER_WORKER=100` when launching the AppHost
+for a larger load. Optional `PILOT_CORPUS`, `PILOT_QUERIES`, `PILOT_OUTPUT`,
+`PILOT_EMBED_MODEL`, `PILOT_EMBED_DIMENSIONS` and `PILOT_MODEL_VOLUME` override the
+inputs/model/cache. Relative file paths resolve from the pilot module directory.
+An existing compatible Ollama service can also be used directly: from this
+directory, run `go run . -ollama <origin>`; `go run . -help` lists native flags.
+
+Default output is the ignored `samples/docs-retrieval-pilot/data/pilot` directory
+on the host, available after the Aspire resource exits:
 
 - `index.sqlite`: persistent typed chunks and the embedding/configuration identity.
 - `backup.sqlite`: verified offline copy after all search workers and handles close.
@@ -146,14 +167,24 @@ point this sample at application databases or replace files beneath an open stor
 
 ## Verification and cleanup
 
+From the repository root, stop the selected AppHost and its persistent resources
+while preserving model/data volumes:
+
 ```sh
+aspire stop --apphost samples/aspire-services/apphost.go --force
+```
+
+The shared host's `--volumes` option also deletes its named volumes; use it only
+when deliberately discarding those caches/databases. No global cleanup is needed.
+Run the pilot's isolated checks from its module directory:
+
+```sh
+cd samples/docs-retrieval-pilot
 # No Docker, model downloads or network service required.
 go test -race -timeout=2m ./...
 go vet ./...
 go mod verify
 
-# Stop only this pilot service and remove only its Compose model volume.
-docker compose --project-name vectorstore-docs-pilot down --volumes
 # Optional: remove this pilot's generated databases and reports.
 rm -r data/pilot
 ```
@@ -164,3 +195,5 @@ They also check metric math, Unicode windows, invalid judgments, ownership/WAL
 guards and embedding count/dimension/zero-vector/cancellation errors. Required CI
 tests this isolated module on Go 1.25/current and scans its dependencies; weekly
 scans include it. Root `go test ./...` does not traverse nested modules.
+`bash scripts/verify-aspire.sh` also restores/builds/vets the shared AppHost without
+starting services or downloading models.

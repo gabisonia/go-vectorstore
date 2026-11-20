@@ -30,7 +30,8 @@ def main():
         if state != previous:
             print(f"{args.resource}: {state}", file=sys.stderr, flush=True)
             previous = state
-        if state == "Exited":
+        # Containers exit; successfully completed Go application resources finish.
+        if state in ("Exited", "Finished"):
             code = resource.get("exitCode")
             if code not in (0, "0"):
                 raise RuntimeError(f"{args.resource} did not exit successfully (code={code!r})")
