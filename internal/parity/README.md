@@ -65,3 +65,16 @@ filtered recall@10 over 32 deterministic queries against exhaustive ranking.
 
 These cases cover standalone Qdrant. The full connector catalog, distributed
 recovery, and broader query options still require interoperability evidence.
+
+## Local Azure AI Search check
+
+Run `bash scripts/test-azure-search-parity.sh` with Docker and a signed-in
+Azure CLI. The script uses the sole Search service in the selected subscription,
+or accepts its resource name in `AZURE_SEARCH_SERVICE`. It passes a short-lived
+Search token to the container on standard input. The test creates a unique
+index, compares C# and Go document reads and vector ranking, then removes the
+index. The identity needs index-management and document read/write permissions
+on that service. The fixture uses the public Azure cloud endpoint.
+
+Live Azure operations are skipped in CI. The locked NuGet restore is still
+checked there. A successful build or restore alone does not verify Azure access.
