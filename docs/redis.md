@@ -714,3 +714,15 @@ they do not measure peak RSS, isolate per-collection memory or establish product
 capacity or a leak-free steady state. Repeat longer tests with representative
 dimensions, collection sizes, write rates and deployment backup tooling before
 relying on this connector operationally.
+
+## C# connector collections
+
+Attach to an existing Redis Search index with
+`store.AttachNativeCosine(ctx, indexName, vectorField, dimensions)`.
+The index must use the C# connector's collection-name prefix and a named
+FLOAT32 cosine vector. `Search` returns logical string IDs and raw Redis
+cosine distances. For a model with one string and one vector, use
+`GetDocument`, `UpsertDocument` and `DeleteDocument`. Hash upserts update
+the named fields. JSON upserts replace the root document. An unacknowledged
+write returns `ErrNativeOutcomeUnknown`. Run
+`bash scripts/test-redis-parity.sh` for both layouts on Redis 8.2.

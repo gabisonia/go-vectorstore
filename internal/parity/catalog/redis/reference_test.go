@@ -3,12 +3,13 @@
 package redisparity
 
 import (
-	"encoding/binary"
-	"encoding/json"
+	"errors"
 	"os/exec"
 	"slices"
 	"testing"
 
+	storeRedis "github.com/gabisonia/go-vectorstore/stores/redis"
+	"github.com/gabisonia/go-vectorstore/vectordata"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -16,6 +17,11 @@ func TestNativeLayouts(t *testing.T) {
 	ctx := t.Context()
 	client := redis.NewClient(&redis.Options{Addr: "localhost:6379", Protocol: 2, MaxRetries: -1})
 	defer client.Close()
+	store, err := storeRedis.New(storeRedis.StoreOptions{Addr: "localhost:6379"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
 	for _, layout := range []string{"JSON", "HASH"} {
 		for _, creator := range []string{"go", "csharp"} {
 			t.Run(layout+"_"+creator, func(t *testing.T) {
@@ -38,56 +44,34 @@ func TestNativeLayouts(t *testing.T) {
 					}
 				}
 				ref("seed")
-				type document struct {
-					Body      string
-					Direction []float32
+				if _, err := store.AttachNativeCosine(ctx, name, "Direction", 3); !errors.Is(err, vectordata.ErrSchemaMismatch) {
+					t.Fatalf("wrong dimensions: %v", err)
 				}
-				var seed document
-				point := document{"from Go", []float32{1, 0}}
-				packed, err := binary.Append(nil, binary.LittleEndian, point.Direction)
+				index, err := store.AttachNativeCosine(ctx, name, "Direction", 2)
 				if err != nil {
 					t.Fatal(err)
 				}
-				if layout == "HASH" {
-					values, err := client.HGetAll(ctx, name+":seed").Result()
-					if err != nil {
-						t.Fatal(err)
-					}
-					seed.Body = values["Body"]
-					seed.Direction = make([]float32, 2)
-					if _, err = binary.Decode([]byte(values["Direction"]), binary.LittleEndian, seed.Direction); err != nil {
-						t.Fatal(err)
-					}
-					if err = client.HSet(ctx, name+":go", "Body", point.Body, "Direction", packed).Err(); err != nil {
-						t.Fatal(err)
-					}
-				} else {
-					raw, err := client.Do(ctx, "JSON.GET", name+":seed").Text()
-					if err != nil {
-						t.Fatal(err)
-					}
-					if err = json.Unmarshal([]byte(raw), &seed); err != nil {
-						t.Fatal(err)
-					}
-					encoded, err := json.Marshal(point)
-					if err != nil {
-						t.Fatal(err)
-					}
-					if err = client.Do(ctx, "JSON.SET", name+":go", "$", encoded).Err(); err != nil {
-						t.Fatal(err)
-					}
+				seed, err := index.GetDocument(ctx, "seed", "Body")
+				if err != nil || seed.Text != "reference" || !slices.Equal(seed.Vector, []float32{0, 1}) {
+					t.Fatalf("reference record: %+v %v", seed, err)
 				}
-				if seed.Body != "reference" || !slices.Equal(seed.Direction, []float32{0, 1}) {
-					t.Fatalf("reference record: %+v", seed)
+				point := storeRedis.NativeDocument{ID: "go", Text: "from Go", Vector: []float32{1, 0}}
+				if err := index.UpsertDocument(ctx, "Body", point); err != nil {
+					t.Fatal(err)
 				}
-				hits, err := client.Do(ctx, "FT.SEARCH", name, "*=>[KNN 2 @Direction $v AS distance]", "PARAMS", 2, "v", packed, "SORTBY", "distance", "NOCONTENT", "DIALECT", 2).Slice()
-				if err != nil || len(hits) != 3 || hits[1] != name+":go" || hits[2] != name+":seed" {
+				hits, err := index.Search(ctx, point.Vector, 2)
+				if err != nil || len(hits) != 2 || hits[0].ID != "go" || hits[1].ID != "seed" || hits[0].Distance != 0 || hits[1].Distance != 1 {
 					t.Fatalf("Go search: %+v %v", hits, err)
 				}
 				ref("verify")
-				exists, err := client.Exists(ctx, name+":go").Result()
-				if err != nil || exists != 0 {
-					t.Fatalf("read after C# deletion: %d %v", exists, err)
+				if _, err := index.GetDocument(ctx, "go", "Body"); !errors.Is(err, redis.Nil) {
+					t.Fatalf("read after C# deletion: %v", err)
+				}
+				if err := index.DeleteDocument(ctx, "seed"); err != nil {
+					t.Fatal(err)
+				}
+				if _, err := index.GetDocument(ctx, "seed", "Body"); !errors.Is(err, redis.Nil) {
+					t.Fatalf("read after Go deletion: %v", err)
 				}
 			})
 		}
