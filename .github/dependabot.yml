@@ -1,0 +1,81 @@
+version: 2
+
+# Keep updates scoped to each module's toolchain and dependency graph.
+# The two AppHosts only reference generated .aspire/modules code, so they are
+# deliberately omitted. Provider image versions retain explicit compatibility review.
+updates:
+  - package-ecosystem: gomod
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Europe/Amsterdam
+    open-pull-requests-limit: 2
+    groups:
+      library-minor-patch:
+        applies-to: version-updates
+        patterns: ["*"]
+        update-types: [minor, patch]
+
+  - package-ecosystem: gomod
+    directory: /samples/local-doc-agent
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Europe/Amsterdam
+    open-pull-requests-limit: 2
+    groups:
+      agent-minor-patch:
+        applies-to: version-updates
+        patterns: ["*"]
+        update-types: [minor, patch]
+
+  - package-ecosystem: gomod
+    directory: /samples/docs-retrieval-pilot
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Europe/Amsterdam
+    open-pull-requests-limit: 2
+    groups:
+      pilot-minor-patch:
+        applies-to: version-updates
+        patterns: ["*"]
+        update-types: [minor, patch]
+
+  - package-ecosystem: gomod
+    directory: /samples/aspire-vector-search/api
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Europe/Amsterdam
+    open-pull-requests-limit: 2
+    # This API intentionally consumes the root checkout through a local replace.
+    ignore:
+      - dependency-name: github.com/gabisonia/go-vectorstore
+    groups:
+      aspire-api-minor-patch:
+        applies-to: version-updates
+        patterns: ["*"]
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:00"
+      timezone: Europe/Amsterdam
+    open-pull-requests-limit: 2
+    groups:
+      actions-minor-patch:
+        applies-to: version-updates
+        patterns: ["*"]
+        update-types: [minor, patch]
+
+# Major version updates remain individual PRs. Security updates use GitHub's
+# separate security-update mechanism; all dependency PRs require CI and review.
