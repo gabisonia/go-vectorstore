@@ -31,5 +31,8 @@ The script creates a disposable Qdrant 1.20.2 container. The fixture covers
 collection creation by either client, attaching by physical name, a single
 named cosine vector, keyword equality, full unsigned IDs and cross-language
 updates and deletes. The two-point fixture exercises the native query endpoint.
-Index activation at scale, recall, hybrid search, UUIDs, ambiguous writes,
+A second fixture waits for native indexing on 8,192 vectors and measures filtered
+recall@10 over 32 deterministic queries against exhaustive cosine ranking.
+The Go client also loses an acknowledgement after a real commit and verifies
+that it reports an uncertain outcome without replay. Hybrid search, UUIDs,
 recovery and the other providers still require evidence.

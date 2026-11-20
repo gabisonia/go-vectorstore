@@ -11,4 +11,4 @@ export PARITY_HTTP_URL="http://$(docker port "$container" 6333/tcp)"
 grpc=$(docker port "$container" 6334/tcp)
 export PARITY_GRPC_PORT="${grpc##*:}"
 curl --retry 30 --retry-delay 1 --retry-connrefused -fsS "$PARITY_HTTP_URL/readyz" >/dev/null
-go test -count=1 -race -tags=qdrantparity -timeout=3m -run '^TestNativeDotNetParity$' ./stores/qdrant
+go test -count=1 -race -tags=qdrantparity -timeout=3m -v -run '^TestNative(DotNetParity|IndexedRecall)$' ./stores/qdrant
