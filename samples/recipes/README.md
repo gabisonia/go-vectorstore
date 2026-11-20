@@ -1,6 +1,6 @@
 # Focused model recipes
 
-Run from the repository root with Go 1.25+. [main.go](main.go) contains each
+Run from the repository root with Go 1.26+. [main.go](main.go) contains each
 workflow in a separate switch case, sharing sample-only provider setup. These
 recipes use supplied vectors or a deterministic instructional embedder, so they
 need no API key.

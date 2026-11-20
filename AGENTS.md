@@ -17,7 +17,7 @@ This file describes contributing to this repository.
 - `samples/docs-retrieval-pilot`: isolated published v0.5.0 consumer; local MiniLM quality/load/offline-restore drill through the shared Aspire host. Run its own module tests; root tests do not traverse it.
 - `docs`: usage, provider limits, migrations, architecture and measured performance.
 
-The module requires Go 1.25+. `VERSION` selects the source version being prepared or tagged; CHANGELOG describes
+The module requires Go 1.26+. `VERSION` selects the source version being prepared or tagged; CHANGELOG describes
 its changes. Verify tag availability in GitHub releases; master can be newer. Keep the original Record API compatible.
 
 ## Local verification

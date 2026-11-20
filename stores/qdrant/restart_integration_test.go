@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/gabisonia/go-vectorstore/vectordata"
+	dockerclient "github.com/moby/moby/client"
 	"github.com/testcontainers/testcontainers-go"
 )
 
@@ -30,16 +31,16 @@ func killAndRestart(t *testing.T, s *Store) {
 		t.Fatal(err)
 	}
 	defer cli.Close()
-	if err := cli.ContainerKill(ctx, ownedContainer.GetContainerID(), "SIGKILL"); err != nil {
+	if _, err := cli.ContainerKill(ctx, ownedContainer.GetContainerID(), dockerclient.ContainerKillOptions{Signal: "SIGKILL"}); err != nil {
 		t.Fatal(err)
 	}
-	done, failed := cli.ContainerWait(ctx, ownedContainer.GetContainerID(), "not-running")
+	waitResult := cli.ContainerWait(ctx, ownedContainer.GetContainerID(), dockerclient.ContainerWaitOptions{})
 	select {
-	case result := <-done:
+	case result := <-waitResult.Result:
 		if result.StatusCode != 137 {
 			t.Fatalf("expected SIGKILL exit, got %d", result.StatusCode)
 		}
-	case err := <-failed:
+	case err := <-waitResult.Error:
 		t.Fatal(err)
 	case <-ctx.Done():
 		t.Fatal(ctx.Err())

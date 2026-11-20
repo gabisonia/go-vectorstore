@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Require Go 1.26 for the updated pgx, Redis, SQLite and Testcontainers dependency graph. The published v0.5.0 release continues to support Go 1.25.
+
 - Add an isolated v0.5.0 documentation retrieval pilot with small local MiniLM
   embeddings, graded retrieval evaluation, bounded concurrent searches, model
   identity checks, incremental ingestion and verified offline SQLite restores.

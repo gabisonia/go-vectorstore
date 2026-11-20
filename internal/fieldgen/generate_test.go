@@ -18,7 +18,7 @@ func fixture(t *testing.T, source string) (Options, string) {
 		t.Fatal(err)
 	}
 	dir := t.TempDir()
-	write(t, dir, "go.mod", "module example.test/models\n\ngo 1.25.0\n\nrequire github.com/gabisonia/go-vectorstore v0.0.0\nreplace github.com/gabisonia/go-vectorstore => "+filepath.ToSlash(root)+"\n")
+	write(t, dir, "go.mod", "module example.test/models\n\ngo 1.26.0\n\nrequire github.com/gabisonia/go-vectorstore v0.0.0\nreplace github.com/gabisonia/go-vectorstore => "+filepath.ToSlash(root)+"\n")
 	write(t, dir, "model.go", source)
 	return Options{Dir: dir, Model: "Article", Output: "fields.gen.go"}, dir
 }

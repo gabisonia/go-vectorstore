@@ -8,7 +8,7 @@
 A lightweight Go vector-store library inspired by `Microsoft.Extensions.VectorData`.
 
 Scope:
-- Go 1.25+
+- Go 1.26+
 - PostgreSQL + `pgvector`, embedded SQLite, standalone Redis, bounded Qdrant snapshots and in-memory model storage
 - Model-driven collections with typed/native keys, named vectors, struct tags, and optional embeddings
 - Shared model contracts and conformance tests across providers
@@ -21,10 +21,10 @@ This library can be used to build retrieval systems such as:
 
 ## Requirements
 
-The minimum Go version is now 1.25 because the patched pgx and text dependencies
-require it. Use current stable Go for up-to-date standard-library security fixes.
+This checkout requires Go 1.26 or later for its patched dependencies. The
+published v0.5.0 release supports Go 1.25.
 
-- Go 1.25+
+- Go 1.26+
 - PostgreSQL provider: PostgreSQL 16+ with `pgvector` extension
 - Qdrant provider: standalone Qdrant 1.20.2 with explicit snapshot/receipt limits ([scope](docs/qdrant.md))
 - SQLite provider: a writable database file; no database server or C toolchain required
@@ -356,7 +356,7 @@ The [shared Go AppHost](samples/aspire-services/README.md) manages persistent lo
 PostgreSQL and Redis services, the semantic-search/RAG examples, and the local
 documentation agent. Aspire owns readiness, dependency ordering, logs and terminals.
 
-Use Aspire CLI 17.0.0, Go 1.26+ and Docker. The root library remains Go 1.25+;
+Use Aspire CLI 17.0.0, Go 1.26+ and Docker. The root library also requires Go 1.26+;
 AppHosts and their generated SDKs live in isolated modules. Ordinary AppHost stops
 retain persistent services; `--force` removes those containers while preserving
 data volumes. Integration tests still use Testcontainers for disposable databases.
@@ -368,7 +368,7 @@ the separate [Aspire vector-search sample](samples/aspire-vector-search/README.m
 
 GitHub Actions workflows are configured for:
 
-- CI on pushes/PRs with race detection, `go vet`, release-script tests, and vulnerability scanning, testing Go 1.25/current stable and PostgreSQL 16/18 (`.github/workflows/ci.yml`)
+- CI on pushes/PRs with race detection, `go vet`, release-script tests, and vulnerability scanning, testing Go 1.26/current stable and PostgreSQL 16/18 (`.github/workflows/ci.yml`)
 - release publishing from semver tags or manual workflow dispatch (`.github/workflows/release.yml`), gated on the same CI checks
 
 Release version input is passed through environment variables and validated before
