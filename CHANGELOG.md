@@ -1,6 +1,16 @@
 # Changelog
 
-## Unreleased
+## v0.6.0
+
+- Add native Cosmos DB for NoSQL and Azure DocumentDB adapters for externally
+  managed collections. Cosmos `SearchExact` scans matching scores and returns
+  the highest scores with deterministic item-ID ties. The two-region hosted
+  workload met its 60-second recovery target with the documented client settings.
+- A forced DocumentDB replica promotion left a previously acknowledged item
+  unreadable on the new primary. Applications requiring all acknowledged
+  writes to survive regional loss need an independent recovery source or a
+  storage topology that supplies that guarantee. See the
+  [hosted results](internal/parity/README.md#hosted-workload-results-2026-11-20).
 
 - Add native Pinecone access for namespace-scoped dense cosine vectors, string
   metadata and equality filters. Docker interoperability uses Pinecone Local.

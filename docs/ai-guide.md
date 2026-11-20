@@ -7,19 +7,19 @@ ensure that a tool reads its documentation or instruction files.
 
 ## Version and starting point
 
-This guide targets published **v0.5.0**. Check
-[GitHub releases](https://github.com/gabisonia/go-vectorstore/releases) for later
-releases and pin the version used by your application's go.mod:
+This guide targets **v0.6.0**. Check
+[GitHub releases](https://github.com/gabisonia/go-vectorstore/releases) for tag
+availability and pin the version used by your application's go.mod:
 
 ```sh
-go get github.com/gabisonia/go-vectorstore@v0.5.0
+go get github.com/gabisonia/go-vectorstore@v0.6.0
 ```
 
-Published v0.5.0 requires Go 1.25+. The unreleased root module requires Go 1.26+. Check your application's `go.mod` before choosing APIs.
+v0.6.0 requires Go 1.26+. v0.5.0 supports Go 1.25. Check your application's `go.mod` before choosing APIs.
 Master may include unpublished changes listed in [CHANGELOG.md](../CHANGELOG.md).
 Run repository samples from a checkout of the matching source. Isolated sample
 modules pin their own dependencies; check their go.mod before choosing newer APIs.
-[Versioned API reference](https://pkg.go.dev/github.com/gabisonia/go-vectorstore@v0.5.0/vectordata)
+[Versioned API reference](https://pkg.go.dev/github.com/gabisonia/go-vectorstore@v0.6.0/vectordata)
 and [upgrade notes](upgrading.md) describe the released contract.
 
 Use the model API for new applications. Import the provider you need and

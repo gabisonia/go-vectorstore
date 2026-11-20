@@ -51,8 +51,7 @@ go get github.com/gabisonia/go-vectorstore@latest
 ```
 
 Use the [release list](https://github.com/gabisonia/go-vectorstore/releases) to
-check available tags and pin the resolved version in go.mod. Published
-[v0.5.0](https://github.com/gabisonia/go-vectorstore/releases/tag/v0.5.0) is available.
+check available tags and pin the resolved version in go.mod.
 Master can include later changes; use a matching tag for a released checkout. See the
 [upgrade guide](docs/upgrading.md) and [compatibility policy](docs/releases.md).
 
@@ -376,7 +375,7 @@ any publishing job runs. Existing tags must point to the checked-out, tested
 commit; the workflow will not move a tag to another commit. Prerelease versions
 are published as GitHub prereleases.
 
-`VERSION` selects the source version being prepared or tagged (`0.5.0`). It does
+`VERSION` selects the source version being prepared or tagged (`0.6.0`). It does
 not establish that the tag has been published. Choose an unused version and update
 `VERSION` and the changelog in a reviewed PR before publishing from master. Published tags are immutable; documentation updates after
 a release do not change the source stored under that tag.

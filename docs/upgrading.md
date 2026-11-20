@@ -1,11 +1,16 @@
 # Upgrading model collections
 
-**v0.5.0 was published on November 20, 2026**, following v0.4.1.
-See the [release notes](https://github.com/gabisonia/go-vectorstore/releases/tag/v0.5.0)
-and [changelog](../CHANGELOG.md).
+## Upgrading to v0.6.0
+
+Use Go 1.26 or later for the root module. Applications on Go 1.25 can stay
+on v0.5.0 until their toolchain is upgraded. Existing model and Record APIs
+remain supported. The new native connectors attach to externally managed
+schemas. Review the [provider coverage](parity.md) before selecting one.
+Check [GitHub releases](https://github.com/gabisonia/go-vectorstore/releases)
+for tag availability before updating the application module.
 
 ```sh
-go get github.com/gabisonia/go-vectorstore@v0.5.0
+go get github.com/gabisonia/go-vectorstore@v0.6.0
 ```
 
 ## Upgrading to v0.5.0
