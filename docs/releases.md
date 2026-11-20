@@ -3,12 +3,14 @@
 `VERSION` selects the source version being prepared or tagged. A version is
 available to consumers only after its immutable tag/release is published; consult
 [GitHub releases](https://github.com/gabisonia/go-vectorstore/releases). Source on
-master may be newer than the latest tag. The production-hardening changes prepare
-**v0.4.1**, using the same public model/Record APIs and SQLite format 1 as v0.4.0.
+master may be newer than the latest tag. **v0.4.1 is published**. This checkout
+prepares **v0.5.0**, adding providers and model workflows plus correctness fixes.
+Its tag is not available merely because the preparation PR merges. See the
+[v0.5.0 compatibility review](release-0.5.md) and [upgrade guide](upgrading.md).
 
 ## Compatibility policy
 
-Within the current 0.4.x line, patch releases preserve exported APIs, existing
+Within a supported minor line, patch releases preserve exported APIs, existing
 record/model registrations, declared error matching, and supported persisted data.
 Fixes can tighten behavior that violates the documented contract, such as yielding
 buffered records after cancellation. Applications must not depend on internal SQL,
@@ -25,7 +27,9 @@ An intentional breaking change before v1 requires a minor-version increase,
 release notes and upgrade guidance. A storage format change requires an explicit
 version and migration/backup procedure; Ensure does not silently convert data.
 Go/driver/database support changes must be called out. The Go minimum is 1.25;
-CI tests minimum/current stable Go and PostgreSQL 16/18. Deployed pgvector operators,
+CI tests minimum/current stable Go, PostgreSQL 16/18, Redis 7.4/8.2 and the pinned
+standalone Qdrant server. Optional sqlite-vec checks run CGo-free on Linux, macOS
+and Windows. Deployed pgvector operators,
 permissions and index limits still determine feature availability.
 
 A v1.0 release should follow an explicit review of the public API and its long-term
@@ -41,7 +45,7 @@ not replace workload validation or database operations. See
    a prepared release is not yet downloadable as a tag.
 2. Review exported API/storage compatibility and upgrade instructions. Run race
    tests, vet, bounded fuzzing, docs/sample smoke checks, release-script tests and
-   the PostgreSQL integration matrix. Review failure/compatibility fixtures and
+   all backend integration matrices. Review failure/compatibility fixtures and
    vulnerability results. The release workflow repeats the complete CI gate.
 3. Merge the reviewed release-preparation PR. Publishing is a separate explicit
    action: dispatch the Release workflow on master with the selected version.
@@ -51,6 +55,16 @@ not replace workload validation or database operations. See
    and run a consumer quickstart pinned to that tag. Announce relevant fixes and
    upgrade steps; follow up on any failed publication rather than retagging.
 
-For this candidate, VERSION is 0.4.1. No tag is created by merging its PR. Use
+`Required CI` succeeds only when every verification job succeeds; failures,
+cancellations and skipped dependencies fail the gate. Protect master by requiring
+this GitHub Actions check, up-to-date branches and pull requests. Keep force pushes
+and deletion disabled and apply the protection to administrators. A solo-maintained
+repository can require PRs with zero approving reviews; this enforces tested
+changes without requiring authors to approve their own PRs. Repository settings
+are separate from workflow code and must be verified after configuration.
+Redis jobs also have a 30-minute overall limit covering build/startup and samples,
+in addition to their individual Go test timeouts.
+
+For this candidate, VERSION is 0.5.0. No tag is created by merging its PR. Use
 `go get github.com/gabisonia/go-vectorstore@latest` for the latest published release
 and inspect/pin the resolved version in your application's go.mod.

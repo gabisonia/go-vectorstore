@@ -7,7 +7,7 @@ ensure that a tool reads its documentation or instruction files.
 
 ## Version and starting point
 
-The example API baseline is **v0.4.0**. This checkout prepares **v0.4.1**; check
+The example API baseline is **v0.4.0**. This checkout prepares **v0.5.0**; check
 [GitHub releases](https://github.com/gabisonia/go-vectorstore/releases) for tags
 that have actually been published. Install the latest published version, then pin
 the resolved version in your application's go.mod:
@@ -87,11 +87,11 @@ part of CI. Replace panic with returned/handled errors in application code.
 | Single-record CRUD and optional lookup | [recipes](../samples/recipes/main.go) | InsertOne, UpsertOne, TryGet, DeleteOne |
 | Typed CRUD and generated keys | [model-store](../samples/model-store/main.go) | EnsureTypedModelCollection, Upsert, GetMany, Delete |
 | Persistent embedded data | [sqlite-store](../samples/sqlite-store/main.go), [SQLite example](../stores/sqlite/example_test.go) | sqlite.Open, GetTypedModelCollection, Get |
-| Redis collection snapshots | [redis-store](../samples/redis-store/README.md) | redis.New, exact dense search in Go; whole-collection transfers; master after v0.4.1 |
+| Redis collection snapshots | [redis-store](../samples/redis-store/README.md) | redis.New, exact dense search in Go; whole-collection transfers; v0.5.0 source; check tag availability |
 | Automatic embeddings and filtered retrieval | [typed-search](../samples/typed-search/main.go), [model and adapters](../samples/internal/demo/demo.go) | source tag, Embedder, SearchText, Column |
 | Bounded standalone Qdrant models | [Qdrant sample](../samples/qdrant-store/README.md) | Exact Go search; finite snapshot/receipt limits |
 | Local agent with model-selected tools | [Aspire demo](../samples/local-doc-agent/README.md) | Agent Framework function tools, SQLite, Ollama |
-| Custom/multimodal embedding inputs | [input-embeddings](../samples/input-embeddings/main.go) | InputEmbeddingFunc, vector,input tag, SearchInput; master after v0.4.1 |
+| Custom/multimodal embedding inputs | [input-embeddings](../samples/input-embeddings/main.go) | InputEmbeddingFunc, vector,input tag, SearchInput; v0.5.0 source; check tag availability |
 | Retrieve sources for generation | [typed-rag](../samples/typed-rag/main.go) | SearchText, TypedModelSearchResult.Item |
 | Named vectors and projections | [recipes](../samples/recipes/main.go), [executable examples](../vectordata/example_test.go) | VectorProperty, IncludeVectors |
 | Read iteration/cancellation | [recipes](../samples/recipes/main.go) | ListCollectionNamesIter, GetManyIter, SearchTextIter, SearchInputIter, context.WithCancel |
@@ -158,7 +158,7 @@ it is not an importable public helper package.
 Copy this and fill in your application choices:
 
 ```text
-Use the latest published go-vectorstore 0.4.x patch and the typed model API.
+Use the latest published go-vectorstore release compatible with the application and the typed model API.
 Pin the resolved version in go.mod.
 Provider: SQLite. Key: string. Model: Document with Body and a 1536-dimensional vector.
 Embedder: my application's existing implementation; source property: Body.

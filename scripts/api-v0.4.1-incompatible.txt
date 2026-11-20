@@ -1,0 +1,1 @@
+- ./vectordata.HybridSearchOptions: old is comparable, new is not

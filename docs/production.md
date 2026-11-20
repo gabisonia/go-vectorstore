@@ -138,6 +138,13 @@ with actual backup tooling before relying on it operationally. PostgreSQL backup
 point-in-time recovery and failover likewise belong to the database deployment;
 validate restoring pgvector, registrations, indexes and application data together.
 
+Redis recovery verification uses owned fixtures with AOF process-crash recovery
+and separate point-in-time RDB restores across supported layouts. Its weekly mixed
+workload checks atomic batches, query/search reads and active-generation cleanup,
+retaining bounded latency/memory observations. See [Redis recovery and workload
+limits](redis.md#recovery-and-mixed-workload-verification). Applications must still
+exercise their own persistence configuration, backups and recovery objectives.
+
 The SQLite subprocess test kills the writer without cleanup after a committed
 transaction and before commit of a spilled multi-row transaction. Reopening checks
 integrity, committed data, rollback and generated-key continuity. This establishes

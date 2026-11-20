@@ -25,9 +25,14 @@ import (
 )
 
 var integrationAddr string
+var ownedRedisContainer testcontainers.Container
 
 func TestMain(m *testing.M) {
 	integrationAddr = os.Getenv("REDIS_TEST_ADDR")
+	if integrationAddr != "" && os.Getenv("REDIS_TEST_RECOVERY") == "true" {
+		fmt.Fprintln(os.Stderr, "Redis recovery tests require an owned container; unset REDIS_TEST_ADDR")
+		os.Exit(1)
+	}
 	var container testcontainers.Container
 	if integrationAddr == "" {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
@@ -36,7 +41,13 @@ func TestMain(m *testing.M) {
 			image = "redis:8.2"
 		}
 		var err error
-		container, err = testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{ContainerRequest: testcontainers.ContainerRequest{Image: image, ExposedPorts: []string{"6379/tcp"}, WaitingFor: wait.ForListeningPort("6379/tcp")}, Started: true})
+		request := testcontainers.ContainerRequest{Image: image, ExposedPorts: []string{"6379/tcp"}, WaitingFor: wait.ForListeningPort("6379/tcp")}
+		if os.Getenv("REDIS_TEST_RECOVERY") == "true" {
+			request.Cmd = []string{"redis-server", "--appendonly", "yes", "--appendfsync", "always", "--save", "", "--maxmemory-policy", "noeviction"}
+			request.WaitingFor = redisRecoveryWait()
+		}
+		container, err = testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{ContainerRequest: request, Started: true})
+		ownedRedisContainer = container
 		if err == nil {
 			var host string
 			host, err = container.Host(ctx)

@@ -32,6 +32,12 @@ bash scripts/test-samples.sh
 bash .github/scripts/release_test.sh
 ```
 
+`bash scripts/check-api.sh` uses a pinned, isolated Go 1.26+ apidiff tool and the
+immutable v0.4.1 tag (fetch tags first). It fails on any change to the reviewed
+incompatible API report. Review/update the baseline and report deliberately;
+never accept unexpected differences simply to make CI green. `Required CI` joins
+all verification jobs; include any new CI job in its needs list.
+
 These commands need no provider credentials. The sample script creates/removes
 its own temporary SQLite files. Documentation checks execute only the explicitly
 marked complete AI-guide program; other snippets may be partial recipes.
@@ -148,6 +154,13 @@ CI's Redis 8.2 job requires real JSON contracts, native conformance/recall and t
 projection proof; Redis 7.4 covers missing-module behavior. CI separates storage
 and native index suites to bound their runtime; the expanded native matrix has a
 ten-minute timeout, while storage checks retain five minutes.
+
+`REDIS_TEST_RECOVERY=true` enables persistent owned-server tests with AOF and
+appendfsync=always. It rejects supplied REDIS_TEST_ADDR values. Run recovery tests
+with `go test -count=1 -race -tags=integration -run '^TestIntegrationRecovery' -timeout=5m ./stores/redis`.
+Only owned fixtures may be killed/restored. REDIS_SOAK_DURATION controls each
+mixed-workload layout (default 2s, weekly 60s); retain its explicit fixture/metric
+limits when documenting measurements.
 
 ## Invariants and implementation conventions
 

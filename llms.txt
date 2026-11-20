@@ -2,7 +2,7 @@
 
 > Go vector-store library inspired by Microsoft.Extensions.VectorData, with typed model collections, native keys/data, named vectors and automatic embeddings across memory, SQLite, Redis snapshots and PostgreSQL/pgvector.
 
-Requires Go 1.25+. Source version: v0.4.1 (release preparation); check GitHub
+Requires Go 1.25+. Source version: v0.5.0 (release preparation); check GitHub
 releases for published tags. Examples use v0.4.0 APIs; new sample commands are
 included in source versions from v0.4.1. Master can be newer than published tags.
 Prefer typed model APIs for new applications. Original PostgreSQL Record APIs remain supported. Choose a
@@ -30,7 +30,7 @@ indexes or hybrid support. Deterministic sample embeddings are instructional.
 - [Qdrant design](https://raw.githubusercontent.com/gabisonia/go-vectorstore/master/docs/qdrant-design.md): Real-server compatibility and bounded publication proof, recovery/retention limits; public connector pending.
 - [SQLite](https://raw.githubusercontent.com/gabisonia/go-vectorstore/master/docs/sqlite.md): Durability, concurrency and exact-scan costs.
 - [SQLite-vec](https://raw.githubusercontent.com/gabisonia/go-vectorstore/master/docs/sqlitevec.md): Optional exact scalar L1 candidates, numerical proof and fallback.
-- [Redis](https://raw.githubusercontent.com/gabisonia/go-vectorstore/master/docs/redis.md): Standalone atomic snapshot/hash/RedisJSON generations, optional HNSW/FLAT, scalar and string full-text indexes, exact fallback and size/write limits; master after v0.4.1.
+- [Redis](https://raw.githubusercontent.com/gabisonia/go-vectorstore/master/docs/redis.md): Standalone atomic snapshot/hash/RedisJSON generations, optional HNSW/FLAT, scalar and string full-text indexes, exact fallback and size/write limits; v0.5.0 source; check release availability.
 - [Migrations](https://raw.githubusercontent.com/gabisonia/go-vectorstore/master/docs/migrations.md): PostgreSQL planning, explicit additive application and limitations.
 - [Performance](https://raw.githubusercontent.com/gabisonia/go-vectorstore/master/docs/performance.md): Reproducible benchmarks and verification commands.
 

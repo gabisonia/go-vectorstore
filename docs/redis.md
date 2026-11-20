@@ -6,7 +6,7 @@ in Go. Opt-in `NativeIndexes` adds Redis Search HNSW/FLAT indexes and scalar
 filtering and string full-text indexes over immutable HASH/JSON generations.
 Opt-in `StorageJSON` uses immutable RedisJSON documents with Go exact search or
 native vector indexes.
-It is available on master after v0.4.1. The default encoded collection limit is
+It is included in the v0.5.0 source candidate; check releases before using a tag. The default encoded collection limit is
 16 MiB; writes still process the whole collection.
 
 ```go
@@ -666,3 +666,51 @@ requires the real RedisJSON contracts. JSON tests also check extreme numeric
 precision, nonzero databases, module absence, partial staging, lost replies,
 errors after PERSIST, read retirement, concurrent conversion, generated sequences,
 corruption, pruning and compatibility with existing snapshot/hash fixtures.
+
+## Recovery and mixed workload verification
+
+Run only against disposable, owned fixtures (unset `REDIS_TEST_ADDR`):
+
+```sh
+REDIS_TEST_RECOVERY=true REDIS_REQUIRE_SEARCH=true REDIS_REQUIRE_JSON=true \
+  go test -count=1 -race -v -tags=integration -timeout=5m \
+  -run '^TestIntegrationRecovery' ./stores/redis
+```
+
+Recovery mode explicitly enables AOF with `appendfsync always`, disables automatic
+RDB saves and uses `noeviction`. It refuses supplied server addresses. For each
+snapshot/HASH/JSON and native HASH/JSON layout, the test writes/updates/deletes
+records, rejects an invalid batch, creates an RDB backup, then acknowledges another
+update before SIGKILL. Restart must recover the newer AOF state through a fresh
+client without Ensure/rebuild. A separate fresh server restores the earlier RDB
+without a conflicting AOF. Fixtures require a PONG after loading, rather than
+only an open port, and retain bounded server state/logs on failure. Both verify
+canonical int64/vector values, deletion,
+generated-key continuation, filters, vector ranking and native TEXT reads.
+Redis 7.4 runs snapshot/HASH cases and missing-module skips; Redis 8.2 CI requires
+all five layouts. These are process-crash and fixture-backup checks, not power-loss,
+replication/failover, filesystem-corruption or production-backup guarantees. The
+stronger test fsync policy does not make the sample's every-second AOF lossless.
+
+The mixed workload uses 64 records with 16-dimensional vectors per layout, two
+writers publishing disjoint two-record batches and two readers checking complete
+query snapshots and known exact search ranks. It checks active data after pruning.
+Each layout runs for two seconds in normal recovery CI; the weekly job runs for
+60 seconds and retains `redis-workload.jsonl`, including failed runs. Run a longer
+local campaign with:
+
+```sh
+REDIS_TEST_RECOVERY=true REDIS_REQUIRE_SEARCH=true REDIS_REQUIRE_JSON=true \
+  REDIS_SOAK_DURATION=60s go test -count=1 -race -json -tags=integration \
+  -timeout=12m -run '^TestIntegrationRecoveryMixedWorkload$' ./stores/redis \
+  > redis-workload.jsonl
+```
+
+Output includes operation counts, p50/p95 of the first at most 4,096 successful
+samples per operation kind, maximum latency, process heap before/after and total
+Redis `used_memory` at completion. Query/search are timed together. These are
+race-instrumented small-fixture observations without latency pass thresholds;
+they do not measure peak RSS, isolate per-collection memory or establish production
+capacity or a leak-free steady state. Repeat longer tests with representative
+dimensions, collection sizes, write rates and deployment backup tooling before
+relying on this connector operationally.

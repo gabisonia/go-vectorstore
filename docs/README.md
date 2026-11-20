@@ -7,6 +7,7 @@ Redis and memory, plus the original PostgreSQL Record API.
 
 - [Production operation](production.md): connections, permissions, deadlines, retries, backups and workload validation
 - [Compatibility and releases](releases.md): patch policy, storage compatibility and release validation
+- [v0.5.0 compatibility review](release-0.5.md): candidate API changes, persisted data and release evidence
 - [Security policy](../SECURITY.md): private reporting, supported versions and scheduled checks
 
 - [AI usage guide](ai-guide.md): version-aware recipes, a complete executable quickstart, and common integration mistakes
