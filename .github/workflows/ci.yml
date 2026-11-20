@@ -382,10 +382,13 @@ jobs:
       - name: Compare against the reviewed published baseline
         run: bash scripts/check-api.sh
 
+  documentation-site:
+    uses: ./.github/workflows/pages-build.yml
+
   required:
     name: Required CI
     if: always()
-    needs: [test, sqlite-vec-probe, qdrant-probe, reference-catalog, standalone-dotnet-parity, sqlserver-dotnet-parity, qdrant-dotnet-parity, integration-postgres, integration-redis, local-doc-agent, docs-retrieval-pilot, aspire, vulnerabilities, api-compatibility]
+    needs: [test, sqlite-vec-probe, qdrant-probe, reference-catalog, standalone-dotnet-parity, sqlserver-dotnet-parity, qdrant-dotnet-parity, integration-postgres, integration-redis, local-doc-agent, docs-retrieval-pilot, aspire, vulnerabilities, api-compatibility, documentation-site]
     runs-on: ubuntu-latest
     steps:
       - name: Require every verification job to succeed

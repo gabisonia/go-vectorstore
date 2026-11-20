@@ -1,7 +1,19 @@
-# Documentation
+# go-vectorstore documentation
 
-`go-vectorstore` provides model collections across PostgreSQL, embedded SQLite,
-Redis and memory, plus the original PostgreSQL Record API.
+Build vector search into a Go application using typed collections, embeddings,
+filters and provider-specific native connectors.
+
+## Get started
+
+Install the published library with Go 1.26 or later.
+
+```sh
+go get github.com/gabisonia/go-vectorstore@v0.6.0
+```
+
+[Run your first vector search](ai-guide.md#minimal-complete-program) using
+the in-memory store. Then [compare provider capabilities](parity.md) or
+[explore the Go API](https://pkg.go.dev/github.com/gabisonia/go-vectorstore/vectordata).
 
 ## Using the library
 
