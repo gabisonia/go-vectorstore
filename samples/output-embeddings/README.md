@@ -1,6 +1,6 @@
 # Typed embedding outputs
 
-Run from the repository root with Go 1.25+, without a server or API key:
+Run from the repository root with Go 1.26+, without a server or API key:
 
 ```sh
 go run ./samples/output-embeddings

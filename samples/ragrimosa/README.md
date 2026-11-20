@@ -69,7 +69,7 @@ postgres://postgres:postgres@localhost:54329/vectorstore_test?sslmode=disable
 
 Stop the shared AppHost before switching its mode or changing managed arguments.
 See [shared Aspire workflows](../aspire-services/README.md) for credentials,
-persistence, resource inspection and cleanup. Native execution remains Go 1.25+;
+persistence, resource inspection and cleanup. Native execution remains Go 1.26+;
 Go AppHost orchestration needs Go 1.26+. OpenAI requests require explicit
 credentials and can incur charges.
 

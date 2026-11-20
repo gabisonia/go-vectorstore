@@ -4,7 +4,7 @@
 `SearchText`, builds sources with stable `[IDs]`, and optionally generates an
 answer. Retrieval and generation remain explicit application steps.
 
-Run from the repository root with Go 1.25+, without credentials or a server:
+Run from the repository root with Go 1.26+, without credentials or a server:
 
 ```sh
 go run ./samples/typed-rag

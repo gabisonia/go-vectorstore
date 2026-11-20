@@ -5,7 +5,7 @@ filters, and `SearchText`. The tagged [Article model](../internal/demo/demo.go)
 and [main.go](main.go) show the complete flow. The default embedder is a tiny
 keyword fixture for learning the API; it does not provide semantic understanding.
 
-Run from the repository root with Go 1.25+:
+Run from the repository root with Go 1.26+:
 
 ```sh
 go run ./samples/typed-search -category architecture

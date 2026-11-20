@@ -2,7 +2,7 @@
 
 Aspire CLI **17.0.0**, **Go 1.26+** and Docker are the prerequisites. This isolated
 Go AppHost owns the sample databases, startup dependencies, local models and
-application resources. The library remains Go 1.25+ with its own dependencies.
+application resources. The library remains Go 1.26+ with its own dependencies.
 Run the commands below from the repository root.
 
 ## Development databases

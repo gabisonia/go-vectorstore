@@ -42,9 +42,9 @@ model definition at an existing Record table and expect it to convert the schema
 Create a separate collection, transform/upsert application records, validate
 counts and search results, then switch the application when ready.
 
-Use Go 1.25 or later; the current stable Go release is recommended for standard
-library fixes. PostgreSQL and SQLite dependencies are pinned in go.mod. SQLite's
-pure-Go driver is selected from its Go 1.25-compatible releases. Applications that
+Building this checkout requires Go 1.26 or later. Applications on Go 1.25 can
+keep using the published v0.5.0 release until they upgrade their toolchain.
+PostgreSQL and SQLite dependencies are pinned in go.mod. Applications that
 only use PostgreSQL do not import/link the SQLite driver unless they import that
 provider or a sample that uses it.
 
@@ -137,7 +137,7 @@ Review SQL NULL versus JSON null and empty operand behavior in the
 
 ## Release validation
 
-The release workflow runs the CI matrix before publishing: Go 1.25/current stable
+The release workflow runs the CI matrix before publishing: Go 1.26/current stable
 race tests, vet, release-tool tests, PostgreSQL 16/18, Redis 7.4/8.2 and standalone
 Qdrant integration tests, SQLite/optional-adapter checks, API compatibility, sample
 checks and vulnerability scanning. Local equivalents are in the repository

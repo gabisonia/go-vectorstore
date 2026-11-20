@@ -10,7 +10,7 @@ This document records the investigation gate in the
 ## Decision
 
 Keep `stores/sqlite` and its existing format-1 canonical records as the default.
-Use the already-pinned `modernc.org/sqlite v1.59.0` for the optional path, including
+Use the already-pinned `modernc.org/sqlite v1.62.0` for the optional path, including
 its `modernc.org/sqlite/vec` package. No dependency update, replacement driver,
 dynamic library download or C compiler is required for this choice.
 
@@ -27,7 +27,7 @@ connections in that application too. Availability must not enable projections or
 change the base provider's queries. Applications using only `stores/sqlite` must
 continue to build without linking the extension.
 
-The pinned driver's [vec package](https://pkg.go.dev/modernc.org/sqlite@v1.59.0/vec)
+The pinned driver's [vec package](https://pkg.go.dev/modernc.org/sqlite@v1.62.0/vec)
 bundles sqlite-vec v0.1.9 as generated Go. Its MIT source notice is in the driver's
 `LICENSE-SQLITE_VEC`; preserve that notice when redistributing those sources.
 Keep the driver and its exact libc dependency aligned. A dependency update must
@@ -66,7 +66,7 @@ The tag links the extension only into this test binary. The probe checks the
 bundled version, three dense metrics, filtering inside KNN, complete tie ordering,
 the base provider's dependency graph, and a separate writer whose binary omits
 the extension. CI executes the CGo-free probe on Linux amd64, macOS arm64 and
-Windows amd64 with minimum Go 1.25, plus current stable Go on Linux. Other targets
+Windows amd64 with minimum Go 1.26, plus current stable Go on Linux. Other targets
 in the driver's source are not a tested platform promise from this project.
 
 The local darwin/arm64 probe reports SQLite 3.53.4 and sqlite-vec v0.1.9.
