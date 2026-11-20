@@ -1,4 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><OutputType>Exe</OutputType><ImplicitUsings>enable</ImplicitUsings></PropertyGroup>
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.VectorData.Pinecone" Version="[1.0.0-preview.3]" />
   </ItemGroup>
