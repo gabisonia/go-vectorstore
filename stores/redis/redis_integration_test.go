@@ -44,6 +44,7 @@ func TestMain(m *testing.M) {
 		request := testcontainers.ContainerRequest{Image: image, ExposedPorts: []string{"6379/tcp"}, WaitingFor: wait.ForListeningPort("6379/tcp")}
 		if os.Getenv("REDIS_TEST_RECOVERY") == "true" {
 			request.Cmd = []string{"redis-server", "--appendonly", "yes", "--appendfsync", "always", "--save", "", "--maxmemory-policy", "noeviction"}
+			request.WaitingFor = redisRecoveryWait()
 		}
 		container, err = testcontainers.GenericContainer(ctx, testcontainers.GenericContainerRequest{ContainerRequest: request, Started: true})
 		ownedRedisContainer = container

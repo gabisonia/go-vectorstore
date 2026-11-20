@@ -36,6 +36,35 @@ func requireRecovery(t *testing.T) {
 	}
 }
 
+func redisRecoveryWait() wait.Strategy {
+	// Redis can bind its port before restoring the dataset/modules. A real PONG
+	// is required before any recovery assertions; never retry failed model reads.
+	return wait.ForAll(wait.ForListeningPort("6379/tcp"),
+		wait.ForExec([]string{"redis-cli", "-e", "ping"}).WithResponseMatcher(func(body io.Reader) bool {
+			data, err := io.ReadAll(body)
+			return err == nil && strings.TrimSpace(string(data)) == "PONG"
+		})).WithDeadline(time.Minute)
+}
+
+func logRecoveryRedis(t *testing.T, container testcontainers.Container) {
+	t.Helper()
+	if !t.Failed() {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	state, err := container.State(ctx)
+	t.Logf("recovery server state: %+v (%v)", state, err)
+	logs, err := container.Logs(ctx)
+	if err != nil {
+		t.Logf("recovery server logs unavailable: %v", err)
+		return
+	}
+	defer logs.Close()
+	data, err := io.ReadAll(io.LimitReader(logs, 128<<10))
+	t.Logf("recovery server logs (at most 128 KiB):\n%s\n%v", data, err)
+}
+
 func recoveryLayouts(t *testing.T, test func(*testing.T, StoreOptions)) {
 	t.Helper()
 	requireRecovery(t)
@@ -48,6 +77,7 @@ func recoveryLayouts(t *testing.T, test func(*testing.T, StoreOptions)) {
 			name += "-native"
 		}
 		t.Run(name, func(t *testing.T) {
+			t.Cleanup(func() { logRecoveryRedis(t, ownedRedisContainer) })
 			if opts.StorageMode == StorageJSON {
 				requireRedisJSON(t)
 			}
@@ -170,11 +200,12 @@ func restoreRedis(t *testing.T, backup []byte) string {
 			// precedence over it. No active server or application data is replaced.
 			Cmd:        []string{"redis-server", "--appendonly", "no", "--save", "", "--maxmemory-policy", "noeviction"},
 			Files:      []testcontainers.ContainerFile{{Reader: bytes.NewReader(backup), ContainerFilePath: "/data/dump.rdb", FileMode: 0644}},
-			WaitingFor: wait.ForListeningPort("6379/tcp"),
+			WaitingFor: redisRecoveryWait(),
 		}, Started: true,
 	})
 	if c != nil {
 		t.Cleanup(func() {
+			logRecoveryRedis(t, c)
 			cleanup, stop := context.WithTimeout(context.Background(), 30*time.Second)
 			defer stop()
 			if err := c.Terminate(cleanup); err != nil {

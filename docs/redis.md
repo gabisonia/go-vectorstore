@@ -683,7 +683,9 @@ snapshot/HASH/JSON and native HASH/JSON layout, the test writes/updates/deletes
 records, rejects an invalid batch, creates an RDB backup, then acknowledges another
 update before SIGKILL. Restart must recover the newer AOF state through a fresh
 client without Ensure/rebuild. A separate fresh server restores the earlier RDB
-without a conflicting AOF. Both verify canonical int64/vector values, deletion,
+without a conflicting AOF. Fixtures require a PONG after loading, rather than
+only an open port, and retain bounded server state/logs on failure. Both verify
+canonical int64/vector values, deletion,
 generated-key continuation, filters, vector ranking and native TEXT reads.
 Redis 7.4 runs snapshot/HASH cases and missing-module skips; Redis 8.2 CI requires
 all five layouts. These are process-crash and fixture-backup checks, not power-loss,
