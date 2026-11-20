@@ -267,7 +267,13 @@ func (h hitHeap) Len() int           { return len(h) }
 func (h hitHeap) Less(i, j int) bool { return compareHits(h[i], h[j]) > 0 }
 func (h hitHeap) Swap(i, j int)      { h[i], h[j] = h[j], h[i] }
 func (h *hitHeap) Push(x any)        { *h = append(*h, x.(NativeHit)) }
-func (h *hitHeap) Pop() any          { i := len(*h) - 1; x := (*h)[i]; *h = (*h)[:i]; return x }
+func (h *hitHeap) Pop() any {
+	i := len(*h) - 1
+	last := (*h)[i]
+	(*h)[i] = NativeHit{}
+	*h = (*h)[:i]
+	return last
+}
 
 func collectHits(ctx context.Context, pager hitPager, top int, exact bool) ([]NativeHit, error) {
 	var hits hitHeap

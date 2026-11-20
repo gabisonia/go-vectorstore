@@ -114,9 +114,10 @@ func TestSharedContainer(t *testing.T) {
 // requests use the real emulator connection.
 type faultKey struct{}
 type writeFault struct {
-	method   string
-	status   int
-	attempts atomic.Int32
+	method     string
+	status     int
+	attempts   atomic.Int32
+	afterApply func() error
 }
 type faultTransport struct{ client *http.Client }
 
@@ -138,6 +139,11 @@ func (f faultTransport) Do(req *http.Request) (*http.Response, error) {
 		return resp, err
 	}
 	resp.Body.Close()
+	if fault.afterApply != nil {
+		if err := fault.afterApply(); err != nil {
+			return nil, err
+		}
+	}
 	return nil, errLostReply
 }
 
@@ -175,4 +181,21 @@ func checkWriteOutcomes(t *testing.T, c *cosmosnosql.NativeCollection) {
 	if _, err := c.Get(ctx, doc.ID); !errors.Is(err, vectordata.ErrNotFound) {
 		t.Fatalf("after lost delete reply: %v", err)
 	}
+	// The first writer still awaits its response while a second writer updates
+	// the same ID. Replaying the first request would erase the acknowledged update.
+	newer := doc
+	newer.Text = "superseding writer"
+	overlap := &writeFault{method: http.MethodPost, afterApply: func() error { return c.Upsert(ctx, newer) }}
+	err = c.Upsert(context.WithValue(ctx, faultKey{}, overlap), doc)
+	if !errors.Is(err, cosmosnosql.ErrNativeOutcomeUnknown) || !errors.Is(err, errLostReply) || overlap.attempts.Load() != 1 {
+		t.Fatalf("superseded unknown write: %v (%d attempts)", err, overlap.attempts.Load())
+	}
+	got, err = c.Get(ctx, doc.ID)
+	if err != nil || got.Text != newer.Text {
+		t.Fatalf("superseding write: %+v %v", got, err)
+	}
+	if err := c.Delete(ctx, doc.ID); err != nil {
+		t.Fatal(err)
+	}
+
 }

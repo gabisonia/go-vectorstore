@@ -325,3 +325,22 @@ It observed 0.8 for `shared` and 0 for `second`. This probe reads every
 eligible score. The public adapter propagates the original gateway error.
 Physical partition fan-out, Entra RBAC, scale and regional failover remain
 unverified.
+
+### Opt-in hosted Azure search workload
+
+Run `go test -count=1 -tags azureworkload -v -timeout=10m ./internal/parity/azureworkload`
+against disposable services. Set `COSMOS_WORKLOAD_ENDPOINT` and
+`COSMOS_WORKLOAD_KEY` for Cosmos NoSQL, or `DOCUMENTDB_WORKLOAD_URI` for
+DocumentDB. Each test creates a randomly named database and removes it on
+return. Cosmos requests a manual 11,000 RU/s container and checks for at least
+two physical partition ranges. Azure bills provisioned capacity while it exists.
+
+Each test seeds 1,024 deterministic 128-dimensional vectors with eight writers.
+Half match the text filter. It submits 60 top-10 searches at two queries per
+second and compares the returned IDs with an exhaustive cosine reference.
+The workload targets p95 at most one second measured from scheduled arrival,
+at least 95% recall for DocumentDB HNSW and 100% recall for Cosmos exact
+search. The Cosmos test also cancels a live scan at its first continuation
+and requires an error with no partial hits. These figures describe a small
+interactive retrieval workload. Larger collections require fresh measurements,
+especially for the Cosmos exact scan.
