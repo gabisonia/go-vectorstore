@@ -22,7 +22,9 @@ go run . -ollama http://127.0.0.1:11435 -revision "$(git rev-parse HEAD)"
 Run with a clean checkout when recording a revision. Otherwise append an explicit
 dirty label to `-revision`. The report always includes hashes of the actual corpus
 and query file. The Compose service binds only loopback, uses a separate model
-volume, reuses Docker's default bridge and limits model memory to 1 GiB. It does
+volume, reuses Docker's default bridge and limits the service to two CPUs and
+1 GiB of memory. Embedding requests explicitly use two CPU threads, recorded in
+the identity/report, to avoid excessive threading overhead for this small model. It does
 not use the shared Aspire services or their volumes. Set `PILOT_OLLAMA_PORT` on
 Compose commands and the matching `-ollama` origin if port 11435 is occupied.
 An existing local Ollama service can be used instead after pulling the same model.
@@ -110,7 +112,7 @@ mixed write/read test, ANN recall test or a customer production validation.
 
 ## Identity, ingestion and restore
 
-The database persists the Ollama tag's reported digest, dimensions, context limit,
+The database persists the Ollama tag's reported digest, dimensions, context/thread limits,
 chunking version/windows and metric. Equal dimensions alone do not permit reuse.
 A mismatch requires a new `-output` directory; no implicit re-embedding occurs.
 The model tag is checked again at completion. These checks assume the operator

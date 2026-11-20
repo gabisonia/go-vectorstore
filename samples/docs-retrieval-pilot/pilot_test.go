@@ -43,7 +43,7 @@ func fixture(t *testing.T) (config, *atomic.Int64) {
 				http.Error(w, "bad JSON", 400)
 				return
 			}
-			if request.Truncate || request.Model != "test:fixed" || request.Options["num_ctx"] != 512 {
+			if request.Truncate || request.Model != "test:fixed" || request.Options["num_ctx"] != 512 || request.Options["num_thread"] != 2 || len(request.Input) > 16 {
 				t.Error("wrong embedding request configuration")
 			}
 			embedded.Add(int64(len(request.Input)))
@@ -66,7 +66,7 @@ func fixture(t *testing.T) (config, *atomic.Int64) {
 	write(t, filepath.Join(corpus, "filter.md"), "A filter limits matches to records with the right category.")
 	queries := filepath.Join(root, "queries.json")
 	write(t, queries, `[{"id":"backup","text":"backup database","relevant":{"backup.md":2}}]`)
-	return config{Corpus: corpus, Queries: queries, Output: filepath.Join(root, "output"), URL: server.URL, Model: "test:fixed", Dimensions: 3, ContextTokens: 512, ChunkRunes: 80, OverlapRunes: 16, K: 1, Candidates: 10, Workers: 3, PerWorker: 4, Timeout: time.Minute, OperationTimeout: time.Second}, &embedded
+	return config{Corpus: corpus, Queries: queries, Output: filepath.Join(root, "output"), URL: server.URL, Model: "test:fixed", Dimensions: 3, ContextTokens: 512, Threads: 2, ChunkRunes: 80, OverlapRunes: 16, K: 1, Candidates: 10, Workers: 3, PerWorker: 4, Timeout: time.Minute, OperationTimeout: time.Second}, &embedded
 }
 
 func TestPilotIngestReuseUpdateRestore(t *testing.T) {
@@ -134,6 +134,37 @@ func TestIdentityMismatchDoesNotEmbedOrComplete(t *testing.T) {
 	again, err := runPilot(t.Context(), cfg)
 	if err != nil || again.Restore.RecordSHA256 != first.Restore.RecordSHA256 {
 		t.Fatalf("mismatch changed stored corpus: %v", err)
+	}
+}
+
+func TestPilotBoundsEmbeddingBatches(t *testing.T) {
+	cfg, embedded := fixture(t)
+	write(t, filepath.Join(cfg.Corpus, "backup.md"), strings.Repeat("backup ", 300))
+	r, err := runPilot(t.Context(), cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The fixture rejects any embedding call with more than 16 inputs.
+	if r.Ingestion.Upserted <= 32 || embedded.Load() != int64(r.Ingestion.Upserted+1) {
+		t.Fatalf("expected multiple bounded write batches: %+v", r.Ingestion)
+	}
+}
+
+func TestLoadFailuresPreventCompletion(t *testing.T) {
+	cfg, _ := fixture(t)
+	cfg.OperationTimeout = time.Nanosecond
+	r, err := runPilot(t.Context(), cfg)
+	if err == nil || r.Completed || r.Stage != "load" || r.Load.Failures == 0 || !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("load failure hidden: %+v, %v", r, err)
+	}
+}
+
+func TestOllamaDisappearingModelDoesNotReuseDigest(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write([]byte(`{"models":[]}`)) }))
+	defer server.Close()
+	o := &ollama{URL: server.URL, Model: modelIdentity{Name: "removed:tag", Digest: "previous"}, Client: server.Client()}
+	if _, err := o.identify(t.Context()); err == nil {
+		t.Fatal("removed tag retained previous digest")
 	}
 }
 
@@ -246,7 +277,7 @@ func TestOllamaRejectsBadVectorsAndCancellation(t *testing.T) {
 		"zero": `{"embeddings":[[0,0,0]]}`, "infinite": `{"embeddings":[[1e100,1,1]]}`,
 	} {
 		t.Run(name, func(t *testing.T) {
-			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { fmtBody := body; w.Write([]byte(fmtBody)) }))
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write([]byte(body)) }))
 			defer server.Close()
 			o := &ollama{URL: server.URL, Model: modelIdentity{Name: "fixture", Dimensions: 3, ContextTokens: 512}, Client: server.Client()}
 			if _, err := o.Embed(t.Context(), []string{"test"}); err == nil {

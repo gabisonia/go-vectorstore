@@ -18,6 +18,7 @@ type modelIdentity struct {
 	Digest        string
 	Dimensions    int
 	ContextTokens int
+	Threads       int
 }
 
 type ollama struct {
@@ -91,7 +92,7 @@ func (o *ollama) Embed(ctx context.Context, inputs []string) ([][]float32, error
 		Input    []string       `json:"input"`
 		Truncate bool           `json:"truncate"`
 		Options  map[string]int `json:"options"`
-	}{o.Model.Name, inputs, false, map[string]int{"num_ctx": o.Model.ContextTokens}}
+	}{o.Model.Name, inputs, false, map[string]int{"num_ctx": o.Model.ContextTokens, "num_thread": o.Model.Threads}}
 	if err := o.request(ctx, "POST", "/api/embed", input, &output); err != nil {
 		return nil, err
 	}

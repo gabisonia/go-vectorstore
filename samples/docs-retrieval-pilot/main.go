@@ -21,6 +21,7 @@ import (
 type config struct {
 	Corpus, Queries, Output, URL, Model, Revision       string
 	Dimensions, ContextTokens, ChunkRunes, OverlapRunes int
+	Threads                                             int
 	K, Candidates, Workers, PerWorker                   int
 	Timeout, OperationTimeout                           time.Duration
 }
@@ -96,7 +97,7 @@ func saveReport(dir string, result report) error {
 func runPilot(ctx context.Context, cfg config) (result report, err error) {
 	result = report{StartedUTC: time.Now().UTC().Format(time.RFC3339), Config: cfg, Stage: "validate"}
 	result.Environment = environment{Library: libraryVersion(), Go: runtime.Version(), OS: runtime.GOOS, Arch: runtime.GOARCH, Revision: cfg.Revision, CPUs: runtime.NumCPU()}
-	if cfg.Workers < 1 || cfg.Workers > 32 || cfg.PerWorker < 1 || cfg.PerWorker > 1000 || cfg.Workers*cfg.PerWorker > 10000 || cfg.K < 1 || cfg.K > 20 || cfg.Candidates < cfg.K || cfg.Candidates > 1000 || cfg.Dimensions < 1 || cfg.Dimensions > 4096 || cfg.ContextTokens < 32 || cfg.ContextTokens > 32768 || cfg.Timeout <= 0 || cfg.OperationTimeout <= 0 {
+	if cfg.Workers < 1 || cfg.Workers > 32 || cfg.PerWorker < 1 || cfg.PerWorker > 1000 || cfg.Workers*cfg.PerWorker > 10000 || cfg.K < 1 || cfg.K > 20 || cfg.Candidates < cfg.K || cfg.Candidates > 1000 || cfg.Dimensions < 1 || cfg.Dimensions > 4096 || cfg.ContextTokens < 32 || cfg.ContextTokens > 32768 || cfg.Threads < 1 || cfg.Threads > 16 || cfg.Timeout <= 0 || cfg.OperationTimeout <= 0 {
 		return result, fmt.Errorf("invalid workload/model bounds; see -help")
 	}
 	desired, sources, corpusHash, err := readCorpus(cfg.Corpus, cfg.ChunkRunes, cfg.OverlapRunes)
@@ -108,7 +109,7 @@ func runPilot(ctx context.Context, cfg config) (result report, err error) {
 		return result, err
 	}
 	result.CorpusSHA256, result.QueriesSHA256 = corpusHash, queryHash
-	embedder := &ollama{URL: cfg.URL, Model: modelIdentity{Name: cfg.Model, Dimensions: cfg.Dimensions, ContextTokens: cfg.ContextTokens}, Client: &http.Client{Timeout: 2 * time.Minute}}
+	embedder := &ollama{URL: cfg.URL, Model: modelIdentity{Name: cfg.Model, Dimensions: cfg.Dimensions, ContextTokens: cfg.ContextTokens, Threads: cfg.Threads}, Client: &http.Client{Timeout: 2 * time.Minute}}
 	defer embedder.Client.CloseIdleConnections()
 	version, err := embedder.identify(ctx)
 	if err != nil {
@@ -244,6 +245,7 @@ func main() {
 	flag.StringVar(&cfg.Revision, "revision", "unspecified", "source revision/dirty status supplied by the operator")
 	flag.IntVar(&cfg.Dimensions, "dimensions", 384, "dense dimensions (1..4096)")
 	flag.IntVar(&cfg.ContextTokens, "context-tokens", 512, "Ollama num_ctx (32..32768); never silently truncate")
+	flag.IntVar(&cfg.Threads, "embedding-threads", 2, "Ollama CPU threads (1..16); small models need few threads")
 	flag.IntVar(&cfg.ChunkRunes, "chunk-runes", 400, "fixed Markdown rune window (32..2000)")
 	flag.IntVar(&cfg.OverlapRunes, "overlap-runes", 80, "window overlap in runes")
 	flag.IntVar(&cfg.K, "k", 5, "document rank cutoff (1..20)")

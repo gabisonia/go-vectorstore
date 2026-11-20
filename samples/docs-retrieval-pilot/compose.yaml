@@ -17,6 +17,7 @@ services:
       timeout: 5s
       retries: 30
     mem_limit: 1g
+    cpus: 2
 
 volumes:
   models:
