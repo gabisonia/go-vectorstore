@@ -131,3 +131,23 @@ rewriting the index. The reference model stores its single full-text string
 property as the Chroma document and its category as metadata. The two-point
 test covers standalone retrieval. Distributed BM25, Chroma Cloud behavior and
 recall after embedding replacement still require separate evidence.
+
+## Elasticsearch 8.19.9
+
+Elastic.SemanticKernel.Connectors.Elasticsearch 0.3.1 restores and builds with
+VectorData.Abstractions 11.0.0, but constructing a collection throws
+`MissingMethodException` for `CollectionModelBuilder.Build`. Applications that
+require the 11.0.0 abstraction cannot use this connector for the tested workflow.
+
+Run `bash scripts/test-elasticsearch-parity.sh` with Docker. The first probe
+reproduces the 11.0.0 failure offline. The second uses a separately locked
+project with the connector's declared VectorData 9.7.0 dependency and a
+disposable Elasticsearch server. Both clients create an index and exercise
+cross-client reads, updates, cosine ranking and deletes.
+
+Use `elasticsearch.AttachNative` for an existing two-field index with a
+string field, an indexed float cosine vector and a retrievable full source.
+The key is Elasticsearch's external `_id`. Go writes use `refresh=wait_for`
+and search returns the server's raw `_score`. The two-document fixture checks
+ordering and scores for known vectors. Filtered search, larger-scale recall
+and cluster recovery are outside its coverage.

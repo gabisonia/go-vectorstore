@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add native Elasticsearch access for string document IDs and dense cosine
+  vectors. The C# interoperability fixture uses VectorData 9.7.0. Elastic’s
+  connector 0.3.1 cannot construct a collection with VectorData 11.0.0.
+
 - Add native access to standalone Chroma v2 collections with cosine embeddings,
   documents and metadata. Text-only updates preserve the stored embedding.
 

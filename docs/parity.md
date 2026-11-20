@@ -10,7 +10,9 @@ The [connector interoperability guide](../internal/parity/README.md) lists the
 locked C# packages, physical schemas, local Docker commands and live-service
 coverage for the unreleased native APIs. The PostgreSQL fixture uses the
 existing typed model API. SQL Server, Azure AI Search, Qdrant, SQLite, Redis, Weaviate and Chroma have explicit entry points
-for attaching to externally managed collections.
+for attaching to externally managed collections. The Elasticsearch adapter targets
+8.19.9 indexes shared with Elastic’s connector on VectorData 9.7.0. Connector
+0.3.1 fails at collection construction on the 11.0.0 target.
 
 | Workflow | Go implementation | Status |
 | --- | --- | --- |
