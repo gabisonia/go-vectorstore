@@ -1,5 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
   <ItemGroup>
+    <Compile Include="../ArticleFixture.cs" Link="ArticleFixture.cs" />
     <PackageReference Include="CommunityToolkit.VectorData.SqlServer" Version="[1.0.1]" />
   </ItemGroup>
 </Project>
