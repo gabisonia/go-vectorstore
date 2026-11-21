@@ -44,6 +44,8 @@ not replace workload validation or database operations. See
 [Go module version guidance](https://go.dev/doc/modules/version-numbers) and
 [security support](../SECURITY.md).
 
+The [pre-v1 review](pre-v1-review.md) maps these promises to tests and fixtures and records the approved v1 scope. Verify the v0.6.0 storage upgrade paths and complete the native connector support matrix and experimental module split before tagging v1.
+
 ## Preparing and publishing
 
 1. Start from latest master. Select an unused version, update VERSION and group
