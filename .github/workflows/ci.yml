@@ -167,6 +167,10 @@ jobs:
           go test -count=1 -race -tags=integration -timeout=5m ./stores/postgres
           go test -count=1 -race -tags=integration -timeout=5m ./samples/recipes
 
+      - name: Replay handbook search and reindex on pgvector
+        if: matrix.postgres == '16' && matrix.go == 'stable'
+        run: bash samples/handbook/replay.sh postgres
+
   integration-redis:
     name: Redis ${{ matrix.redis }} (Go ${{ matrix.go }})
     runs-on: ubuntu-latest

@@ -395,6 +395,8 @@ git push origin "v${RELEASE_VERSION}"
 
 ## Samples
 
+[Search an engineering handbook](samples/handbook/README.md) to see a cited passage change after editing and reindexing its source. Replay it locally with SQLite or on PostgreSQL with pgvector.
+
 - Overview and entry points: [`samples/README.md`](samples/README.md)
 - Local agent with Ollama and SQLite: [`local-doc-agent`](samples/local-doc-agent/README.md) (Aspire, separate module)
 - Redis model snapshots and exact retrieval: [`redis-store`](samples/redis-store/README.md)
