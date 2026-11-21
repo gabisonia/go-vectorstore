@@ -1,5 +1,30 @@
 # Upgrading model collections
 
+## Preparing for v0.7.0
+
+Two packages move out of the root module. Replace the import prefix
+`github.com/gabisonia/go-vectorstore/stores/` with
+`github.com/gabisonia/go-vectorstore/connectors/` **only for `azuresearch` and
+`pinecone`**. Their package names and public operations stay the same. Add the
+new module to the application's go.mod. Each initially depends on published
+core v0.6.0 and also works alongside the v0.7.0 root API.
+
+Release maintainers tag the reviewed commit independently as
+`connectors/azuresearch/v0.1.0` and `connectors/pinecone/v0.1.0` before
+publishing root v0.7.0. Once the corresponding tag is published, for example:
+
+```sh
+go get github.com/gabisonia/go-vectorstore/connectors/pinecone@v0.1.0
+go mod tidy
+go test ./...
+```
+
+Before those tags exist, keep deployed consumers on v0.6.x or pin the
+reviewed connector commit explicitly for pre-release testing. The
+[CI consumer check](../scripts/test-connector-modules.sh) resolves both
+modules by nested Git tags in a disposable repository using the public import
+paths and an ordinary consumer go.mod. See the [support matrix](native-support.md).
+
 ## Reading data written by v0.6.0
 
 Required CI builds a writer from the published v0.6.0 source (commit

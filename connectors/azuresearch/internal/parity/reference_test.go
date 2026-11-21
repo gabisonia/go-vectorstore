@@ -18,7 +18,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/gabisonia/go-vectorstore/stores/azuresearch"
+	"github.com/gabisonia/go-vectorstore/connectors/azuresearch"
 	"github.com/google/uuid"
 )
 

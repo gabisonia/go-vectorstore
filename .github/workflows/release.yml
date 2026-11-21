@@ -54,6 +54,13 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
+      - uses: actions/setup-go@v5
+        if: startsWith(needs.resolve.outputs.tag, 'v0.7.')
+        with:
+          go-version: stable
+      - name: Verify published connector modules from a clean consumer
+        if: startsWith(needs.resolve.outputs.tag, 'v0.7.')
+        run: bash scripts/test-connector-modules.sh --published
       - name: Ensure tag points to the tested commit
         env:
           RELEASE_TAG: ${{ needs.resolve.outputs.tag }}

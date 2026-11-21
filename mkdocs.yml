@@ -45,6 +45,7 @@ nav:
     - Production: production.md
     - Upgrading: upgrading.md
     - Compatibility and releases: releases.md
+    - Native connector support: native-support.md
     - Pre-v1 compatibility review: pre-v1-review.md
     - Performance: performance.md
     - Redis and PostgreSQL mixed workload: benchmarks/redis-mixed/report.md

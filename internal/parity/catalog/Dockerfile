@@ -5,8 +5,9 @@ COPY go.mod go.sum ./
 COPY vectordata vectordata
 COPY internal internal
 COPY stores stores
-WORKDIR /src/internal/parity/catalog/$provider
-RUN go test -race -tags=referenceparity -c -o /reference.test .
+COPY connectors connectors
+ARG test_dir
+RUN cd "${test_dir:-internal/parity/catalog/$provider}" && go test -race -tags=referenceparity -c -o /reference.test .
 
 FROM mcr.microsoft.com/dotnet/sdk:10.0.400 AS reference
 ARG provider

@@ -18,9 +18,10 @@ GOBIN="$api_tmp/bin" go install "golang.org/x/exp/cmd/apidiff@$api_tool"
 "$api_tmp/bin/apidiff" -m -w "$api_tmp/new.export" "$api_module"
 # apidiff reports differences on stdout but does not fail for incompatibility.
 "$api_tmp/bin/apidiff" -m -incompatible "$api_tmp/old.export" "$api_tmp/new.export" > "$api_tmp/report"
-if [[ -s "$api_tmp/report" ]]; then
-  cat "$api_tmp/report" >&2
-  printf 'Incompatible public API changes since %s require release review.\n' "$api_baseline" >&2
-  exit 1
+# Only this minor transition permits the two reviewed package relocations.
+: > "$api_tmp/expected"
+if [[ $(cat VERSION) == 0.7.0 && $api_baseline == v0.6.0 ]]; then
+  printf -- '- package %s/stores/%s: removed\n' "$api_module" azuresearch "$api_module" pinecone > "$api_tmp/expected"
 fi
-printf 'No incompatible public API changes since %s.\n' "$api_baseline"
+diff -u "$api_tmp/expected" "$api_tmp/report"
+printf 'API differences match the reviewed transition from %s.\n' "$api_baseline"

@@ -12,7 +12,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/gabisonia/go-vectorstore/internal/nativehttp"
+	"github.com/gabisonia/go-vectorstore/connectors/pinecone/internal/nativehttp"
 	"github.com/gabisonia/go-vectorstore/vectordata"
 )
 
