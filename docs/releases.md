@@ -3,7 +3,7 @@
 `VERSION` selects the source version being prepared or tagged. A version is
 available to consumers only after its immutable tag/release is published; consult
 [GitHub releases](https://github.com/gabisonia/go-vectorstore/releases). Source on
-master may be newer than the latest tag. The v0.6.0 source adds native connectors and requires Go 1.26+.
+master may be newer than the latest tag. The v0.7.0 source separates two experimental native connector modules and requires Go 1.26+.
 Consult the changelog for changes since the previous tag. See the
 [v0.5.0 compatibility review](release-0.5.md) and [upgrade guide](upgrading.md).
 
@@ -15,9 +15,10 @@ Fixes can tighten behavior that violates the documented contract, such as yieldi
 buffered records after cancellation. Applications must not depend on internal SQL,
 index names, undocumented error text, timing, or driver implementation details.
 
-CI compares all exported module packages against published v0.6.0 and requires
-zero incompatible changes, including the native connector APIs first published
-in that release. The archived v0.4.1-to-v0.5.0 report records that
+CI compares exported root packages against published v0.6.0. For the v0.7.0
+transition the expected diff consists of the two removed packages listed in the
+[upgrade guide](upgrading.md). Every other difference fails the check. A v0.6.x
+patch still requires an empty incompatibility report. The archived v0.4.1-to-v0.5.0 report records that
 minor-version transition; it is not a current compatibility exception list.
 Advance the baseline deliberately after a release, not to bypass an unexpected
 breaking change. See [API verification](../scripts/check-api.sh).
@@ -44,7 +45,7 @@ not replace workload validation or database operations. See
 [Go module version guidance](https://go.dev/doc/modules/version-numbers) and
 [security support](../SECURITY.md).
 
-The [pre-v1 review](pre-v1-review.md) maps these promises to tests and fixtures and records the approved v1 scope. Verify the v0.6.0 storage upgrade paths and complete the native connector support matrix and experimental module split before tagging v1.
+The [pre-v1 review](pre-v1-review.md) maps these promises to tests and fixtures and records the approved v1 scope. Verify the v0.6.0 storage upgrade paths and verify independent connector tags against the [support matrix](native-support.md) before tagging v1.
 
 ## Preparing and publishing
 

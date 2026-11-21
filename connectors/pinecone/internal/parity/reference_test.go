@@ -12,7 +12,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/gabisonia/go-vectorstore/stores/pinecone"
+	"github.com/gabisonia/go-vectorstore/connectors/pinecone"
 	"github.com/gabisonia/go-vectorstore/vectordata"
 )
 

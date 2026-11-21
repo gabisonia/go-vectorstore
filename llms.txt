@@ -2,7 +2,7 @@
 
 > Go vector-store library inspired by Microsoft.Extensions.VectorData, with typed model collections, native keys/data, named vectors and automatic embeddings across memory, SQLite, Redis, bounded Qdrant snapshots and PostgreSQL/pgvector.
 
-v0.6.0 requires Go 1.26+. v0.5.0 supports Go 1.25. Check GitHub
+The checkout prepares v0.7.0. Published v0.6.0 requires Go 1.26+. v0.5.0 supports Go 1.25. Check GitHub
 releases for available tags. Master can include unreleased changes. Run repository
 samples from the matching source checkout and check isolated modules' own go.mod.
 Prefer typed model APIs for new applications. Original PostgreSQL Record APIs remain supported. Choose a

@@ -25,6 +25,8 @@ jobs:
           cache: true
       - name: Test with race detection
         run: go test -race -timeout=5m ./...
+      - name: Test experimental connector modules and consumer resolution
+        run: bash scripts/test-connector-modules.sh
       - name: Run bounded fuzz campaigns
         run: bash scripts/test-fuzz.sh 50000x
       - name: Retain failing fuzz inputs
@@ -366,7 +368,11 @@ jobs:
           go-version: stable
           cache: true
       - name: Scan production and integration dependencies
-        run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 -test -tags=integration ./...
+        run: |
+          go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 -test -tags=integration ./...
+          for adapter in azuresearch pinecone; do
+            (cd "connectors/$adapter" && go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 -test ./...)
+          done
 
   storage-upgrade:
     name: Released storage upgrade

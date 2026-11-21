@@ -14,6 +14,6 @@ if [[ -z "$service" ]]; then
   fi
   service=$services
 fi
-runner=$(docker build -q --build-arg provider=azure-search -f internal/parity/catalog/Dockerfile .)
+runner=$(docker build -q --build-arg provider=azure-search --build-arg test_dir=connectors/azuresearch/internal/parity -f internal/parity/catalog/Dockerfile .)
 az account get-access-token --scope https://search.azure.com/.default --query accessToken -o tsv |
   docker run --rm -i -e AZURE_SEARCH_SERVICE="$service" "$runner"

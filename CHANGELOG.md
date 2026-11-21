@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.7.0
+
+- Move the Azure AI Search and Pinecone native APIs from the root module to
+  independently versioned experimental modules. Existing consumers must update
+  the two import paths. See the [migration guide](docs/upgrading.md) and
+  [native connector support matrix](docs/native-support.md).
+
 ## v0.6.0
 
 - Add native Cosmos DB for NoSQL and Azure DocumentDB adapters for externally

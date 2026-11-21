@@ -7,7 +7,7 @@ ensure that a tool reads its documentation or instruction files.
 
 ## Version and starting point
 
-This guide targets **v0.6.0**. Check
+The checkout prepares **v0.7.0**. This quickstart uses published **v0.6.0**. Check
 [GitHub releases](https://github.com/gabisonia/go-vectorstore/releases) for tag
 availability and pin the version used by your application's go.mod:
 
