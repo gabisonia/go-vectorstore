@@ -1,5 +1,37 @@
 # Upgrading model collections
 
+## Reading data written by v0.6.0
+
+Required CI builds a writer from the published v0.6.0 source (commit
+`545df9b8974c88e086c2f599e33a6703a01c1033`) with that release's dependencies,
+and a second binary from the checkout. Both execute the same public-API
+fixture. Run `bash scripts/test-storage-upgrade.sh` with Go, Docker and a
+checkout containing the release commit. All databases and backups belong to
+the script and are removed on exit.
+
+| Released configuration | Backup and reopen path on the same backend version |
+| --- | --- |
+| SQLite canonical, scalar/vector projections, sqlitevec | Close the writer, copy the database file and open the copy with the corresponding options. |
+| PostgreSQL 16 with pgvector | Stop the fixture server, copy its data directory and restore into a fresh instance of the same image. Open the registered model on the restored database. |
+| Redis 8.2 snapshot, hash and JSON | Save the database, stop the server and restore the data directory. Open with the original namespace and layout. The fixture also checks hash and JSON native indexes and JSON with a full-text hint. |
+| Qdrant 1.20.2 bounded standalone snapshot | Stop the single-node server, copy its storage directory and restore it to a fresh instance. Reopen with the original namespace and limits. |
+
+Each path uses two generated keys, an integer above 2^53 and an optional
+vector. Point reads verify the original values, search ranks the vector-bearing
+record, and a new insert must receive key 3. The restored Redis JSON case also
+attempts a disallowed migration to hash and checks the source records, ranking
+and key sequence afterwards. All listed configurations use direct reads.
+Preserve a backup before an explicit migration; consult the
+[provider migration guide](migrations.md) when changing schemas.
+
+These cold-copy procedures exercise **library upgrades on matching server
+images**. Follow backend-specific procedures for live backups, clusters and
+database-engine major upgrades. Native attachments to externally owned schemas
+have separate [interoperability fixtures](../internal/parity/README.md).
+The [SQLite v0.4.0](../stores/sqlite/testdata/v0.4.0/README.md) and
+[Redis format-1](../stores/redis/testdata/README.md) fixtures continue to test
+older direct reads independently.
+
 ## Upgrading to v0.6.0
 
 Use Go 1.26 or later for the root module. Applications on Go 1.25 can stay
