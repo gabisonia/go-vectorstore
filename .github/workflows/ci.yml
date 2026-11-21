@@ -368,6 +368,19 @@ jobs:
       - name: Scan production and integration dependencies
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 -test -tags=integration ./...
 
+  storage-upgrade:
+    name: Released storage upgrade
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+      - run: bash scripts/test-storage-upgrade.sh
+
   api-compatibility:
     name: Public API compatibility
     runs-on: ubuntu-latest
@@ -388,7 +401,7 @@ jobs:
   required:
     name: Required CI
     if: always()
-    needs: [test, sqlite-vec-probe, qdrant-probe, reference-catalog, standalone-dotnet-parity, sqlserver-dotnet-parity, qdrant-dotnet-parity, integration-postgres, integration-redis, local-doc-agent, docs-retrieval-pilot, aspire, vulnerabilities, api-compatibility, documentation-site]
+    needs: [test, sqlite-vec-probe, qdrant-probe, reference-catalog, standalone-dotnet-parity, sqlserver-dotnet-parity, qdrant-dotnet-parity, integration-postgres, integration-redis, local-doc-agent, docs-retrieval-pilot, aspire, vulnerabilities, api-compatibility, storage-upgrade, documentation-site]
     runs-on: ubuntu-latest
     steps:
       - name: Require every verification job to succeed
