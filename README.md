@@ -463,6 +463,8 @@ git push origin "v${RELEASE_VERSION}"
 
 ## Samples
 
+[Search an engineering handbook](samples/handbook/README.md) to see a cited passage change after editing and reindexing its source. Replay it locally with SQLite or on PostgreSQL with pgvector.
+
 - Overview and entry points: [`samples/README.md`](samples/README.md)
 - Local agent with Ollama and SQLite: [`local-doc-agent`](samples/local-doc-agent/README.md) (Aspire, separate module)
 - Redis model snapshots and exact retrieval: [`redis-store`](samples/redis-store/README.md)
@@ -510,6 +512,10 @@ Unsupported filters keep exact Go evaluation. KeywordTerms lists OR plain-text
 AND groups; native mode advertises HybridKeywordTerms.
 Native indexing requires Redis Search and database zero; writes rebuild the generation's index.
 See [native support and fallback rules](docs/redis.md#native-indexes-and-search).
+
+## Contributing
+
+[Start with the contributor guide](CONTRIBUTING.md) for a first issue, a local test command, and how to submit a pull request.
 
 ## License
 

@@ -5,6 +5,7 @@ cd "$(dirname "$0")/.."
 sample_tmp="$(mktemp -d)"
 trap 'rm -rf "$sample_tmp"' EXIT
 
+bash samples/handbook/replay.sh sqlite
 go run ./samples/model-store
 go run ./samples/input-embeddings
 go run ./samples/output-embeddings

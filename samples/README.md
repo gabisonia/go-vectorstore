@@ -5,6 +5,7 @@ model sample; then select SQLite or PostgreSQL when persistence is needed.
 
 | Goal | Sample | Requirements |
 | --- | --- | --- |
+| Search and edit an engineering handbook with source citations | [Handbook walkthrough](handbook/README.md) | SQLite locally; Docker for the PostgreSQL replay |
 | Typed CRUD, generated keys, automatic embeddings | [model-store](model-store/README.md) | None; optional SQLite/PostgreSQL |
 | Exact uint64 keys and generated UUIDs | [native-keys](native-keys/README.md) | None |
 | Custom inputs, image/audio bytes and direct string vector fields | [input-embeddings](input-embeddings/README.md) | None; deterministic fixture |
