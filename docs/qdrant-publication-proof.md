@@ -96,10 +96,32 @@ is returned.
 
 ## Retention, cleanup and hard bounds
 
-There is **no online reclamation**. `prune` returns `ErrUnsupported`. Readers,
-losing writers, cancelled staging and uncertain publications retain their slots.
-Logical deletion/recreation does not release slots or evict receipts. No lease
-timeout is used as evidence that a reader has finished.
+Each nonempty snapshot registers its reader token against the observed manifest
+revision before fetching records and releases it after the final batch. A
+publisher that wins the race invalidates a pending registration against the old
+revision. Registration and release each consume one of the 128 lifetime
+receipts. A conflict, cancellation, exhausted receipt budget or lost response
+can fail a snapshot. A failed release can leave its pin in place.
+
+Targeted cleanup accepts a previously published generation whose successor has
+become visible and whose last pin has gone. A published token can never become
+head again, so registration of a new pin on the retired generation is fenced
+even between the cleanup check and deletion. Cleanup deletes only that slot's
+data points. Its descriptor, IDs, publication token and receipts remain reserved
+for the lifetime of the collection. A lost deletion reply leaves the deletion
+outcome unknown.
+
+This requires every snapshot reader to register and each staging owner to
+complete its sequential writes before publication. Unpublished slots, including
+uncertain staging, are ineligible. Mixed clients that bypass registration fall
+outside the proof. An abandoned pin retains its generation indefinitely. The
+manifest admits up to 16 pins and the collection admits 16 lifetime slots.
+
+The real-server cases pause A after its first batch, publish B, and observe
+cleanup refuse A until its reader finishes. After release they verify removal
+of A's points. A separate case discards A's publication reply and confirms A's
+receipt after B publishes and A's data is removed. The counterexample that
+deliberately bypasses the pin check breaks the second batch of A.
 
 | Experiment bound | Value |
 | --- | --- |
@@ -127,8 +149,7 @@ while clients remain active is outside this protocol's assumptions.
 
 ## Evidence and reproduction
 
-The suite has fourteen publication cases in addition to the eleven compatibility
-cases. They use distinct HTTP clients/transports with no process-local publication
+The publication and compatibility cases use distinct HTTP clients/transports with no process-local publication
 mutex. Fault wrappers intercept the client boundary of the real Qdrant server;
 they never substitute a fake backend or fabricate a successful response.
 

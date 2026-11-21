@@ -84,7 +84,8 @@ not by themselves provide those guarantees. Conditional manifest publication
 is verified by the bounded provider; native multi-point execution remains a
 separate retention/recall gate.
 The [publication experiment](docs/qdrant-publication-proof.md) is tagged test code
-with fixed lifetime slots/receipts, logical epoch fencing and no online cleanup.
+with fixed lifetime slots/receipts and logical epoch fencing. Only reclaim the
+payload of a retired published generation after its last registered reader leaves.
 Preserve positive receipt evidence across superseding writes; absent receipts do
 not settle requests still in flight. Never stage an uncertain reservation until
 its exact slot descriptor is confirmed. Do not generalize the standalone proof
