@@ -85,7 +85,7 @@ page's vector, so cosine search prints:
 Restore a database backup
 ```
 
-Try changing the query to `[]float32{0, 1}` and run it again to find the
+Try changing the vector passed to `pages.Search` to `[]float32{0, 1}` and run it again to find the
 deployment page. SQLite keeps the collection in `handbook.db`; upserting the
 same IDs updates the same three pages. Delete the demo directory when finished.
 

@@ -28,6 +28,25 @@ func TestRun(t *testing.T) {
 		})
 	}
 }
+
+func TestNoMatchingCategory(t *testing.T) {
+	for _, backend := range []string{"memory", "sqlite"} {
+		t.Run(backend, func(t *testing.T) {
+			args := []string{"-category", "absent-category"}
+			if backend == "sqlite" {
+				args = append(args, "-sqlite", filepath.Join(t.TempDir(), "search.db"))
+			}
+			var out bytes.Buffer
+			if err := run(t.Context(), args, &out); err != nil {
+				t.Fatal(err)
+			}
+			if got := out.String(); got != "Matches: 0\n" {
+				t.Fatalf("unexpected output: %q", got)
+			}
+		})
+	}
+}
+
 func TestInvalidOptions(t *testing.T) {
 	for _, args := range [][]string{{"-dsn", "unused", "-sqlite", "unused"}, {"-dimensions", "2"}, {"-openai", "-dimensions", "-1"}} {
 		if err := run(context.Background(), args, &bytes.Buffer{}); err == nil {
