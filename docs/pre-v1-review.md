@@ -1,6 +1,6 @@
 # Pre-v1 compatibility review
 
-This working review uses published v0.6.0 as its API baseline. The commitments below already apply within a supported minor line under the [release policy](releases.md). Extending them across the lifetime of v1 requires maintainer approval. The review makes no release or tagging decision.
+This review uses published v0.6.0 as its API baseline. The commitments below already apply within a supported minor line under the [release policy](releases.md). The decisions below define the scope to verify before v1.
 
 ## Public surface and evidence
 
@@ -26,8 +26,10 @@ The [signature check](../scripts/check-api.sh) covers exported packages, includi
 | Qdrant | Preserve namespace ownership checks, persisted limits, bounded snapshots and retained acknowledgement evidence within the documented standalone topology. | [Provider contract](qdrant.md). The separate multi-point experiment is tracked in [#104](https://github.com/gabisonia/go-vectorstore/issues/104). |
 | Native connectors | Native schema, connection, authentication and search options belong to the individual adapter. The shared-storage fixtures cover PostgreSQL, SQLite, Redis, Qdrant, SQL Server, Azure AI Search, Azure DocumentDB, Cosmos NoSQL, Oracle, Elasticsearch, MongoDB, Couchbase, Pinecone, Chroma, Milvus and Weaviate. Preserve each documented attachment boundary, score convention and error contract. | [Per-connector versions, commands and known gaps](../internal/parity/README.md). Hosted DocumentDB recovery evidence is tracked in [#105](https://github.com/gabisonia/go-vectorstore/issues/105). |
 
-## Decisions before v1
+## Approved v1 scope and release gates
 
-* **Persisted-format coverage.** Decide the oldest release and layouts each new reader must open directly, and which require an explicit migration. The SQLite and Redis fixture links above identify concrete inputs. A restore or current-version round trip alone cannot establish cross-release compatibility. For each additional promised layout, provide a fixture from the producing release and an executable read or migration check.
-* **Scope of native guarantees.** Decide which adapter and backend-version combinations receive long-term behavioral support. Record the promised schema, query and error behavior for each selected combination. Keep exact portable search, approximate recall and externally managed schemas distinct in that decision.
-* **Approval record.** Record the accepted v1 scope, supported migration paths and any exceptions in the release policy before proposing a tag. [Issue #106](https://github.com/gabisonia/go-vectorstore/issues/106) tracks that decision. [#102](https://github.com/gabisonia/go-vectorstore/issues/102) covers the signature baseline. Neither the signature check nor the two provider investigations above settles these policy choices.
+Applications using supported v0.6.0 storage layouts must have a documented path to v1. A layout may require an explicit migration. Preserve direct reads for the existing SQLite v0.4.0 database and Redis format-1 snapshot. Before tagging v1, verify each promised path against data written by its released producer and publish the direct-read and migration matrix. [Storage upgrade fixtures (#112)](https://github.com/gabisonia/go-vectorstore/issues/112)
+
+Commit to native behavior for explicitly listed adapter, backend version and topology combinations with CI coverage of the promised operations. Move experimental connector APIs into independently versioned v0 modules before tagging the root module v1. Where a package contains both a core provider and native attachment APIs, review those surfaces separately. The supported combinations, module boundaries and consumer migration steps are deliverables of the [connector support and extraction work (#113)](https://github.com/gabisonia/go-vectorstore/issues/113).
+
+Intentional breaking changes belong in a reviewed pre-v1 minor release with release notes and upgrade instructions. Existing v0.6.x patch releases retain the published compatibility policy. Release timing is a separate decision.
