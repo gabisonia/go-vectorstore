@@ -38,6 +38,8 @@ jobs:
           if-no-files-found: ignore
       - name: Check documentation links and executable quickstart
         run: python3 scripts/check-docs.py
+      - name: Run the README SQLite quickstart against the published module
+        run: python3 scripts/check-readme-quickstart.py
       - name: Run credential-free sample smoke tests
         run: bash scripts/test-samples.sh
       - name: Vet
