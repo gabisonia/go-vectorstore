@@ -29,6 +29,7 @@ go test -race -timeout=5m ./...
 go vet ./...
 bash scripts/test-fuzz.sh 50000x
 python3 scripts/check-docs.py
+python3 scripts/check-readme-quickstart.py
 bash scripts/test-samples.sh
 bash .github/scripts/release_test.sh
 ```
@@ -41,8 +42,10 @@ never accept unexpected differences simply to make CI green. `Required CI` joins
 all verification jobs; include any new CI job in its needs list.
 
 These commands need no provider credentials. The sample script creates/removes
-its own temporary SQLite files. Documentation checks execute only the explicitly
-marked complete AI-guide program; other snippets may be partial recipes.
+its own temporary SQLite files. The documentation checks execute the AI guide
+against both the checkout and its published install pin. The README SQLite
+quickstart runs against its published pin and reopens the database. A fresh Go
+module cache needs network access for the consumer checks.
 
 The SQLite vector design has an isolated, opt-in compatibility probe:
 
@@ -100,12 +103,13 @@ tests use owned fixtures or unique namespaces on an explicitly supplied server.
 Restart tests SIGKILL only their owned container and skip supplied servers; CI
 runs them separately without QDRANT_TEST_URL. See [provider scope](docs/qdrant.md).
 
-PostgreSQL and sample recipe integration tests need Docker:
+PostgreSQL, Redis and sample recipe integration tests use Docker by default:
 
 ```sh
 go test -count=1 -race -tags=integration -timeout=5m ./stores/postgres
 go test -count=1 -race -tags=integration -timeout=5m ./samples/recipes
-go test -count=1 -race -tags=integration -timeout=5m ./stores/redis
+go test -count=1 -race -tags=integration -timeout=5m -skip 'TestIntegration(Native|JSONNative)' ./stores/redis
+go test -count=1 -race -tags=integration -timeout=10m -run 'TestIntegration(Native|JSONNative)' ./stores/redis
 ```
 
 Set `PGVECTOR_TEST_IMAGE=pgvector/pgvector:pg18` for PostgreSQL 18; the default is
@@ -169,12 +173,14 @@ limits when documenting measurements.
 
 - Keep public contracts in `vectordata`; provider-specific options belong to the provider.
 - Validate records, filters, vectors and options before side effects. Failed batch
-  writes must remain atomic, including generated-key allocation.
+  writes must remain atomic. Commit provider-managed integer sequences with their
+  records. PostgreSQL identity sequences can have gaps after rollback.
 - Preserve caller ownership of mutable maps/slices and returned records. Memory
   stores immutable canonical values and replaces them on writes; searches borrow
   them through a shallow snapshot, so never mutate stored record internals.
 - Preserve native key and JSON numeric precision, SQL NULL versus JSON null,
-  optional-vector behavior, distance/score contracts and stable key tie ordering.
+  optional-vector behavior, distance/score contracts and documented tie ordering.
+  PostgreSQL ordinary vector search orders by distance alone.
 - Keep context cancellation discoverable through errors.Is. Close iterators,
   cursors and transactions on early return. Do not invoke caller codecs while
   holding memory locks or SQLite's single connection.

@@ -111,6 +111,7 @@ published v0.5.0 release supports Go 1.25.
 - `stores/redis`: atomic snapshots/hash generations, dense exact search and opt-in HNSW/FLAT
 - `stores/qdrant`: bounded standalone snapshots and exact Go search ([scope and limits](docs/qdrant.md))
 - `stores/memory`: transient model collections for development and contract tests
+- `connectors/azuresearch` and `connectors/pinecone`: independently versioned native adapters. See the [native connector support matrix](docs/native-support.md) for tested operations across all backends.
 - `samples`: runnable demos (see `samples/README.md`)
 - `docs`: architecture and implementation notes
 
@@ -403,26 +404,24 @@ store, err := postgres.NewVectorStore(pool, postgres.StoreOptions{
 
 ## Integration tests
 
-```bash
-go test -tags=integration ./...
+Run unit tests with `go test ./...`. For the PostgreSQL provider and recipes,
+run each package separately against a disposable PostgreSQL database:
+
+```sh
+go test -count=1 -race -tags=integration -timeout=5m ./stores/postgres
+go test -count=1 -race -tags=integration -timeout=5m ./samples/recipes
 ```
 
-Unit tests run with:
-
-```bash
-go test ./...
-```
-
-Notes:
-- Integration tests start Postgres/pgvector automatically via Testcontainers
-- Docker daemon must be available when running integration tests
-- Optional override: set `PGVECTOR_TEST_DSN` to use an existing Postgres instance instead of starting a container
-- Set `PGVECTOR_TEST_IMAGE=pgvector/pgvector:pg18` to test a different PostgreSQL image (the default is `pgvector/pgvector:pg16`)
+By default these tests use Docker and `pgvector/pgvector:pg16`. Set
+`PGVECTOR_TEST_IMAGE=pgvector/pgvector:pg18` to test PostgreSQL 18, or set
+`PGVECTOR_TEST_DSN` to use an existing disposable database. Redis and Qdrant
+have their own fixtures and test commands. See [Redis verification](docs/redis.md#verification)
+and the [Qdrant provider guide](docs/qdrant.md).
 
 ## Aspire local development (optional)
 
 The [shared Go AppHost](samples/aspire-services/README.md) manages persistent local
-PostgreSQL and Redis services, the semantic-search/RAG examples, and the local
+PostgreSQL, Redis and Qdrant services, the semantic-search/RAG examples, and the local
 documentation agent. Aspire owns readiness, dependency ordering, logs and terminals.
 
 Use Aspire CLI 17.0.0, Go 1.26+ and Docker. The root library also requires Go 1.26+;

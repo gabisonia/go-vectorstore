@@ -23,7 +23,6 @@ An ordinary string vector field does not require the `input` flag and also works
 with the original text `Embedder`. The source type must match the generic adapter,
 including custom pointer types; optional string pointers supply their string value.
 
-All three built-in providers support custom inputs. See the
+The model API supports custom embedding inputs from v0.5.0. See the
 [model API](../../docs/model-api.md#custom-and-multimodal-inputs) for configuration,
-dynamic records, ownership and error behavior. These APIs are on master after
-v0.4.1; consult [release guidance](../../docs/releases.md) for published versions.
+dynamic records, ownership and error behavior.

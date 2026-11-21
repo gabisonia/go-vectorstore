@@ -5,7 +5,7 @@ This document explains how `go-vectorstore` store backends are implemented, how 
 ## 1) Design Goals
 
 - Keep provider-neutral model and Record contracts in `vectordata`
-- Isolate backend specifics inside `stores/<backend>`
+- Keep backend-specific code in its provider package or independent connector module
 - Enforce schema and vector-dimension correctness at runtime
 - Keep write/read/search behavior consistent across implementations
 - Allow adding future store implementations without changing caller-facing contracts
@@ -21,12 +21,13 @@ The shared core and provider packages are:
 - `stores/sqlite`: durable model storage with exact snapshot queries/search
 - `stores/sqlitevec`: optional adapter for verified scalar L1 candidates over the same SQLite engine
 - `stores/memory`: transient model storage with exact search
-- `stores/redis`: atomic collection snapshots with Go dense exact search
-- `internal/modelcodec`: canonical JSON record encoding shared by SQLite and Redis
+- `stores/redis`: snapshot, hash and RedisJSON layouts with exact Go search and optional native indexes
+- `stores/qdrant`: bounded standalone snapshots with exact Go search
+- `internal/modelcodec`: canonical JSON record encoding shared by SQLite, Redis and bounded Qdrant snapshots
 
-All built-in providers implement ModelStore and ModelCollection. Only PostgreSQL
+The model providers listed above implement ModelStore and ModelCollection. Only PostgreSQL
 also implements the original VectorStore/Collection contracts. New model providers
-do not need to implement the Record API. See the [provider matrix](parity.md).
+do not need to implement the Record API. See the [model provider matrix](parity.md) and the [provider-specific native APIs](native-support.md).
 
 ## 3) Shared Core Contracts (`vectordata`)
 
@@ -117,7 +118,7 @@ content text
 3. Build distance expression and dynamic projection columns
 4. Compile optional filter AST into SQL + bind args
 5. Apply optional backend distance threshold (`distance <= threshold`; lower is stricter)
-6. Order by ascending distance and limit by `topK`
+6. Order by ascending native distance and limit by `topK`. Squared L2 uses the L2 operator for ordering and squared units for the reported distance and threshold.
 7. Scan rows and map distance to score
 
 ### 4.5 Index Management
@@ -201,14 +202,14 @@ For a practical checklist and repository wiring steps, see [`connector-developme
 Model collections use a separate native schema defined by
 `vectordata.CollectionDefinition`. They support typed keys, data properties,
 named vectors, batched embeddings, projected and streaming retrieval, and
-PostgreSQL keyword/vector hybrid search. PostgreSQL model tables use native key/data/vector columns. SQLite stores
+keyword/vector hybrid search on PostgreSQL and native Redis. PostgreSQL model tables use native key/data/vector columns. SQLite stores
 canonical records and definitions in internal provider tables; memory stores
 normalized records in process. The original implementation
 and interfaces remain supported.
 
 The portable AST is in `vectordata/filterast`; PostgreSQL compilation is in
-`stores/postgres/filtersql`. Memory, SQLite and Redis provide exact search. All
-providers run `vectordata/conformance.Run`. SQLite adds file-reopen, concurrent
+`stores/postgres/filtersql`. Memory, SQLite, Redis and bounded Qdrant provide exact Go search. The
+model providers run `vectordata/conformance.Run`. SQLite adds file-reopen, concurrent
 handle, rollback and precision tests; PostgreSQL integration tests cover the
 driver, native schemas, indexes, migrations and transactions. See
 [model-api.md](model-api.md) for details and current limits.

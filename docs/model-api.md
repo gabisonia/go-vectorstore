@@ -108,7 +108,7 @@ integer arguments are accepted when in range; floats, numeric strings and negati
 values are rejected for uint64 keys. SQLite decodes unsigned JSON keys directly
 into uint64, preserving values above 2^53 and MaxInt64 after reopening a file.
 
-On master after v0.4.1, non-generated typed integer keys support `int8`, `int16`,
+Since v0.5.0, non-generated typed integer keys support `int8`, `int16`,
 `int32`, `int`, `int64`, `uint8`, `uint16`, `uint32`, `uint`, `uint64` and named
 types. For example, an `int32` key field can use `TypedModelCollection[int32, T]`.
 Signed widths map to canonical `KeyInt64`; unsigned widths map to `KeyUint64`.
@@ -130,9 +130,11 @@ A zero generated key field in a tagged model (or a nil `ModelRecord.Key`) reques
 a new key. An explicit dynamic key, including an all-zero UUID string, is preserved.
 Insert/Upsert return keys in input order; input models are not mutated. Assign the
 returned key before upserting the same model again. A generated-key collision
-fails instead of overwriting a record, including during Upsert. Failed memory and
-SQLite batches preserve integer sequence state; PostgreSQL identity values can
-have gaps after a rollback. See the runnable
+fails instead of overwriting a record, including during Upsert. Memory, SQLite,
+Redis and bounded Qdrant publish their integer sequence with the batch.
+PostgreSQL rolls back every row in a failed transaction, but an identity value
+already allocated can leave a gap. For example, if a rolled-back insert used
+ID 8, the next successful insert can return 9. See the runnable
 [native-key sample](../samples/native-keys/README.md).
 
 Data types are `string`, `int64`, `float64`, `bool`, `time`, `string_array`, `json`,
@@ -390,10 +392,10 @@ if provider, ok := store.(vectordata.CapabilityProvider); ok {
 }
 ```
 
-All providers report string/int64/uint64/UUID keys, generated int64/UUID keys, all
+All built-in model providers report string/int64/uint64/UUID keys, generated int64/UUID keys, all
 twenty portable data types and cosine/L2/squared-L2/inner-product/L1 dense metrics.
-`VectorKinds` reports supported kinds: Redis supports dense; memory, SQLite and
-PostgreSQL also support binary and sparse. Hamming applies only to binary vectors.
+`VectorKinds` reports supported kinds: Redis and bounded Qdrant support dense vectors. Memory,
+SQLite and PostgreSQL also support binary and sparse vectors. Hamming applies only to binary vectors.
 `VectorPrecisions` reports `VectorFloat32` and `VectorFloat16` on all providers;
 PostgreSQL float16 storage requires pgvector 0.7+ and a visible `halfvec` type.
 
@@ -412,8 +414,9 @@ PostgreSQL float16 storage requires pgvector 0.7+ and a visible `halfvec` type.
 | `MigrationPlanning` | False | False | True, plan-only |
 | `MigrationApplication` | False | False | True, additive changes only |
 
-Plain Redis layouts report the same booleans/index fields as memory and buffer
-snapshots/pages. With `NativeIndexes`, HASH and JSON advertise HNSW and FLAT
+The bounded Qdrant model provider and plain Redis layouts report the same features
+as memory for the rows above. Both read snapshots and rank dense vectors in Go.
+Qdrant native point handles have separate [search semantics](qdrant.md#native-c-collections). With `NativeIndexes`, HASH and JSON advertise HNSW and FLAT
 for four dense metrics and two precisions (16 tuples, up to 4,096 dimensions).
 Both native layouts advertise indexed string/int64/float64/bool data and
 `FullTextIndexing` for strings marked `IsFullTextIndexed`/`fulltext`. JSON version-5
@@ -473,7 +476,7 @@ and normal operation errors when metadata is unavailable.
 
 ### Store and collection metadata
 
-On master after v0.4.1, optional `StoreMetadataProvider` and
+Since v0.5.0, optional `StoreMetadataProvider` and
 `CollectionMetadataProvider` interfaces identify configured handles. This serves
 the discovery workflow of Microsoft's
 [store metadata](https://learn.microsoft.com/en-us/dotnet/api/microsoft.extensions.vectordata.vectorstoremetadata)
@@ -606,7 +609,7 @@ and SQLite operation errors add backend, collection, and operation context throu
 `OperationError`, preserving
 `errors.Is`/`errors.As`.
 
-On master after v0.4.1, these wrappers also embed `StoreMetadata`: configured
+Since v0.5.0, these wrappers also embed `StoreMetadata`: configured
 system, database and namespace names. PostgreSQL migration planning/application
 errors carry the same identity. This covers the contextual diagnostics represented
 by Microsoft's [VectorStoreException](https://source.dot.net/Microsoft.Extensions.VectorData.Abstractions/VectorStoreException.cs.html).
@@ -755,14 +758,18 @@ finite; cosine vectors must be nonzero.
 
 `Skip` and `top` page the ranked results. Approximate indexes can still return
 fewer matches or change the candidate set between requests; paging does not
-create a stable snapshot across separate searches.
+create a stable snapshot across separate searches. Ordinary PostgreSQL vector
+search orders by distance alone, even with an exact scan. If two records tie
+for the last place on a page, either can appear. Applications that need
+repeatable pages across that tie cannot rely on `Skip` to break it.
 
-Memory and SQLite perform exact scans, retaining the best `top + Skip` candidates
-and sorting that set by distance, then native key for ties. Memory takes a shallow
-snapshot of immutable stored records and copies only the returned page. SQLite
-streams decoded records from one read snapshot. Both still examine the whole
-collection; large offsets increase retained candidate memory. See the
-[selection benchmarks](performance.md#exact-search-selection-and-copying).
+Memory and SQLite rank exact hits by distance and then by native key. Both
+retain up to `top + Skip` candidates. Memory scans a shallow snapshot and copies
+the returned page. SQLite's default path decodes canonical records as it scans.
+With a ready dense vector projection, unfiltered search ranks packed vectors
+and fetches full records only for the selected page in the same WAL snapshot.
+See [SQLite vector projections](sqlite.md#opt-in-dense-vector-projections) and
+the [selection benchmarks](performance.md#exact-search-selection-and-copying).
 
 Native Redis FLAT retrieves all matching vector-bearing payloads and remeasures
 in Go before exact selection, preserving roundoff-sensitive ordering and native
@@ -808,7 +815,7 @@ rebuilds; `ApplyMigration` rejects that change.
 ### Squared Euclidean distance
 
 Use `DistanceL2Squared` or `metric=l2_squared` to return the sum of squared
-component differences. This metric is available on master after v0.4.1:
+component differences. The metric is available from v0.5.0.
 
 ```go
 Embedding []float32 `vectordata:"vector,dimensions=2,metric=l2_squared,index"`
@@ -1209,7 +1216,7 @@ See [SQLite storage and limits](sqlite.md) and [Redis limits](redis.md).
 
 ### Keyword lists
 
-On master after v0.4.1, PostgreSQL and native Redis accept
+Since v0.5.0, PostgreSQL and native Redis accept
 `HybridSearchOptions.KeywordTerms`,
 covering the keyword-list workflow of Microsoft's
 [hybrid search contract](https://source.dot.net/Microsoft.Extensions.VectorData.Abstractions/IKeywordHybridSearchable.cs.html).

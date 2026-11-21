@@ -11,9 +11,11 @@ The shared core and provider implementations are:
 - `stores/sqlite`: durable embedded model storage with exact snapshot search
 - `stores/sqlitevec`: opt-in extension adapter sharing the SQLite implementation
 - `stores/memory`: transient exact-search model implementation
-- `stores/redis`: standalone atomic snapshots and dense Go exact search
+- `stores/redis`: snapshot, hash and RedisJSON layouts with exact Go search and optional native indexes
+- `stores/qdrant`: bounded standalone snapshots with exact Go search
 
-Providers share model contracts, portable filter evaluation, and a conformance suite.
+These providers share model contracts, portable filter semantics and a conformance suite.
+Provider-specific APIs for externally managed data are listed in the [native support matrix](native-support.md).
 
 ## 2) Core Data Model
 
@@ -45,7 +47,7 @@ Search returns `vectordata.SearchResult`:
 Score normalization:
 
 - cosine: `1 - distance`
-- L2/L1/Hamming: `1 / (1 + distance)` (Hamming applies to binary model vectors)
+- L2/squared L2/L1/Hamming: `1 / (1 + distance)` (Hamming applies to binary model vectors)
 - inner product: `-distance`
 
 ## 3) Public API Shape
@@ -132,14 +134,17 @@ Each record is validated before sending:
 2. Validates query vector dimension, finite elements, and nonzero norm for cosine
 3. Chooses operator by metric:
    - cosine: `<=>`
-   - l2: `<->`
+   - L2 and squared L2: `<->`
    - l1: `<+>`
    - inner product: `<#>`
-4. Builds `distance` expression (`"vector" <op> $1::vector`)
-5. Applies optional filter SQL
-6. Applies optional backend distance threshold (`distance <= threshold`; lower is stricter)
-7. Orders by `distance ASC`, limits by `topK`
-8. Scans rows into `SearchResult`
+4. Computes the reported distance. Squared L2 squares the result of `<->`.
+5. Applies optional filter SQL and the inclusive threshold on the reported distance.
+   A displacement of `(3, 4)` has L2 distance 5 and squared L2 distance 25, so a
+   threshold of 5 includes it for L2 and excludes it for squared L2.
+6. Orders by the native distance operator and limits by `topK`. Squared L2 uses
+   ordinary L2 ordering so pgvector can use its L2 index. Equal distances have
+   no guaranteed key order.
+7. Scans rows into `SearchResult`.
 
 The pgvector operators are documented in the [pgvector README](https://github.com/pgvector/pgvector#querying).
 
@@ -227,7 +232,8 @@ Defaults when index options are omitted:
 Metric-specific operator classes are selected automatically:
 
 - cosine -> `vector_cosine_ops`
-- l2 -> `vector_l2_ops`
+- L2 and squared L2 -> `vector_l2_ops`
+- L1 -> `vector_l1_ops` (HNSW only)
 - inner product -> `vector_ip_ops`
 
 For vector indexing details:
