@@ -401,3 +401,31 @@ possible data loss during forced promotion because regional replication is
 asynchronous. Graceful promotion requires a reachable primary and a drained
 replication queue. This drill did not test graceful promotion.
 See [DocumentDB failover modes](https://learn.microsoft.com/en-us/azure/documentdb/failover-modes).
+
+#### Independent intent log recovery demonstration
+
+Run `bash scripts/test-documentdb-recovery.sh` with Docker and Go. The test
+creates a disposable DocumentDB Local container and a separate SQLite intent
+log. It commits each stable ID, revision and payload to the log before writing
+DocumentDB, and reports the write as acknowledged only after both operations
+succeed. It closes and reopens the log, removes one acknowledged target item,
+and introduces a newer target revision. Reconciliation inserts missing IDs
+only, checks existing revisions and rejects an older target or conflicting
+payload. It runs twice and freshly reads all three items after each pass.
+
+One local run on 2026-11-21 recovered and verified one missing item among three
+intents in 8.4 ms. The second pass inserted nothing. This is a small local
+fixture, not a recovery-time objective. The missing item in the earlier hosted
+promotion was observed on Azure; this demonstration deliberately deletes its
+own item locally and does not reproduce a regional failover.
+
+SQLite is a stand-in for an independently durable log. A real deployment needs
+that log and its backups in a separate failure domain, stable per-item ordering,
+and an acknowledgement policy covering its durability. An intent can be
+committed even if the target write fails or its outcome is unknown; the
+application must define whether such intents are replayable before adopting
+this pattern. The demo does not update older target revisions, handle deletes,
+or provide a general concurrent-writer protocol. A newer revision is preserved,
+but the demonstration does not establish its provenance or durability. Insert
+errors with unknown outcomes require later read-only reconciliation, not blind
+replay; the test's second pass establishes idempotent final state only.
