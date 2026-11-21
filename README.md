@@ -445,6 +445,10 @@ AND groups; native mode advertises HybridKeywordTerms.
 Native indexing requires Redis Search and database zero; writes rebuild the generation's index.
 See [native support and fallback rules](docs/redis.md#native-indexes-and-search).
 
+## Contributing
+
+[Start with the contributor guide](CONTRIBUTING.md) for a first issue, a local test command, and how to submit a pull request.
+
 ## License
 
 This project is licensed under the MIT License.
