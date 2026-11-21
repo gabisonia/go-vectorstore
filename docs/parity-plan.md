@@ -272,16 +272,13 @@ SQL NULL/empty pointers, canonical read/rewrite stability, narrowing errors with
 partial slice results, iterator stopping and reopen. Upgrade guidance explains the
 native conversion correction; persisted formats remain unchanged.
 
-Remaining production work proceeds one focused PR at a time:
+Continue auditing schema/codec agreement, decode overflow, error propagation and
+mutable-value ownership. Extend restore and failure drills as supported storage
+layouts evolve. The following results cover released configurations.
 
-1. Continue the typed-model audit for schema/codec agreement, decode overflow,
-   error propagation and mutable-value ownership; fix reproduced defects.
-2. Extend restore/failure drills, checking registered schemas, native values and
-   generated-key continuity, with explicit provider-specific outcome limits.
-3. Publish reproducible PostgreSQL/Redis mixed-workload evidence alongside the
-   existing SQLite measurements; include cancellation, concurrency and memory.
-4. Prepare a reviewed release candidate, compatibility/upgrade guidance and a
-   pinned consumer smoke test. Publication remains a separate explicit action.
+- The [upgrade matrix](upgrading.md#reading-data-written-by-v060) records restore and direct-read checks using fixtures written by v0.6.0.
+- The [PostgreSQL report](benchmarks/postgres-mixed/report.md) and [Redis comparison](benchmarks/redis-mixed/report.md) give the fixture, concurrency and measured results for each layout tested.
+- The [v0.7.0 upgrade guide](upgrading.md) covers the released module split. CI runs the pinned SQLite consumer quickstart against a fresh database and again after reopening it.
 
 ## Completion checks for each implementation PR
 

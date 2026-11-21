@@ -8,7 +8,8 @@ It is a workflow comparison, not a claim of API or feature equivalence with ever
 
 The [connector interoperability guide](../internal/parity/README.md) lists the
 locked C# packages, physical schemas, local Docker commands and live-service
-coverage for the unreleased native APIs. The PostgreSQL fixture uses the
+coverage for the provider-specific native APIs. Azure AI Search and Pinecone ship
+as independent modules as of v0.7.0. See the [native support matrix](native-support.md). The PostgreSQL fixture uses the
 existing typed model API. Oracle, SQL Server, Azure AI Search, Qdrant, SQLite, Redis, Weaviate, Chroma, Milvus and MongoDB have explicit entry points
 for attaching to externally managed collections. The Elasticsearch adapter targets
 8.19.9 indexes shared with Elastic’s connector on VectorData 9.7.0. Connector
@@ -76,8 +77,7 @@ support remain separate gates.
 The [typed output adapter](embedding-outputs.md) adds float32/float16 generator
 representations while retaining the existing dense boundary. Optional
 [typed property references](typed-fields.md) add compile-checked model fields and
-operands over the portable AST. Native service access remains deferred pending a
-concrete consumer.
+operands over the portable AST. A generic interface for retrieving the underlying provider client remains deferred.
 
 ## Provider matrix
 
@@ -119,7 +119,7 @@ See [query costs](sqlite.md#query-costs-and-provider-limits),
 [scalar measurements](performance.md#sqlite-scalar-query-verification) and
 [index verification](performance.md#sqlite-scalar-index-verification).
 
-Redis is available on master after v0.4.1. Default snapshot storage transfers the
+The Redis model provider is available from v0.5.0. Default snapshot storage transfers the
 whole collection and runs exact dense search/filtering in Go. Its encoded size
 limit defaults to 16 MiB. Plain hash storage adds immutable per-record generations
 without changing query execution. Opt-in RedisJSON uses format-3 documents with

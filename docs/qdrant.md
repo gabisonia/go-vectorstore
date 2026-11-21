@@ -13,7 +13,7 @@ tests need no Qdrant; real-server checks use the integration build tag.
 
 ## Native C# collections
 
-The unreleased `qdrant.AttachNativePoints[K]` also opens externally managed
+Since v0.6.0, `qdrant.AttachNativePoints[K]` opens externally managed
 Qdrant collections by physical name. Choose `uint64` or `uuid.UUID` for the
 point ID and supply the complete map of named dense cosine vectors to their
 dimensions. `UpsertPoint` requires all configured vectors and replaces the full

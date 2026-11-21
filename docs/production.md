@@ -170,10 +170,13 @@ questions about state captured at its cutoff.
 
 Use a local filesystem with SQLite-compatible locking. Each Store has one pooled
 connection; WAL allows readers and other handles' writes to overlap, while writes
-serialize. FULL synchronization and WAL are configured by the provider. Exact
-search still decodes/scans the collection; benchmark record size, vectors, paging,
-concurrent readers/writers and memory use. Large offsets retain more candidates.
-See [SQLite costs](sqlite.md#query-costs-and-provider-limits).
+serialize. The provider configures FULL synchronization and WAL. By default,
+exact search scans and decodes canonical records. With a ready dense vector
+projection, an unfiltered search ranks packed vectors, then fetches full records
+only for the result page in the same WAL snapshot. Filtered, binary and sparse
+searches use the canonical scan. Large offsets increase the number of candidates
+retained during ranking. Benchmark the path and page sizes your application uses.
+See [SQLite vector projections](sqlite.md#opt-in-dense-vector-projections).
 
 Do not rename, replace or remove an open database or its WAL/SHM sidecars. For live
 backups use SQLite-aware tooling built on the online backup API or an appropriate

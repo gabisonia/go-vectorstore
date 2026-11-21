@@ -12,7 +12,7 @@ PostgreSQL integration contract:
 
 ```sh
 go test -race -run TestModelContract ./stores/memory ./stores/sqlite
-go test -race -tags=integration -run TestIntegrationModelContract -timeout=5m ./stores/postgres
+go test -count=1 -race -tags=integration -run TestIntegrationModelContract -timeout=5m ./stores/postgres
 ```
 
 This covers advertised native types, dense/float16/binary/sparse and optional
@@ -230,10 +230,8 @@ benchmarks do not measure indexed throughput. Projection rows/indexes add O(reco
 
 ## Redis snapshot verification
 
-```sh
-go test -race -tags=integration -timeout=5m ./stores/redis
-REDIS_TEST_IMAGE=redis:7.4 go test -count=1 -race -tags=integration -timeout=5m ./stores/redis
-```
+Run the [Redis verification commands](redis.md#verification) for storage and
+native index coverage on Redis 8.2 and 7.4.
 
 Default Redis storage transfers a complete collection snapshot even for one-key
 reads and nil-filter Count. Writes also read/serialize/publish complete snapshots;
@@ -542,7 +540,7 @@ verifying that search uses one read snapshot without reserving the writer lock.
 
 ```sh
 go test -race -run 'Sparse' ./vectordata ./stores/memory ./stores/postgres
-go test -race -tags=integration -run 'Sparse|ModelContract/capabilities/sparse_vectors' \
+go test -count=1 -race -tags=integration -run 'Sparse|ModelContract/capabilities/sparse_vectors' \
   -timeout=3m ./stores/postgres
 ```
 
@@ -562,7 +560,7 @@ behavior and index eligibility, without a production throughput or recall claim.
 
 ```sh
 go test -race -run 'Binary' ./vectordata ./stores/memory ./stores/postgres
-go test -race -tags=integration -run 'Binary|ModelContract/capabilities/binary_vectors' \
+go test -count=1 -race -tags=integration -run 'Binary|ModelContract/capabilities/binary_vectors' \
   -timeout=3m ./stores/postgres
 ```
 
@@ -580,7 +578,7 @@ throughput or recall claim.
 ## Native array verification
 
 ```sh
-go test -race -tags=integration -run 'NativeArray|TimestampArrays|Calendar|Decimal|ModelContract/capabilities/(native_arrays|calendar_data|decimals)' \
+go test -count=1 -race -tags=integration -run 'NativeArray|TimestampArrays|Calendar|Decimal|ModelContract/capabilities/(native_arrays|calendar_data|decimals)' \
   -v -timeout=3m ./stores/postgres
 go test -race -run 'NativeArray|StructuredArray|Calendar|Decimal' ./vectordata
 ```
@@ -624,7 +622,7 @@ out-of-range direct-SQL values and unsupported numeric array shapes.
 ## L1 distance and index verification
 
 ```sh
-go test -race -tags=integration -run 'L1|IndexCapability|ModelContract/capabilities' \
+go test -count=1 -race -tags=integration -run 'L1|IndexCapability|ModelContract/capabilities' \
   -v -timeout=3m ./stores/postgres
 ```
 
@@ -651,7 +649,7 @@ shared extension objects.
 Run the precision checks against a disposable PostgreSQL instance:
 
 ```sh
-go test -race -tags=integration -run 'Float16|HalfVector|VectorPrecision|ModelContract/capabilities/vector_precisions' \
+go test -count=1 -race -tags=integration -run 'Float16|HalfVector|VectorPrecision|ModelContract/capabilities/vector_precisions' \
   -v -timeout=3m ./stores/postgres
 go test -race -run 'Float16|VectorPrecision' ./vectordata
 ```
@@ -913,7 +911,7 @@ repeat against the target deployment when assessing latency.
 ## Index and recall verification
 
 ```sh
-go test -race -tags=integration -timeout=5m ./...
+go test -count=1 -race -tags=integration -timeout=5m ./stores/postgres
 ```
 
 Metadata index tests use 20,000 records and `EXPLAIN` to verify that Eq/In predicates
@@ -947,7 +945,7 @@ distinctions, typed nil values, literal object keys, array indexing and SQL null
 behavior under negation. Run these checks explicitly with:
 
 ```sh
-go test -tags=integration -run 'TestIntegrationModelQueryIndexes|TestIntegrationModelFilterParity|TestIntegrationModelContract/filter_edges' \
+go test -count=1 -tags=integration -run 'TestIntegrationModelQueryIndexes|TestIntegrationModelFilterParity|TestIntegrationModelContract/filter_edges' \
   -timeout=3m ./stores/postgres
 ```
 
@@ -955,7 +953,7 @@ go test -tags=integration -run 'TestIntegrationModelQueryIndexes|TestIntegration
 
 ```sh
 go test -race -run 'TestWALRecoveryAfterProcessKill|TestReleasedFormat1Compatibility' ./stores/sqlite
-go test -race -tags=integration -run 'TestIntegrationBufferedIteratorCancellation|TestIntegrationConnectionLoss' -timeout=3m ./stores/postgres
+go test -count=1 -race -tags=integration -run 'TestIntegrationBufferedIteratorCancellation|TestIntegrationConnectionLoss' -timeout=3m ./stores/postgres
 bash scripts/test-fuzz.sh 50000x
 ```
 

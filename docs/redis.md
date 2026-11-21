@@ -627,12 +627,13 @@ timeout to return. Preserve errors with `errors.Is`/`errors.As`.
 
 ```sh
 go test -race ./stores/redis
-go test -race -tags=integration -timeout=5m ./stores/redis
-REDIS_TEST_IMAGE=redis:7.4 go test -count=1 -race -tags=integration -timeout=5m ./stores/redis
+go test -count=1 -race -tags=integration -timeout=5m -skip 'TestIntegration(Native|JSONNative)' ./stores/redis
+go test -count=1 -race -tags=integration -timeout=10m -run 'TestIntegration(Native|JSONNative)' ./stores/redis
 ```
 
 Normal tests need no server. Integration tests start a disposable `redis:8.2`
-container by default; `REDIS_TEST_IMAGE` selects another image and `REDIS_TEST_ADDR`
+container by default. Set `REDIS_TEST_IMAGE=redis:7.4` to repeat the suites on Redis 7.4.
+`REDIS_TEST_ADDR`
 can point to an existing disposable standalone server. Each factory uses its own
 namespace and deletes only its collections. CI exercises Redis 7.4/8.2 on minimum
 and current Go, separating storage and native index suites with five/ten-minute

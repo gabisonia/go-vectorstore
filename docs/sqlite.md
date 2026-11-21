@@ -225,7 +225,7 @@ schema/format validation in the same statement. It does not deserialize payloads
 and uses bounded Go memory; counting still scans the matching index entries and
 can grow with collection size. These fast paths do not invoke embedders.
 
-On master after v0.4.1, top-level `Eq(Column(keyName), value)` and
+Since v0.5.0, top-level `Eq(Column(keyName), value)` and
 `In(Column(keyName), values...)` also use the existing collection/key primary index
 for `Query`, `QueryIter` and filtered `Count`. Use the logical key name; a storage
 name is not a field alias. Keys are normalized and deduplicated before SQL, with

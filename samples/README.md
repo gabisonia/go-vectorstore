@@ -10,9 +10,11 @@ model sample; then select SQLite or PostgreSQL when persistence is needed.
 | Exact uint64 keys and generated UUIDs | [native-keys](native-keys/README.md) | None |
 | Custom inputs, image/audio bytes and direct string vector fields | [input-embeddings](input-embeddings/README.md) | None; deterministic fixture |
 | Typed float16 generator outputs with unchanged dense model storage | [output-embeddings](output-embeddings/README.md) | None; deterministic fixture |
-| Generated typed filters, ordering and nullable properties | [typed-fields](typed-fields/README.md) | None; optional SQLite/PostgreSQL; master after v0.4.1 |
+| Generated typed filters, ordering and nullable properties | [typed-fields](typed-fields/README.md) | None; optional SQLite/PostgreSQL |
 | Durable records, optional vectors, array filters | [sqlite-store](sqlite-store/README.md) | Writable SQLite file |
-| Redis model snapshots and dense exact search | [redis-store](redis-store/README.md) | Standalone Redis; available on master after v0.4.1 |
+| Scalar L1 search with sqlite-vec | [sqlitevec-store](sqlitevec-store/README.md) | Writable SQLite file |
+| Measure SQLite search and storage costs | [sqlite-workload](sqlite-workload/README.md) | Local SQLite fixtures |
+| Redis model snapshots and dense exact search | [redis-store](redis-store/README.md) | Standalone Redis |
 | Bounded Qdrant snapshots and exact search | [qdrant-store](qdrant-store/README.md) | Standalone Qdrant 1.20.2; default Aspire services |
 | Typed filtered text retrieval | [typed-search](typed-search/README.md) | None in fixture mode; optional OpenAI |
 | Typed retrieval and cited context for generation | [typed-rag](typed-rag/README.md) | None in fixture mode; optional OpenAI |
@@ -34,19 +36,18 @@ Each README describes expected output, flags, stored fixtures, and cleanup.
 Deterministic embedders are instructional fixtures, not semantic models. Remote
 modes require explicit opt-in and can incur provider charges. The original Record
 API examples remain supported; new model applications should start with the typed
-samples. The new samples are on master and included in source versions from v0.4.1;
-their library calls use APIs available in v0.4.0, except for input-embeddings,
-native-keys and the key-filter, metadata, squared-distance and updated iterator/hybrid recipes,
-which require master after v0.4.1. Consult GitHub releases for
-published tags. The scalar-query recipe also demonstrates the SQLite SQL paging
-optimization on master after v0.4.1; its public calls work on v0.4.0.
+samples. Use the checkout that contains the sample you want. The typed
+search and RAG samples ship from v0.4.1. The Redis, Qdrant, typed-field and
+custom embedding examples ship from v0.5.0. The handbook walkthrough was
+added to master after v0.7.0. Isolated modules declare their own library and
+Go versions in their `go.mod` files.
 
 ## Verification
 
 ```sh
 go test -race ./samples/...
 bash scripts/test-samples.sh
-go test -race -tags=integration -timeout=3m ./samples/recipes
+go test -count=1 -race -tags=integration -timeout=5m ./samples/recipes
 ```
 
 The first two need no credentials or database server. The smoke script uses a

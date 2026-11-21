@@ -1,13 +1,17 @@
 # Changelog
 
-## v0.7.0
+## v0.7.0 — 2026-11-21
+
+[Release notes](https://github.com/gabisonia/go-vectorstore/releases/tag/v0.7.0).
 
 - Move the Azure AI Search and Pinecone native APIs from the root module to
   independently versioned experimental modules. Existing consumers must update
   the two import paths. See the [migration guide](docs/upgrading.md) and
   [native connector support matrix](docs/native-support.md).
 
-## v0.6.0
+## v0.6.0 — 2026-11-20
+
+[Release notes](https://github.com/gabisonia/go-vectorstore/releases/tag/v0.6.0).
 
 - Add native Cosmos DB for NoSQL and Azure DocumentDB adapters for externally
   managed collections. Cosmos `SearchExact` scans matching scores and returns

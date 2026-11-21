@@ -1,7 +1,7 @@
 # Redis model collections
 
-Run from the repository root with Go 1.26+ and a standalone Redis server. This
-sample is on master after v0.4.1 and needs no model download or cloud API key.
+Run from the repository root with Go 1.26+ and a standalone Redis server. The
+sample has shipped since v0.5.0 and needs no model download or cloud API key.
 
 ```sh
 aspire start --apphost samples/aspire-services/apphost.go

@@ -1,29 +1,26 @@
 # Upgrading model collections
 
-## Preparing for v0.7.0
+## Upgrading to v0.7.0
 
-Two packages move out of the root module. Replace the import prefix
-`github.com/gabisonia/go-vectorstore/stores/` with
-`github.com/gabisonia/go-vectorstore/connectors/` **only for `azuresearch` and
-`pinecone`**. Their package names and public operations stay the same. Add the
-new module to the application's go.mod. Each initially depends on published
-core v0.6.0 and also works alongside the v0.7.0 root API.
-
-Release maintainers tag the reviewed commit independently as
-`connectors/azuresearch/v0.1.0` and `connectors/pinecone/v0.1.0` before
-publishing root v0.7.0. Once the corresponding tag is published, for example:
+With Go 1.26 or later, update the root module in your application:
 
 ```sh
-go get github.com/gabisonia/go-vectorstore/connectors/pinecone@v0.1.0
-go mod tidy
-go test ./...
+go get github.com/gabisonia/go-vectorstore@v0.7.0
 ```
 
-Before those tags exist, keep deployed consumers on v0.6.x or pin the
-reviewed connector commit explicitly for pre-release testing. The
-[CI consumer check](../scripts/test-connector-modules.sh) resolves both
-modules by nested Git tags in a disposable repository using the public import
-paths and an ordinary consumer go.mod. See the [support matrix](native-support.md).
+If your application imports Azure AI Search or Pinecone, change the import
+and add the corresponding experimental module. Both v0.1.0 tags are published.
+Package names and operations stay the same.
+
+| Previous import after `github.com/gabisonia/go-vectorstore/` | New import after the same prefix | Install in the application module |
+| --- | --- | --- |
+| `stores/azuresearch` | `connectors/azuresearch` | `go get github.com/gabisonia/go-vectorstore/connectors/azuresearch@v0.1.0` |
+| `stores/pinecone` | `connectors/pinecone` | `go get github.com/gabisonia/go-vectorstore/connectors/pinecone@v0.1.0` |
+
+Each connector declares core v0.6.0 as its minimum and works alongside root
+v0.7.0. After updating imports and dependencies, run `go mod tidy` and
+`go test ./...` in your application. See the [native connector support
+matrix](native-support.md) for the tested backends and operations.
 
 ## Reading data written by v0.6.0
 

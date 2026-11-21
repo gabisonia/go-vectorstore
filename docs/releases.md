@@ -3,7 +3,8 @@
 `VERSION` selects the source version being prepared or tagged. A version is
 available to consumers only after its immutable tag/release is published; consult
 [GitHub releases](https://github.com/gabisonia/go-vectorstore/releases). Source on
-master may be newer than the latest tag. The v0.7.0 source separates two experimental native connector modules and requires Go 1.26+.
+master may be newer than the latest tag. The [v0.7.0 release](https://github.com/gabisonia/go-vectorstore/releases/tag/v0.7.0)
+requires Go 1.26+ and ships Azure AI Search and Pinecone as separate modules.
 Consult the changelog for changes since the previous tag. See the
 [v0.5.0 compatibility review](release-0.5.md) and [upgrade guide](upgrading.md).
 
@@ -61,7 +62,9 @@ The [pre-v1 review](pre-v1-review.md) maps these promises to tests and fixtures 
    It verifies VERSION/changelog consistency and that any existing tag points to
    the tested commit. It never moves an existing tag.
 4. After publishing, verify the tag/release commit and public Go proxy download,
-   and run a consumer quickstart pinned to that tag. Announce relevant fixes and
+   and update the quickstart install commands to the published tag. Run
+   `python3 scripts/check-docs.py` and `python3 scripts/check-readme-quickstart.py`
+   to verify the consumer examples. Announce relevant fixes and
    upgrade steps; follow up on any failed publication rather than retagging.
 
 `Required CI` succeeds only when every verification job succeeds; failures,

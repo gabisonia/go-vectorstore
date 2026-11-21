@@ -28,6 +28,9 @@ go get github.com/gabisonia/go-vectorstore@v0.7.0
 - [Model API](model-api.md): schemas, typed/native keys and data, optional named vectors, filters, embeddings, search and iterators
 - [Typed property references](typed-fields.md): optional generation, compile-checked operands and ordering, regeneration and dynamic JSON paths
 - [SQLite provider](sqlite.md): setup, persistence, concurrency and snapshot-scan limits
+- [Redis provider](redis.md): snapshot, hash and JSON layouts, native indexes and hybrid search
+- [Qdrant provider](qdrant.md): bounded model snapshots and native point access for externally managed collections
+- [Native connector support](native-support.md): tested operations, backend versions and independently versioned connectors
 - [Opt-in sqlite-vec](sqlitevec.md): exact scalar L1 candidates, precision proof and fallback
 - [SQLite vector design](sqlite-vector-design.md): opt-in extension choice, executable compatibility probe and implementation gates
 - [Parity implementation plan](parity-plan.md): ordered increments, acceptance checks and delivery status
@@ -42,6 +45,6 @@ go get github.com/gabisonia/go-vectorstore@v0.7.0
 - [Architecture](architecture.md): contracts, request flows, schema behavior, filters and indexes
 - [Store implementation](stores-implementation.md): provider responsibilities, storage boundaries and invariants
 - [Connector development](connector-development.md): implementing and verifying a provider
-- [Qdrant design and probe](qdrant-design.md): pinned real-server behavior and publication/snapshot gates before a public connector
+- [Qdrant design and probe](qdrant-design.md): real-server experiments behind the bounded snapshot provider
 - [Qdrant publication proof](qdrant-publication-proof.md): bounded manifest/generation experiment, read-only recovery, epoch fencing and retained readers
 - [Performance and verification](performance.md): test commands, measured allocations and index/recall checks

@@ -7,20 +7,20 @@ ensure that a tool reads its documentation or instruction files.
 
 ## Version and starting point
 
-The checkout prepares **v0.7.0**. This quickstart uses published **v0.6.0**. Check
-[GitHub releases](https://github.com/gabisonia/go-vectorstore/releases) for tag
-availability and pin the version used by your application's go.mod:
+This quickstart uses the published **v0.7.0** root module and requires Go 1.26
+or later. Start in an empty directory. If you already have a Go module, skip
+the initialization line.
 
 ```sh
-go get github.com/gabisonia/go-vectorstore@v0.6.0
+go mod init example.com/vector-demo
+go get github.com/gabisonia/go-vectorstore/stores/memory@v0.7.0
 ```
 
-v0.6.0 requires Go 1.26+. v0.5.0 supports Go 1.25. Check your application's `go.mod` before choosing APIs.
-Master may include unpublished changes listed in [CHANGELOG.md](../CHANGELOG.md).
-Run repository samples from a checkout of the matching source. Isolated sample
-modules pin their own dependencies; check their go.mod before choosing newer APIs.
-[Versioned API reference](https://pkg.go.dev/github.com/gabisonia/go-vectorstore@v0.6.0/vectordata)
-and [upgrade notes](upgrading.md) describe the released contract.
+Applications using Go 1.25 can use v0.5.0. Run repository samples from the
+matching checkout and check isolated samples' own `go.mod` files. Azure AI Search
+and Pinecone have separate module paths and versions. See the [v0.7.0 API
+reference](https://pkg.go.dev/github.com/gabisonia/go-vectorstore@v0.7.0/vectordata)
+and [upgrade guide](upgrading.md).
 
 Use the model API for new applications. Import the provider you need and
 `github.com/gabisonia/go-vectorstore/vectordata`. The original PostgreSQL Record
@@ -28,7 +28,8 @@ API is supported and has its own record/filter/options types.
 
 ## Minimal complete program
 
-This program needs no database server or API key. The vectors are instructional.
+Save the program as `main.go` and run `go run .`. It uses hand-written vectors
+and needs no server or API key.
 Its behavior is also exercised by [Example_typedSearch](../vectordata/example_test.go).
 
 ```go
@@ -75,8 +76,9 @@ func main() {
 ```
 
 Expected output: `guide 0 0`. The final zero demonstrates that vector projection
-is off by default. `scripts/check-docs.py` compiles/runs this fenced program as
-part of CI. Replace panic with returned/handled errors in application code.
+is off by default. CI checks this output against both the checkout and a fresh
+consumer module using the install commands above. The install pin must match
+the published release named in this guide. Handle errors in application code.
 
 ## Choose a workflow
 
@@ -104,9 +106,11 @@ it is not an importable public helper package.
 
 ## Rules that prevent common integration mistakes
 
-- Match `TypedModelCollection[K,T]`'s key type to the model key: string, int64, uint64 or
-  a compatible UUID type. Generated int64/UUID keys are returned from writes; do not
-  assume the input struct is modified with its generated ID.
+- Match `K` in `TypedModelCollection[K,T]` to the model's key field. Explicit keys
+  support strings, compatible UUID types, `int`, `uint`, and their fixed-width
+  counterparts, including named integer types such as `type UserID int32`. For generated integer
+  keys, both the field and `K` must be signed 64-bit types. For generated integer
+  or UUID keys, assign the key returned by the write to your model before reusing it.
 - Use `Column("Category")` for logical model fields and
   `DataPath("Details", "rating")` for a JSON data field. `Metadata(...)` belongs
   to the original Record API. Filters are AST nodes, not SQL strings.
@@ -126,8 +130,9 @@ it is not an importable public helper package.
   SearchBinary/SearchSparse interfaces for binary/sparse queries. Request
   IncludeVectors explicitly when a read/search needs stored vector values.
 - `top` must be positive, Skip nonnegative, and their sum must not overflow.
-  Exact memory/SQLite search scans the collection; deep paging retains more
-  candidates. Approximate PostgreSQL searches may return fewer than top.
+  Deep pages retain more candidates in memory and SQLite. PostgreSQL vector
+  search can return either record when equal distances straddle a page boundary.
+  Approximate searches can also return fewer than `top` matches.
 - Lower Distance is closer; higher Score is better. DistanceThreshold is an
   upper distance bound; ScoreThreshold is a lower similarity bound. Hybrid
   results use ScoreRRF and cannot be compared directly with similarity scores.
