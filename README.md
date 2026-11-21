@@ -5,21 +5,89 @@
 [![Go Version](https://img.shields.io/github/go-mod/go-version/gabisonia/go-vectorstore)](https://github.com/gabisonia/go-vectorstore/blob/master/go.mod)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-A lightweight Go vector-store library inspired by `Microsoft.Extensions.VectorData`.
+Store typed Go structs and search them by vector. Start with a SQLite file;
+the same model API also works with PostgreSQL, Redis, Qdrant and in-memory
+collections. [Documentation](https://gabisonia.dev/go-vectorstore/) · [Provider differences](docs/parity.md)
 
-[Read the documentation](https://gabisonia.dev/go-vectorstore/)
+## Your first SQLite search
 
-Scope:
-- Go 1.26+
-- PostgreSQL + `pgvector`, embedded SQLite, standalone Redis, bounded Qdrant snapshots and in-memory model storage
-- Model-driven collections with typed/native keys, named vectors, struct tags, and optional embeddings
-- Shared model contracts and conformance tests across providers
-- Original Record API and custom codecs remain supported
+With Go 1.26 or later, start in an empty directory and run:
 
-This library can be used to build retrieval systems such as:
-- semantic search
-- RAG pipelines (retrieve from vector DB, then generate with an LLM)
-- context-aware assistants grounded on your own data
+```sh
+go mod init example.com/handbook
+go get github.com/gabisonia/go-vectorstore/stores/sqlite@v0.7.0
+```
+
+Save this as `main.go`. Each handbook page has a two-number vector describing
+how strongly it relates to **recovery** and **deployment**, in that order.
+The values are hand-written so you can see exactly why a query matches.
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "log"
+
+    "github.com/gabisonia/go-vectorstore/stores/sqlite"
+    "github.com/gabisonia/go-vectorstore/vectordata"
+)
+
+type Page struct {
+    ID     string    `vectordata:"key"`
+    Title  string    `vectordata:"data"`
+    Vector []float32 `vectordata:"vector,dimensions=2,metric=cosine"`
+}
+
+func main() {
+    if err := search(); err != nil {
+        log.Fatal(err)
+    }
+}
+
+func search() error {
+    ctx := context.Background()
+    store, err := sqlite.Open(ctx, "handbook.db", sqlite.StoreOptions{})
+    if err != nil {
+        return err
+    }
+    defer store.Close()
+
+    pages, err := vectordata.EnsureTypedModelCollection[string, Page](
+        ctx, store, "pages", nil, vectordata.ModelCollectionOptions{})
+    if err != nil {
+        return err
+    }
+    _, err = pages.Upsert(ctx, []Page{
+        {"restore", "Restore a database backup", []float32{1, 0}},
+        {"rollback", "Roll back a deployment", []float32{0.7, 0.7}},
+        {"deploy", "Deploy a new service", []float32{0, 1}},
+    })
+    if err != nil {
+        return err
+    }
+    hits, err := pages.Search(ctx, []float32{1, 0}, 1, vectordata.ModelSearchOptions{})
+    if err != nil {
+        return err
+    }
+    for _, hit := range hits {
+        fmt.Println(hit.Item.Title)
+    }
+    return nil
+}
+```
+
+Run `go run .`. The recovery query points in the same direction as the first
+page's vector, so cosine search prints:
+
+```text
+Restore a database backup
+```
+
+Try changing the query to `[]float32{0, 1}` and run it again to find the
+deployment page. SQLite keeps the collection in `handbook.db`; upserting the
+same IDs updates the same three pages. Delete the demo directory when finished.
 
 ## Requirements
 
@@ -57,7 +125,7 @@ check available tags and pin the resolved version in go.mod.
 Master can include later changes; use a matching tag for a released checkout. See the
 [upgrade guide](docs/upgrading.md) and [compatibility policy](docs/releases.md).
 
-## Quick Start (Local)
+## Run the repository samples
 
 For typed text retrieval with no server or API key:
 
