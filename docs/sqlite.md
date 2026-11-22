@@ -223,6 +223,7 @@ unspecified. The connection is released before results reach the caller.
 are lazy at construction. They load their snapshot/result page before yielding
 and release the connection before invoking application callbacks or typed codecs.
 They do not promise bounded lookup-result memory or incremental SQL decoding.
+Get and GetMany validate the selected records before omitting vectors from the result.
 GetManyIter shares the same one-snapshot semantics as GetMany. Cancellation is
 checked before loading, between results and at exhaustion; a break terminates
 without yielding another error. Enumeration never retries after exposing results.

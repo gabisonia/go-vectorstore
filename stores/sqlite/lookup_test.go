@@ -294,7 +294,7 @@ func TestLookupAndCountIndexPlans(t *testing.T) {
 	}
 }
 
-func TestGetManyValidatesSelectedVectors(t *testing.T) {
+func TestPointAndBatchReadsValidateSelectedVectors(t *testing.T) {
 	ctx := context.Background()
 	s, c := lookupFixture(t, vectordata.CollectionDefinition{Key: vectordata.KeyProperty{Name: "ID"}, Vectors: []vectordata.VectorProperty{{Name: "Vector", Dimensions: 2}}})
 	if _, err := c.Insert(ctx, []vectordata.ModelRecord{{Key: "bad", Vectors: map[string][]float32{"Vector": {1, 0}}}}); err != nil {
@@ -307,7 +307,13 @@ func TestGetManyValidatesSelectedVectors(t *testing.T) {
 	if _, err := s.db.ExecContext(ctx, `UPDATE __vectorstore_records SET payload=? WHERE collection=? AND key=?`, payload, c.name, keyToken("bad")); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := c.GetMany(ctx, []any{"bad"}, vectordata.RetrievalOptions{}); !errors.Is(err, vectordata.ErrDimensionMismatch) {
-		t.Fatalf("selected vector validation lost: %v", err)
+	for _, include := range []bool{false, true} {
+		opts := vectordata.RetrievalOptions{IncludeVectors: include}
+		if _, err := c.Get(ctx, "bad", opts); !errors.Is(err, vectordata.ErrDimensionMismatch) {
+			t.Fatalf("Get(include=%v): %v", include, err)
+		}
+		if _, err := c.GetMany(ctx, []any{"bad"}, opts); !errors.Is(err, vectordata.ErrDimensionMismatch) {
+			t.Fatalf("GetMany(include=%v): %v", include, err)
+		}
 	}
 }

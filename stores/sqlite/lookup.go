@@ -135,9 +135,13 @@ func (c *Collection) lookupBatch(ctx context.Context, tx *sql.Tx, tokens []strin
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
+	return c.prepareLookupRecords(ctx, records, opts)
+}
+
+func (c *Collection) prepareLookupRecords(ctx context.Context, records []vectordata.ModelRecord, opts vectordata.RetrievalOptions) ([]vectordata.ModelRecord, error) {
 	// Validate only selected records using the same rules as snapshot replay,
 	// with embedding sources cleared. Prepared values own their maps and slices.
-	records, err = vectordata.PrepareModelRecords(ctx, c.readDefinition(), vectordata.ModelCollectionOptions{}, records)
+	records, err := vectordata.PrepareModelRecords(ctx, c.readDefinition(), vectordata.ModelCollectionOptions{}, records)
 	if err != nil {
 		return nil, err
 	}
