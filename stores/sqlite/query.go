@@ -105,7 +105,11 @@ func (c *Collection) Get(ctx context.Context, key any, opts vectordata.Retrieval
 	if len(records) == 0 {
 		return record, vectordata.ErrNotFound
 	}
-	return vectordata.CloneModelRecord(records[0], c.definition, opts.IncludeVectors), nil
+	records, err = c.prepareLookupRecords(ctx, records, opts)
+	if err != nil {
+		return record, err
+	}
+	return records[0], nil
 }
 func (c *Collection) Query(ctx context.Context, filter vectordata.Filter, top int, opts vectordata.QueryOptions) (records []vectordata.ModelRecord, err error) {
 	defer func() { err = c.operation("query", err) }()
