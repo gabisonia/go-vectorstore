@@ -253,18 +253,58 @@ func (c *Collection) Get(ctx context.Context, key any, opts vectordata.Retrieval
 	return vectordata.CloneModelRecord(r, c.definition, opts.IncludeVectors), nil
 }
 func (c *Collection) GetMany(ctx context.Context, keys []any, opts vectordata.RetrievalOptions) ([]vectordata.ModelRecord, error) {
-	values := make([]any, len(keys))
-	for i, key := range keys {
+	if len(keys) == 0 {
+		return []vectordata.ModelRecord{}, ctx.Err()
+	}
+	wanted := make(map[any]struct{}, len(keys))
+	for _, key := range keys {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		value, err := c.definition.NormalizeKey(key)
 		if err != nil {
 			return nil, err
 		}
-		values[i] = value
+		wanted[value] = struct{}{}
 	}
-	if len(values) == 0 {
-		return []vectordata.ModelRecord{}, ctx.Err()
+	records, err := c.lookupKeys(ctx, wanted)
+	if err != nil {
+		return nil, err
 	}
-	return c.Query(ctx, vectordata.In(vectordata.Column(c.definition.Key.Name), values...), len(values), vectordata.QueryOptions{IncludeVectors: opts.IncludeVectors})
+	sort.Slice(records, func(i, j int) bool {
+		return vectordata.CompareModelValues(records[i].Key, records[j].Key) < 0
+	})
+	for i, r := range records {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		records[i] = vectordata.CloneModelRecord(r, c.definition, opts.IncludeVectors)
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	return records, nil
+}
+
+// Stored records are immutable. Borrow all matched records under one lock and
+// release it before sorting or copying their data into caller-owned results.
+func (c *Collection) lookupKeys(ctx context.Context, wanted map[any]struct{}) ([]vectordata.ModelRecord, error) {
+	c.store.mu.RLock()
+	defer c.store.mu.RUnlock()
+	state, err := c.stateLocked()
+	if err != nil {
+		return nil, err
+	}
+	records := make([]vectordata.ModelRecord, 0, min(len(wanted), len(state.records)))
+	for key := range wanted {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		if record, ok := state.records[key]; ok {
+			records = append(records, record)
+		}
+	}
+	return records, nil
 }
 func (c *Collection) Query(ctx context.Context, filter vectordata.Filter, top int, opts vectordata.QueryOptions) ([]vectordata.ModelRecord, error) {
 	if err := vectordata.ValidateModelQuery(c.definition, top, opts); err != nil {
@@ -340,8 +380,41 @@ func (c *Collection) QueryIter(ctx context.Context, filter vectordata.Filter, to
 	}
 }
 func (c *Collection) Count(ctx context.Context, filter vectordata.Filter) (int64, error) {
-	records, err := c.Query(ctx, filter, int(^uint(0)>>1), vectordata.QueryOptions{})
-	return int64(len(records)), err
+	if filter == nil {
+		c.store.mu.RLock()
+		defer c.store.mu.RUnlock()
+		if err := ctx.Err(); err != nil {
+			return 0, err
+		}
+		state, err := c.stateLocked()
+		if err != nil {
+			return 0, err
+		}
+		return int64(len(state.records)), nil
+	}
+	if err := vectordata.ValidateModelFilter(filter, c.definition); err != nil {
+		return 0, err
+	}
+	var count int64
+	for record, err := range c.searchSnapshot(ctx) {
+		if err != nil {
+			return 0, err
+		}
+		if err := ctx.Err(); err != nil {
+			return 0, err
+		}
+		match, err := vectordata.MatchModelFilter(filter, record, c.definition)
+		if err != nil {
+			return 0, err
+		}
+		if match {
+			count++
+		}
+	}
+	if err := ctx.Err(); err != nil {
+		return 0, err
+	}
+	return count, nil
 }
 func (c *Collection) Delete(ctx context.Context, keys []any) (int64, error) {
 	normalized := make([]any, len(keys))
