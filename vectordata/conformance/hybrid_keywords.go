@@ -156,4 +156,38 @@ func runHybridKeywordTerms(t *testing.T, factory Factory, caps vectordata.Provid
 	if terms[0] != "absent" {
 		t.Fatal("embedding callback did not run")
 	}
+	for _, criterion := range []string{"filter", "distance", "score"} {
+		t.Run("embedder_changes_"+criterion, func(t *testing.T) {
+			o := opts
+			var first []string
+			second := []string{"b", "c", "a"}
+			switch criterion {
+			case "filter":
+				values := []any{"a"}
+				o.Filter = vectordata.InFilter{Field: vectordata.Column("ID"), Values: values}
+				duringEmbedding = func() { values[0] = "c" }
+				first, second = []string{"a"}, []string{"c"}
+			case "distance":
+				o.DistanceThreshold = floatPointer(0)
+				duringEmbedding = func() { *o.DistanceThreshold = 10 }
+				first = []string{"a"}
+			case "score":
+				o.ScoreThreshold = floatPointer(0.02)
+				duringEmbedding = func() { *o.ScoreThreshold = 0 }
+				first = []string{"b", "c"}
+			}
+			defer func() { duringEmbedding = nil }()
+			seq := c.HybridSearchTextIter(ctx, "query", "", 3, o)
+			for _, want := range [][]string{first, second} {
+				var hits []vectordata.TypedModelSearchResult[keywordModel]
+				for hit, err := range seq {
+					if err != nil {
+						t.Fatal(err)
+					}
+					hits = append(hits, hit)
+				}
+				check(t, hits, nil, want)
+			}
+		})
+	}
 }

@@ -1260,9 +1260,9 @@ joined by OR, using English stemming/default stopwords and BM25. Redis limits th
 whole list to 128 groups, 128 lexical tokens and 16,384 UTF-8 bytes. Punctuation-only
 groups contribute no keyword candidates. Native Redis supports dense forms;
 PostgreSQL also supports binary/sparse forms. Typed and dynamic supported hybrid APIs,
-including iterators, use the same option. Each enumeration snapshots the list
-before invoking embedding code; repeated enumerations read the current supplied
-list again. Callers must avoid concurrent mutation during enumeration. Filters,
+including iterators, use the same option. Each embedded hybrid enumeration snapshots the keyword list,
+filter operands, distance threshold and RRF score threshold before invoking
+the embedder. A later enumeration reads the caller's current values. Callers must avoid concurrent mutation during enumeration. Filters,
 projection, paging, candidate limits, distance thresholds and RRF score thresholds
 keep their existing meanings. Existing string keywords continue to require all
 words using each provider's tokenizer. Run the PostgreSQL `hybrid` recipe or the

@@ -90,6 +90,11 @@ func (c *ModelCollection) HybridSearchTextIter(ctx context.Context, text, keywor
 func (c *ModelCollection) HybridSearchInputIter(ctx context.Context, input any, keywords string, top int, opts vectordata.HybridSearchOptions) iter.Seq2[vectordata.ModelSearchResult, error] {
 	return c.plannedSearchIter(ctx, opts.ModelSearchOptions, true, func() (string, []any, vectordata.VectorProperty, error) {
 		opts := snapshotHybridOptions(opts)
+		criteria, err := exactsearch.FreezeSearchOptions(opts.ModelSearchOptions, c.definition)
+		if err != nil {
+			return "", nil, vectordata.VectorProperty{}, err
+		}
+		opts.ModelSearchOptions = criteria
 		config, err := c.validateHybridOptions(keywords, top, opts)
 		if err != nil {
 			return "", nil, config.vector, err
