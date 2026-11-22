@@ -89,3 +89,28 @@ func TestEmbedQueryHonorsCancellationFromEmbedder(t *testing.T) {
 		t.Fatalf("called embedder after cancellation: %d", calls)
 	}
 }
+
+func TestInvalidExplicitVectorPreventsEmbeddingAcrossPropertiesAndRecords(t *testing.T) {
+	generated := vectordata.VectorProperty{Name: "Generated", Dimensions: 2, SourceProperty: "Text"}
+	explicit := vectordata.VectorProperty{Name: "Explicit", Dimensions: 2}
+	for _, properties := range [][]vectordata.VectorProperty{{generated, explicit}, {explicit, generated}} {
+		t.Run(properties[0].Name+"_first", func(t *testing.T) {
+			d, err := (vectordata.CollectionDefinition{Key: vectordata.KeyProperty{Name: "ID"}, Data: []vectordata.DataProperty{{Name: "Text", Type: vectordata.TypeString}}, Vectors: properties}).Normalize()
+			if err != nil {
+				t.Fatal(err)
+			}
+			records := []vectordata.ModelRecord{
+				{Key: "first", Data: map[string]any{"Text": "one"}, Vectors: map[string][]float32{"Explicit": {1, 0}}},
+				{Key: "last", Data: map[string]any{"Text": "two"}, Vectors: map[string][]float32{"Explicit": {1}}},
+			}
+			opts := vectordata.ModelCollectionOptions{EmbeddingBatchSize: 1, Embedder: vectordata.EmbeddingFunc(func(context.Context, []string) ([][]float32, error) {
+				t.Fatal("embedder called before batch validation completed")
+				return nil, nil
+			})}
+			got, err := vectordata.PrepareModelRecords(t.Context(), d, opts, records)
+			if !errors.Is(err, vectordata.ErrDimensionMismatch) || got != nil {
+				t.Fatalf("prepared=%v err=%v", got, err)
+			}
+		})
+	}
+}

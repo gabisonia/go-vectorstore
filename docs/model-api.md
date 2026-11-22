@@ -924,6 +924,8 @@ in model registrations or migration plans.
 
 Writes generate missing vectors in input order, separately for each property.
 Explicitly supplied vectors take precedence and do not consume embedding batches.
+The library checks explicit vectors across all properties and records before it
+sends the first embedding request.
 Requests run sequentially, with cancellation checked before and after each call.
 Each batch's output count/dimensions/values are checked before another request.
 The complete record batch is prepared before any storage write, so a later
