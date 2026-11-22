@@ -4,6 +4,7 @@ import (
 	"context"
 	"iter"
 
+	"github.com/gabisonia/go-vectorstore/internal/iteration"
 	"github.com/gabisonia/go-vectorstore/vectordata"
 )
 
@@ -29,20 +30,7 @@ func (c *Collection) SearchSparse(ctx context.Context, v vectordata.SparseVector
 	})
 }
 func (c *Collection) SearchSparseIter(ctx context.Context, v vectordata.SparseVector, top int, opts vectordata.ModelSearchOptions) iter.Seq2[vectordata.ModelSearchResult, error] {
-	return func(yield func(vectordata.ModelSearchResult, error) bool) {
-		rows, err := c.SearchSparse(ctx, v, top, opts)
-		if err != nil {
-			yield(vectordata.ModelSearchResult{}, err)
-			return
-		}
-		for _, r := range rows {
-			if err := ctx.Err(); err != nil {
-				yield(vectordata.ModelSearchResult{}, err)
-				return
-			}
-			if !yield(r, nil) {
-				return
-			}
-		}
-	}
+	return iteration.FromSlice(ctx, func() ([]vectordata.ModelSearchResult, error) {
+		return c.SearchSparse(ctx, v, top, opts)
+	})
 }

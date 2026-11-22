@@ -157,6 +157,30 @@ func runReadIterators(t *testing.T, factory Factory, caps vectordata.ProviderCap
 			t.Fatalf("batch cancellation: %d/%d", values, failures)
 		}
 	})
+	t.Run("query", func(t *testing.T) {
+		checkIteratorCancellation(t, ctx, len(rows), func(ctx context.Context) iter.Seq2[vectordata.ModelRecord, error] {
+			return c.QueryIter(ctx, nil, len(rows), vectordata.QueryOptions{})
+		})
+	})
+	t.Run("dense", func(t *testing.T) {
+		checkIteratorCancellation(t, ctx, len(rows), func(ctx context.Context) iter.Seq2[vectordata.ModelSearchResult, error] {
+			return c.SearchIter(ctx, []float32{1, 0}, len(rows), vectordata.ModelSearchOptions{VectorProperty: "Dense"})
+		})
+	})
+	if slices.Contains(caps.VectorKinds, vectordata.VectorBinary) {
+		t.Run("binary", func(t *testing.T) {
+			checkIteratorCancellation(t, ctx, len(rows), func(ctx context.Context) iter.Seq2[vectordata.ModelSearchResult, error] {
+				return c.(vectordata.BinarySearcher).SearchBinaryIter(ctx, rows[0].BinaryVectors["Bits"], len(rows), vectordata.ModelSearchOptions{VectorProperty: "Bits"})
+			})
+		})
+	}
+	if slices.Contains(caps.VectorKinds, vectordata.VectorSparse) {
+		t.Run("sparse", func(t *testing.T) {
+			checkIteratorCancellation(t, ctx, len(rows), func(ctx context.Context) iter.Seq2[vectordata.ModelSearchResult, error] {
+				return c.(vectordata.SparseSearcher).SearchSparseIter(ctx, rows[0].SparseVectors["Sparse"], len(rows), vectordata.ModelSearchOptions{VectorProperty: "Sparse"})
+			})
+		})
+	}
 	type operation struct {
 		name   string
 		embeds bool
@@ -254,42 +278,50 @@ func runReadIterators(t *testing.T, factory Factory, caps vectordata.ProviderCap
 					t.Fatalf("embedding not once per enumeration: %d", embeddingCalls-before)
 				}
 			}
-			for _, cancelAt := range []int{0, 1, len(want)} {
-				cancelCtx, cancel := context.WithCancel(ctx)
-				defer cancel()
-				if cancelAt == 0 {
-					cancel()
-				}
-				values, failures := 0, 0
-				for _, err := range op.run(cancelCtx) {
-					if err != nil {
-						if !errors.Is(err, context.Canceled) {
-							t.Fatal(err)
-						}
-						failures++
-						continue
-					}
-					values++
-					if values == cancelAt {
-						cancel()
-					}
-				}
-				cancel()
-				if values != cancelAt || failures != 1 {
-					t.Fatalf("cancelAt=%d values=%d failures=%d", cancelAt, values, failures)
-				}
-			}
-			for _, err := range op.run(ctx) {
-				if err != nil {
-					t.Fatal(err)
-				}
-				break
-			}
+			checkIteratorCancellation(t, ctx, len(want), op.run)
 			check, cancel := context.WithTimeout(ctx, time.Second)
 			defer cancel()
 			if n, err := c.Count(check, nil); err != nil || n != 3 {
 				t.Fatalf("iterator leaked resources: %d, %v", n, err)
 			}
 		})
+	}
+}
+
+func checkIteratorCancellation[T any](t *testing.T, ctx context.Context, total int, run func(context.Context) iter.Seq2[T, error]) {
+	t.Helper()
+	for _, cancelAt := range []int{0, 1, total} {
+		cancelCtx, cancel := context.WithCancel(ctx)
+		defer cancel()
+		if cancelAt == 0 {
+			cancel()
+		}
+		values, failures := 0, 0
+		for _, err := range run(cancelCtx) {
+			if err != nil {
+				if !errors.Is(err, context.Canceled) {
+					t.Fatal(err)
+				}
+				failures++
+				continue
+			}
+			values++
+			if values == cancelAt {
+				cancel()
+			}
+		}
+		cancel()
+		if values != cancelAt || failures != 1 {
+			t.Fatalf("cancelAt=%d values=%d failures=%d", cancelAt, values, failures)
+		}
+	}
+	stopCtx, stop := context.WithCancel(ctx)
+	defer stop()
+	for _, err := range run(stopCtx) {
+		if err != nil {
+			t.Fatal(err)
+		}
+		stop()
+		break
 	}
 }

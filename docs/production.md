@@ -59,9 +59,8 @@ migration ownership solely to simplify startup.
 
 Pass the request context through reads, writes and embeddings. Check every
 iterator error. Listing, batch, text/input and hybrid iterators check cancellation
-before starting, between values and at exhaustion. PostgreSQL also checks between
-buffered query/vector-search rows and at exhaustion; cancellation during the final item is reported
-if iteration continues. Breaking the loop deliberately ends iteration and closes
+before starting, between values and at exhaustion. Memory and PostgreSQL query and vector-search iterators also report cancellation
+on the final item when the consumer continues iteration. Breaking the loop deliberately ends iteration and closes
 its resources. Consumers should also check ctx.Err before expensive per-item work.
 
 Typed model wrappers also check cancellation around each synchronous codec
