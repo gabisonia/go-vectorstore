@@ -721,6 +721,14 @@ func PrepareModelRecords(ctx context.Context, d CollectionDefinition, opts Model
 			}
 		}
 	}
+	// Collect embedding work during validation. Invoke callbacks only after
+	// all properties and records have passed.
+	type pendingEmbedding struct {
+		property  VectorProperty
+		positions []int
+		inputs    []any
+	}
+	var pending []pendingEmbedding
 	for _, p := range d.Vectors {
 		if p.Kind == VectorBinary || p.Kind == VectorSparse {
 			continue
@@ -728,6 +736,9 @@ func PrepareModelRecords(ctx context.Context, d CollectionDefinition, opts Model
 		var positions []int
 		var inputs []any
 		for i := range out {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
 			input, hasInput := records[i].EmbeddingInputs[p.Name]
 			if !hasInput && p.SourceProperty != "" {
 				input, hasInput = out[i].Data[p.SourceProperty]
@@ -751,39 +762,44 @@ func PrepareModelRecords(ctx context.Context, d CollectionDefinition, opts Model
 			}
 		}
 		if len(inputs) > 0 {
-			batchSize := opts.EmbeddingBatchSize
-			if batchSize == 0 {
-				batchSize = len(inputs)
+			pending = append(pending, pendingEmbedding{property: p, positions: positions, inputs: inputs})
+		}
+	}
+	for _, work := range pending {
+		p, inputs := work.property, work.inputs
+
+		batchSize := opts.EmbeddingBatchSize
+		if batchSize == 0 {
+			batchSize = len(inputs)
+		}
+		for start := 0; start < len(inputs); {
+			if err := ctx.Err(); err != nil {
+				return nil, err
 			}
-			for start := 0; start < len(inputs); {
-				if err := ctx.Err(); err != nil {
-					return nil, err
-				}
-				end := start + min(batchSize, len(inputs)-start)
-				vectors, err := embedInputs(ctx, inputs[start:end:end], p, opts)
+			end := start + min(batchSize, len(inputs)-start)
+			vectors, err := embedInputs(ctx, inputs[start:end:end], p, opts)
+			if err != nil {
+				return nil, err
+			}
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
+			if len(vectors) != end-start {
+				return nil, fmt.Errorf("%w: embedder returned %d vectors for %d inputs", ErrInvalidVector, len(vectors), end-start)
+			}
+			for j, vector := range vectors {
+				i := work.positions[start+j]
+				vector, err := NormalizeModelVector(vector, p)
 				if err != nil {
-					return nil, err
+					return nil, fmt.Errorf("%w: record %d: %w", ErrInvalidRecord, i, err)
 				}
-				if err := ctx.Err(); err != nil {
-					return nil, err
+				// Embedders may reuse their output buffers on the next call.
+				if p.Precision != VectorFloat16 {
+					vector = append([]float32(nil), vector...)
 				}
-				if len(vectors) != end-start {
-					return nil, fmt.Errorf("%w: embedder returned %d vectors for %d inputs", ErrInvalidVector, len(vectors), end-start)
-				}
-				for j, vector := range vectors {
-					i := positions[start+j]
-					vector, err := NormalizeModelVector(vector, p)
-					if err != nil {
-						return nil, fmt.Errorf("%w: record %d: %w", ErrInvalidRecord, i, err)
-					}
-					// Embedders may reuse their output buffers on the next call.
-					if p.Precision != VectorFloat16 {
-						vector = append([]float32(nil), vector...)
-					}
-					out[i].Vectors[p.Name] = vector
-				}
-				start = end
+				out[i].Vectors[p.Name] = vector
 			}
+			start = end
 		}
 	}
 	return out, nil
