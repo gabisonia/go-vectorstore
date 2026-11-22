@@ -105,7 +105,7 @@ func (c *Collection) Get(ctx context.Context, key any, opts vectordata.Retrieval
 	if len(records) == 0 {
 		return record, vectordata.ErrNotFound
 	}
-	records, err = c.prepareLookupRecords(ctx, records, opts)
+	records, err = c.prepareLookupRecords(ctx, records, []string{token}, opts)
 	if err != nil {
 		return record, err
 	}

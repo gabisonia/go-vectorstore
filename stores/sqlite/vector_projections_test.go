@@ -250,7 +250,7 @@ func TestVectorProjectionReadSnapshotAndPageFetch(t *testing.T) {
 				_, writeErr = writer.Upsert(deadline, after)
 			}
 		}
-		if strings.HasPrefix(query, "SELECT payload FROM") {
+		if strings.HasPrefix(query, "SELECT payload FROM") || strings.HasPrefix(query, "SELECT payload,key FROM") {
 			if !strings.Contains(query, "key IN (") {
 				t.Error("projected search decoded all canonical payloads")
 			}
@@ -368,7 +368,7 @@ func TestVectorProjectionCancellationDiscardsStagedWork(t *testing.T) {
 			}
 			queries := 0
 			connector := lookupConnector{base: s.db.Driver(), dsn: path + "?_txlock=immediate&_pragma=foreign_keys(1)", before: func(query string) {
-				if operation == "rebuild" && strings.HasPrefix(query, "SELECT key,payload") || operation == "search" && strings.HasPrefix(query, "SELECT payload FROM") {
+				if operation == "rebuild" && strings.HasPrefix(query, "SELECT key,payload") || operation == "search" && strings.HasPrefix(query, "SELECT payload,key FROM") {
 					queries++
 					if queries == 2 {
 						cancel()
