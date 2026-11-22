@@ -26,7 +26,8 @@ and the rerunnable [sample](../samples/sqlitevec-store/README.md).
 | --- | --- |
 | Unfiltered dense L1, ready projections, reviewed 64-bit little-endian targets | Scalar `vec_distance_L1`, complete boundary candidates, exact Go ranking, canonical page retrieval |
 | Cosine, L2, L2Squared or inner product | Existing packed Go path when ready |
-| Any filter; binary or sparse vectors | Existing canonical path |
+| One equality on a ready indexed scalar with ready dense projections | Scalar key lookup and exact packed Go ranking |
+| Other filters, binary or sparse vectors | Canonical scan |
 | Missing, dirty or incompatible projections | Canonical path until explicit rebuild |
 | Other architectures/operating systems | Existing packed Go path when ready |
 

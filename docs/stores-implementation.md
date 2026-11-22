@@ -242,7 +242,8 @@ unfiltered searches, retains exact Go ranking, and fetches only the selected pag
 canonical payloads within the same WAL snapshot. Its ordinary triggers invalidate
 readiness for all writers. Aware writes restore readiness only from a previously
 ready state; dirty projections fall back until explicit rebuild. Binary/sparse
-and filtered searches retain the canonical path. Memory allocates O(collection size) shallow record headers, while
+and filtered searches retain the canonical path except for one indexed scalar
+equality on ready dense projections. The scalar value index drives packed key lookups. Memory allocates O(collection size) shallow record headers, while
 candidate retention in both providers grows with top + Skip. SQLite opt-in
 NativeIndexes advertises indexed string/int64/float64/bool data. Generic projection
 rows and a covering B-tree select candidate keys for eligible scalar SQL predicates;

@@ -176,9 +176,44 @@ func (c *Collection) vectorProjectionBatch(ctx context.Context, tx *sql.Tx, afte
 	return records, after, rows.Err()
 }
 
+// The scalar value index drives the join. Each matching key probes one packed
+// vector, so a missing optional vector drops out before ranking and pagination.
+const indexedVectorEqualitySQL = `SELECT v.key,v.vector
+ FROM __vectorstore_scalar_values AS s INDEXED BY __vectorstore_scalar_lookup
+ CROSS JOIN __vectorstore_vector_values AS v
+ WHERE s.collection=?1 AND s.property=?2 AND s.value IS ?3
+ AND v.collection=?1 AND v.property=?4 AND v.key=s.key`
+
+// Resolve the entire predicate before acquiring the connection. Only a single
+// equality on a registered scalar has equivalent membership without a residual.
+func (c *Collection) indexedVectorEquality(filter vectordata.Filter) (vectordata.EqFilter, bool, error) {
+	eq, ok := filter.(vectordata.EqFilter)
+	if !ok || !c.store.nativeIndexes {
+		return eq, false, nil
+	}
+	ref, err := vectordata.NormalizeFieldRef(eq.Field)
+	if err != nil {
+		return eq, false, err
+	}
+	kind, indexed := c.scalarIndexProperties()[ref.Name]
+	if ref.Kind != vectordata.FieldColumn || !indexed {
+		return eq, false, nil
+	}
+	compiler := scalarQueryCompiler{definition: c.definition}
+	value, err := compiler.normalize(ref.Name, vectordata.DataProperty{Name: ref.Name, Type: kind}, eq.Value)
+	if err != nil || !validText(value) {
+		return eq, false, err
+	}
+	return vectordata.EqFilter{Field: ref, Value: value}, true, nil
+}
+
 func (c *Collection) searchProjectedVectors(ctx context.Context, p vectordata.VectorProperty, top int, opts vectordata.ModelSearchOptions, measure exactsearch.Measure, denseQuery []float32) ([]vectordata.ModelSearchResult, bool, error) {
-	if !c.store.vectorProjections || opts.Filter != nil || p.Kind == vectordata.VectorBinary || p.Kind == vectordata.VectorSparse {
+	if !c.store.vectorProjections || p.Kind == vectordata.VectorBinary || p.Kind == vectordata.VectorSparse {
 		return nil, false, nil
+	}
+	eq, filtered, err := c.indexedVectorEquality(opts.Filter)
+	if err != nil || (opts.Filter != nil && !filtered) {
+		return nil, false, err
 	}
 	tx, err := c.store.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {
@@ -198,7 +233,17 @@ func (c *Collection) searchProjectedVectors(ctx context.Context, p vectordata.Ve
 	rankOpts.IncludeVectors = false
 	d := vectordata.CollectionDefinition{Key: c.definition.Key, Vectors: []vectordata.VectorProperty{p}}
 	source := c.projectedVectorScan(ctx, tx, p)
-	if c.store.nativeVectors && p.Metric == vectordata.DistanceL1 && nativeL1Platform() && denseQuery != nil {
+	if filtered {
+		ready, err := c.scalarIndexesReady(ctx, tx)
+		if errors.Is(err, vectordata.ErrSchemaMismatch) {
+			return nil, false, nil
+		}
+		if err != nil || !ready {
+			return nil, false, err
+		}
+		source = c.scanProjectedVectorsSQL(ctx, tx, p, indexedVectorEqualitySQL, c.name, eq.Field.Name, eq.Value, p.Name)
+		rankOpts.Filter = nil // The equality is fully evaluated by the scalar lookup.
+	} else if c.store.nativeVectors && p.Metric == vectordata.DistanceL1 && nativeL1Platform() && denseQuery != nil {
 		source = c.scanProjectedVectorsSQL(ctx, tx, p, nativeL1CandidatesSQL, c.name, p.Name, packVector(denseQuery), top+opts.Skip-1)
 	}
 	hits, err := exactsearch.Run(ctx, d, p, top, rankOpts, source, measure)

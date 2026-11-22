@@ -359,8 +359,8 @@ snapshot through the shared `internal/exactsearch` top-K selector, retaining onl
 immutable records. Both copy only the returned search page and release resources
 before application iteration. Runtime embedders are cleared during stored reads.
 Optional dense `VectorProjections` scan packed vectors for unfiltered searches,
-use the same Go ranking and fetch only the selected canonical page in that read
-snapshot. Ordinary triggers invalidate readiness; aware writers maintain affected
+or look up eligible packed vectors for one equality on a ready scalar index.
+Both use the same Go ranking and fetch the selected canonical page in that snapshot. Ordinary triggers invalidate readiness. Aware writers maintain affected
 rows and restore readiness atomically only from a previously ready state. Dirty
 or absent projections require explicit rebuild and otherwise use canonical scans.
 Native values are decoded by declared type, with a separate SQL NULL marker for JSON properties. See [sqlite.md](sqlite.md) for workload limits.

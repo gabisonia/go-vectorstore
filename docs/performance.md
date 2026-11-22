@@ -83,6 +83,24 @@ process pinned to published v0.4.0 also verified an update and generated-key ins
 into a projected file, followed by current-reader invalidation/fallback, explicit
 rebuild and exact projected search. The immutable release fixture is checked in CI.
 
+## SQLite search with one indexed scalar equality
+
+Run `go test -run '^$' -bench '^BenchmarkSQLiteIndexedVectorEquality$' -benchtime=3x -timeout=10m ./stores/sqlite`.
+Both handles search the same warm file with 100,000 int64 keys, 128-dimensional
+dense vectors, 4 KiB bodies, L1 distance and top 10. Two indexed integer fields
+select 1% and 10% by equality. Before timing, the benchmark checks each complete
+projected page against the canonical scan, including distances and key ties.
+
+| Eligible | Canonical ms/op | Indexed ms/op | Canonical MB/op | Indexed MB/op |
+| --- | ---: | ---: | ---: | ---: |
+| 1% | 4,709 | 18 | 2,382 | 2.45 |
+| 10% | 4,569 | 45 | 2,381 | 22.18 |
+
+These are averages of three calls on Go 1.26.1, darwin/arm64, Apple M3 Pro.
+Allocations are cumulative Go heap allocations in decimal MB. The fixture
+excludes setup, writes and index maintenance from the timed region. The
+measurements apply to this corpus and query shape.
+
 ## SQLite-vec L1 verification
 
 The [workload harness](../samples/sqlite-workload/README.md) extends this microbenchmark
@@ -96,8 +114,8 @@ checksums and reproducible Markdown/CSV summaries. It exposed a collection-only
 cleanup scan per vector write; the existing key index is now required. At 10k/768,
 the diagnostic projected load/rebuild observations were 71.8/71.6 seconds versus
 1.46/1.90 seconds after the fix. These are single-operation observations on matching
-fixtures, not general throughput estimates. Filtered searches retain full canonical
-cost, and native tie handling can be slower than packed Go; the report preserves
+fixtures, not general throughput estimates. The filtered searches in that run used full canonical
+scans, and native tie handling can be slower than packed Go; the report preserves
 those cases and all timing outliers.
 
 ```sh

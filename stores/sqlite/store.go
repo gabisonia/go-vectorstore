@@ -2,7 +2,8 @@
 // Reads use indexed key lookups or native scalar SQL where supported, with
 // snapshot evaluation for other predicates. Exact search uses bounded ranking.
 // Opt-in scalar indexes accelerate eligible filters; dense vector projections
-// avoid full-payload decoding for unfiltered exact searches. No native ANN, full-text
+// avoid full-payload decoding for unfiltered exact searches and equality on one
+// indexed scalar. No native ANN, full-text
 // indexes, hybrid search, or automatic schema migrations are provided.
 package sqlite
 

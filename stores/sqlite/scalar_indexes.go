@@ -138,21 +138,9 @@ func (c *Collection) indexedScalarPlan(ctx context.Context, tx *sql.Tx, plan sca
 	if !c.store.nativeIndexes || len(c.scalarIndexProperties()) == 0 {
 		return plan, nil
 	}
-	var definition, properties string
-	var version int
-	err := tx.QueryRowContext(ctx, `SELECT definition,properties,version FROM __vectorstore_scalar_indexes WHERE collection=?`, c.name).Scan(&definition, &properties, &version)
-	if errors.Is(err, sql.ErrNoRows) {
-		return plan, nil
-	}
-	if err != nil {
+	ready, err := c.scalarIndexesReady(ctx, tx)
+	if err != nil || !ready {
 		return plan, err
-	}
-	expected, err := json.Marshal(c.scalarIndexProperties())
-	if err != nil {
-		return plan, err
-	}
-	if version != 1 || definition != c.registration || properties != string(expected) {
-		return plan, fmt.Errorf("%w: scalar index registration differs; rebuild explicitly", vectordata.ErrSchemaMismatch)
 	}
 	compiler := scalarQueryCompiler{definition: c.definition, args: slices.Clone(plan.args), fields: map[string]string{}}
 	for name := range c.scalarIndexProperties() {
@@ -165,6 +153,26 @@ func (c *Collection) indexedScalarPlan(ctx context.Context, tx *sql.Tx, plan sca
 	plan.sql = plan.sql[:plan.whereEnd] + " AND (" + predicate + ")" + plan.sql[plan.whereEnd:]
 	plan.args = compiler.args
 	return plan, nil
+}
+
+func (c *Collection) scalarIndexesReady(ctx context.Context, tx *sql.Tx) (bool, error) {
+	var definition, properties string
+	var version int
+	err := tx.QueryRowContext(ctx, `SELECT definition,properties,version FROM __vectorstore_scalar_indexes WHERE collection=?`, c.name).Scan(&definition, &properties, &version)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	expected, err := json.Marshal(c.scalarIndexProperties())
+	if err != nil {
+		return false, err
+	}
+	if version != 1 || definition != c.registration || properties != string(expected) {
+		return false, fmt.Errorf("%w: scalar index registration differs; rebuild explicitly", vectordata.ErrSchemaMismatch)
+	}
+	return true, nil
 }
 
 func (c *scalarQueryCompiler) scalarCandidates(filter vectordata.Filter) (string, bool, error) {
