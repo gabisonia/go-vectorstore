@@ -217,22 +217,6 @@ func (c *Collection) write(ctx context.Context, records []vectordata.ModelRecord
 	s.next = next
 	return keys, nil
 }
-func (c *Collection) snapshot(ctx context.Context, vectors bool) ([]vectordata.ModelRecord, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	c.store.mu.RLock()
-	defer c.store.mu.RUnlock()
-	s, err := c.stateLocked()
-	if err != nil {
-		return nil, err
-	}
-	records := make([]vectordata.ModelRecord, 0, len(s.records))
-	for _, r := range s.records {
-		records = append(records, vectordata.CloneModelRecord(r, c.definition, vectors))
-	}
-	return records, nil
-}
 func (c *Collection) Get(ctx context.Context, key any, opts vectordata.RetrievalOptions) (vectordata.ModelRecord, error) {
 	normalized, err := c.definition.NormalizeKey(key)
 	if err != nil {
@@ -306,61 +290,6 @@ func (c *Collection) lookupKeys(ctx context.Context, wanted map[any]struct{}) ([
 		}
 	}
 	return records, nil
-}
-func (c *Collection) Query(ctx context.Context, filter vectordata.Filter, top int, opts vectordata.QueryOptions) ([]vectordata.ModelRecord, error) {
-	if err := vectordata.ValidateModelQuery(c.definition, top, opts); err != nil {
-		return nil, err
-	}
-	if err := vectordata.ValidateModelFilter(filter, c.definition); err != nil {
-		return nil, err
-	}
-	fields := map[string]bool{c.definition.Key.Name: true}
-	for _, p := range c.definition.Data {
-		fields[p.Name] = true
-	}
-	for _, field := range opts.OrderBy {
-		if !fields[field.Property] {
-			return nil, vectordata.ErrInvalidFilter
-		}
-	}
-	records, err := c.snapshot(ctx, opts.IncludeVectors)
-	if err != nil {
-		return nil, err
-	}
-	out := []vectordata.ModelRecord{}
-	for _, r := range records {
-		match, err := vectordata.MatchModelFilter(filter, r, c.definition)
-		if err != nil {
-			return nil, err
-		}
-		if match {
-			out = append(out, r)
-		}
-	}
-	value := func(r vectordata.ModelRecord, name string) any {
-		if name == c.definition.Key.Name {
-			return r.Key
-		}
-		return r.Data[name]
-	}
-	sort.Slice(out, func(i, j int) bool {
-		for _, field := range opts.OrderBy {
-			a, b := value(out[i], field.Property), value(out[j], field.Property)
-			cmp := vectordata.CompareModelValues(a, b)
-			if cmp != 0 {
-				if a == nil || b == nil {
-					return a != nil
-				}
-				if field.Descending {
-					return cmp > 0
-				}
-				return cmp < 0
-			}
-		}
-		return vectordata.CompareModelValues(out[i].Key, out[j].Key) < 0
-	})
-	start := min(opts.Skip, len(out))
-	return out[start : start+min(top, len(out)-start)], nil
 }
 func (c *Collection) QueryIter(ctx context.Context, filter vectordata.Filter, top int, opts vectordata.QueryOptions) iter.Seq2[vectordata.ModelRecord, error] {
 	return iteration.FromSlice(ctx, func() ([]vectordata.ModelRecord, error) {

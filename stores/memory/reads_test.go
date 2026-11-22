@@ -2,7 +2,9 @@ package memory
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"math"
 	"testing"
 
 	"github.com/gabisonia/go-vectorstore/vectordata"
@@ -69,5 +71,56 @@ func BenchmarkMemoryPointBatchAndCount(b *testing.B) {
 				}
 			}
 		})
+	}
+}
+
+func TestQueryPageOwnershipAndLargeOffset(t *testing.T) {
+	c := memoryReadsFixture(t, 128)
+	ctx := t.Context()
+	opts := vectordata.QueryOptions{Skip: 1, IncludeVectors: true, OrderBy: []vectordata.SortField{{Property: "Body"}, {Property: "ID", Descending: true}}}
+	rows, err := c.Query(ctx, nil, 1, opts)
+	if err != nil || len(rows) != 1 || cap(rows) != 1 || rows[0].Key != int64(127) {
+		t.Fatalf("page: %v, %v", rows, err)
+	}
+	rows[0].Vectors["Vector"][0] = 8
+	row, err := c.Get(ctx, int64(127), vectordata.RetrievalOptions{IncludeVectors: true})
+	if err != nil || row.Vectors["Vector"][0] != 1 {
+		t.Fatalf("stored: %v, %v", row, err)
+	}
+	opts.Skip = math.MaxInt
+	rows, err = c.Query(ctx, nil, math.MaxInt, opts)
+	if err != nil || rows == nil || len(rows) != 0 {
+		t.Fatalf("large offset: %v, %v", rows, err)
+	}
+}
+
+type cancelQueryOperand struct {
+	calls  int
+	cancel context.CancelFunc
+}
+
+func (v *cancelQueryOperand) MarshalJSON() ([]byte, error) {
+	v.calls++
+	if v.calls == 2 {
+		v.cancel()
+	}
+	return []byte(`"ok"`), nil
+}
+
+func TestQueryCancellationWhileEvaluatingFilter(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	d := vectordata.CollectionDefinition{Key: vectordata.KeyProperty{Name: "ID"}, Data: []vectordata.DataProperty{{Name: "Tag", Type: vectordata.TypeJSON}}}
+	c, err := New().EnsureModelCollection(ctx, "rows", d, vectordata.ModelCollectionOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = c.Insert(ctx, []vectordata.ModelRecord{{Key: "a", Data: map[string]any{"Tag": "ok"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows, err := c.Query(ctx, vectordata.Eq(vectordata.Column("Tag"), &cancelQueryOperand{cancel: cancel}), 1, vectordata.QueryOptions{})
+	if !errors.Is(err, context.Canceled) || rows != nil {
+		t.Fatalf("rows=%v err=%v", rows, err)
 	}
 }
