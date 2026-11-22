@@ -114,8 +114,9 @@ Neither path should be advertised as approximate nearest-neighbor search.
 
 Implemented as `sqlite.StoreOptions.VectorProjections` and
 `Collection.RebuildVectorProjections`; see [provider usage](sqlite.md#opt-in-dense-vector-projections).
-The first read path supports unfiltered dense searches; all filtered/binary/sparse
-searches retain canonical evaluation. The design constraints below remain the
+The first read path supported unfiltered dense searches. A single indexed scalar
+equality can now restrict packed vectors when both projections are ready. Other
+filters and binary/sparse searches retain canonical evaluation. The design constraints below remain the
 acceptance criteria for future changes.
 
 Add an opt-in ordinary projection table keyed by collection, property and exact

@@ -115,8 +115,15 @@ caller ownership keep their existing semantics. The returned page includes every
 requested data/vector property, not only the ranked property. All SQL resources
 close before typed codecs or application iteration run.
 
-Searches with any filter, binary/sparse searches, and collections whose projection
-is absent/dirty/incompatible use the existing canonical scan. No native distance
+When both `NativeIndexes` and `VectorProjections` are enabled and ready, a
+single `Eq(Column(name), value)` on an indexed string, int64, float64 or bool
+uses the scalar value index to look up eligible packed vectors. Equality with
+nil selects SQL NULL. Go ranks the matching vectors and the same WAL snapshot
+supplies the winning payloads. Missing optional vectors drop out before paging.
+This path also applies to L1 on the sqlite-vec handle.
+
+Other filters, binary/sparse searches, and absent or dirty projections use the
+canonical scan. No native distance
 rounding, candidate truncation or implicit rebuild is introduced. A ready scan
 validates projected vectors and returned payloads; it does not decode off-page
 canonical payloads. Direct modification of private projection tables is unsupported.
@@ -275,8 +282,8 @@ collection size, while retained candidate records grow with `top + Skip`.
 Large offsets therefore increase memory use. WAL permits other connections to
 write during the scan; the Store's own connection remains occupied until it ends.
 Filter operands are normalized before acquiring the connection. Ready optional
-dense projections avoid full payload decoding for unfiltered searches as described
-above; filtered/binary/sparse searches retain the default scan.
+dense projections avoid full payload decoding for unfiltered searches and for
+the indexed equality described above.
 
 Queries/counts with unsupported filter or sort operations load the whole collection
 into the memory engine, using O(collection size) memory and scan work. This includes

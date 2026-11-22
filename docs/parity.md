@@ -111,7 +111,9 @@ Triggers preserve compatibility with older writers. Vector indexes remain absent
 Optional `VectorProjections` adds packed dense storage for unfiltered exact Go
 ranking and page-only canonical retrieval. Existing/dirty collections require
 explicit `RebuildVectorProjections`; ordinary triggers invalidate readiness for
-unaware writers. Filtered/binary/sparse searches keep their canonical scan.
+unaware writers. With both projections ready, a single indexed scalar equality
+restricts the packed search to matching keys. Other filters and binary/sparse
+searches use the canonical scan.
 The [sqlite-vec adapter](sqlitevec.md) optionally selects complete scalar-L1
 boundary candidates and retains exact Go ranking. Other metrics/shapes keep the
 shared provider's paths; extension presence does not add vector index capability.

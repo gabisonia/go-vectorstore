@@ -195,8 +195,9 @@ limits when documenting measurements.
   triggers must use ordinary SQL to invalidate readiness for unaware writers;
   only aware writes from an already-ready state may maintain and republish it.
   Keep rebuild explicit, keyset-batched and atomic. Rank packed vectors and fetch
-  the selected payload page in one deferred WAL snapshot; filtered/binary/sparse
-  searches retain canonical fallback. Do not infer native vector index support.
+  the selected payload page in one deferred WAL snapshot. Single indexed scalar
+  equality may restrict ready packed dense vectors by key. Keep canonical fallback
+  for unsupported filters, binary/sparse searches and unready projections. Do not infer native vector index support.
   Require the existing collection/key index for per-record projection cleanup;
   SQLite can otherwise select a collection-only primary-key scan without ANALYZE.
 - PostgreSQL migrations separate read-only planning from explicit application.
