@@ -21,6 +21,11 @@ Memory queries scan a shallow snapshot of all record headers. They retain at mos
 `Skip + top` matching rows for ordering and deep-copy just the returned page.
 A large offset therefore increases the memory required for ranking.
 
+Memory writes stage the input batch and commit its keys and generated sequence
+under one lock. In `BenchmarkMemorySingleUpsert`, updating one row used 840 B/op
+and eight allocations at both 100 and 10,000 rows (Go 1.26.1, Apple M3 Pro,
+same record shape as the batch-read benchmark).
+
 ## Shared provider and SQLite verification
 
 Run the complete model contract against both exact-search providers, then the

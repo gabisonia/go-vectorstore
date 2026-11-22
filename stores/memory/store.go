@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"iter"
+	"maps"
 	"math"
 	"sort"
 	"strings"
@@ -175,10 +176,7 @@ func (c *Collection) write(ctx context.Context, records []vectordata.ModelRecord
 	if err != nil {
 		return nil, err
 	}
-	staged := make(map[any]vectordata.ModelRecord, len(s.records)+len(prepared))
-	for key, r := range s.records {
-		staged[key] = r
-	}
+	staged := make(map[any]vectordata.ModelRecord, len(prepared))
 	keys := make([]any, len(prepared))
 	next := s.next
 	for i, r := range prepared {
@@ -204,8 +202,12 @@ func (c *Collection) write(ctx context.Context, records []vectordata.ModelRecord
 				}
 			}
 		}
-		if _, exists := staged[r.Key]; exists && (!upsert || generated) {
-			return nil, fmt.Errorf("%w: duplicate key", vectordata.ErrInvalidRecord)
+		if !upsert || generated {
+			_, stored := s.records[r.Key]
+			_, pending := staged[r.Key]
+			if stored || pending {
+				return nil, fmt.Errorf("%w: duplicate key", vectordata.ErrInvalidRecord)
+			}
 		}
 		staged[r.Key] = r
 		keys[i] = r.Key
@@ -213,7 +215,7 @@ func (c *Collection) write(ctx context.Context, records []vectordata.ModelRecord
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	s.records = staged
+	maps.Copy(s.records, staged)
 	s.next = next
 	return keys, nil
 }
