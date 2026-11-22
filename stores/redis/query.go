@@ -225,6 +225,10 @@ func (c *Collection) SearchInput(ctx context.Context, input any, top int, opts v
 	if err != nil {
 		return nil, err
 	}
+	opts, err = exactsearch.FreezeSearchOptions(opts, c.definition)
+	if err != nil {
+		return nil, err
+	}
 	if c.store.nativeIndexes {
 		_, _, _, err = c.nativeManifest(ctx)
 	} else {

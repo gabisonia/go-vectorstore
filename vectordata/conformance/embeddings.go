@@ -28,6 +28,7 @@ func embeddingRecord(key, body string, vector []float32) vectordata.ModelRecord 
 // store-level embedding configuration.
 func RunEmbeddingConfiguration(t *testing.T, factory func(*testing.T, vectordata.ModelCollectionOptions) vectordata.ModelStore) {
 	t.Helper()
+	t.Run("search_criteria_during_embedding", func(t *testing.T) { runEmbeddedSearchCriteria(t, factory) })
 	probe := factory(t, vectordata.ModelCollectionOptions{})
 	if caps, ok := probe.(vectordata.CapabilityProvider); ok && caps.Capabilities().InputEmbedding {
 		t.Run("input_embeddings", func(t *testing.T) { runInputEmbeddings(t, factory) })
@@ -207,5 +208,61 @@ func RunEmbeddingConfiguration(t *testing.T, factory func(*testing.T, vectordata
 				}
 			})
 		}
+	}
+}
+
+func runEmbeddedSearchCriteria(t *testing.T, factory func(*testing.T, vectordata.ModelCollectionOptions) vectordata.ModelStore) {
+	ctx := t.Context()
+	var mutate func()
+	calls := 0
+	store := factory(t, vectordata.ModelCollectionOptions{Embedder: vectordata.EmbeddingFunc(func(context.Context, []string) ([][]float32, error) {
+		calls++
+		mutate()
+		return [][]float32{{1, 1}}, nil
+	})})
+	c, err := store.EnsureModelCollection(ctx, "search_criteria", embeddingDefinition(), vectordata.ModelCollectionOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err = c.Insert(ctx, []vectordata.ModelRecord{embeddingRecord("a", "alpha", []float32{1, 1}), embeddingRecord("b", "beta", []float32{2, 1})}); err != nil {
+		t.Fatal(err)
+	}
+	for _, criterion := range []string{"filter", "distance", "score"} {
+		t.Run(criterion, func(t *testing.T) {
+			opts := vectordata.ModelSearchOptions{}
+			wantNext := []string{"a", "b"}
+			switch criterion {
+			case "filter":
+				values := []any{"a"}
+				opts.Filter = vectordata.InFilter{Field: vectordata.Column("ID"), Values: values}
+				mutate = func() { values[0] = "b" }
+				wantNext = []string{"b"}
+			case "distance":
+				threshold := 0.0
+				opts.DistanceThreshold = &threshold
+				mutate = func() { threshold = 2 }
+			case "score":
+				threshold := 1.0
+				opts.ScoreThreshold = &threshold
+				mutate = func() { threshold = 0 }
+			}
+			before := calls
+			seq := vectordata.SearchTextIter(ctx, c, "query", 2, opts)
+			if calls != before {
+				t.Fatal("iterator embedded before enumeration")
+			}
+			for i, want := range [][]string{{"a"}, wantNext} {
+				var keys []string
+				for hit, err := range seq {
+					if err != nil {
+						t.Fatal(err)
+					}
+					keys = append(keys, hit.Record.Key.(string))
+				}
+				if !reflect.DeepEqual(keys, want) || calls != before+i+1 {
+					t.Fatalf("enumeration %d: got keys %v, want %v; embedding calls %d", i, keys, want, calls-before)
+				}
+			}
+		})
 	}
 }

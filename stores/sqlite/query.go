@@ -228,6 +228,10 @@ func (c *Collection) SearchInput(ctx context.Context, input any, top int, o vect
 	if err != nil {
 		return nil, c.operation("search_text", err)
 	}
+	o, err = exactsearch.FreezeSearchOptions(o, c.definition)
+	if err != nil {
+		return nil, c.operation("search_text", err)
+	}
 	v, err := vectordata.EmbedInputQuery(ctx, input, p, c.options)
 	if err != nil {
 		return nil, c.operation("embed_query", err)

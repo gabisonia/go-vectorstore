@@ -4,6 +4,7 @@ import (
 	"context"
 	"iter"
 
+	"github.com/gabisonia/go-vectorstore/internal/exactsearch"
 	"github.com/gabisonia/go-vectorstore/internal/iteration"
 	"github.com/gabisonia/go-vectorstore/vectordata"
 )
@@ -65,6 +66,10 @@ func (c *ModelCollection) SearchTextIter(ctx context.Context, text string, top i
 }
 func (c *ModelCollection) SearchInputIter(ctx context.Context, input any, top int, opts vectordata.ModelSearchOptions) iter.Seq2[vectordata.ModelSearchResult, error] {
 	return c.plannedSearchIter(ctx, opts, false, func() (string, []any, vectordata.VectorProperty, error) {
+		opts, err := exactsearch.FreezeSearchOptions(opts, c.definition)
+		if err != nil {
+			return "", nil, vectordata.VectorProperty{}, err
+		}
 		vector, err := c.embedSearchInput(ctx, input, top, opts)
 		if err != nil {
 			return "", nil, vectordata.VectorProperty{}, err

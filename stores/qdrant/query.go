@@ -203,17 +203,9 @@ func (c *Collection) SearchInput(ctx context.Context, input any, top int, opts v
 	if err != nil {
 		return nil, err
 	}
-	opts.Filter, err = exactsearch.FreezeFilter(opts.Filter, c.definition)
+	opts, err = exactsearch.FreezeSearchOptions(opts, c.definition)
 	if err != nil {
 		return nil, err
-	}
-	if opts.DistanceThreshold != nil {
-		value := *opts.DistanceThreshold
-		opts.DistanceThreshold = &value
-	}
-	if opts.ScoreThreshold != nil {
-		value := *opts.ScoreThreshold
-		opts.ScoreThreshold = &value
 	}
 	_, _, err = c.load(ctx)
 	if err != nil {

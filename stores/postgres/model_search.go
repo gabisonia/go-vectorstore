@@ -152,9 +152,6 @@ func (c *ModelCollection) embedSearchInput(ctx context.Context, input any, top i
 	if err := vectordata.ValidateModelSearchOptions(top, opts); err != nil {
 		return nil, err
 	}
-	if err := vectordata.ValidateModelFilter(opts.Filter, c.definition); err != nil {
-		return nil, err
-	}
 	if _, _, _, err := modelVectorTuning(opts.ProviderOptions, p); err != nil {
 		return nil, err
 	}
