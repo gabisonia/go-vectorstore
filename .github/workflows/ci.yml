@@ -16,8 +16,30 @@ permissions:
   contents: read
 
 jobs:
+  profile:
+    name: Select CI checks
+    runs-on: ubuntu-latest
+    outputs:
+      profile: ${{ steps.select.outputs.profile || 'full' }}
+    steps:
+      - uses: actions/checkout@v7
+        if: github.event_name == 'pull_request'
+        with:
+          fetch-depth: 0
+      - name: Classify pull request changes
+        id: select
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          profile=$(python3 .github/scripts/ci_profile.py classify)
+          echo "profile=$profile" >> "$GITHUB_OUTPUT"
+
   test:
-    name: Test and vet (Go ${{ matrix.go }})
+    needs: profile
+    name: ${{ needs.profile.outputs.profile == 'prose' && 'Executable documentation' || 'Test and vet' }} (Go ${{ matrix.go }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -30,21 +52,31 @@ jobs:
           go-version: ${{ matrix.go }}
           cache: true
       - name: Test with race detection
+        if: needs.profile.outputs.profile == 'full'
         run: go test -race -timeout=5m ./...
       - name: Test experimental connector modules and consumer resolution
+        if: needs.profile.outputs.profile == 'full'
         run: bash scripts/test-connector-modules.sh
       - name: Check documentation links and executable quickstart
         run: python3 scripts/check-docs.py
       - name: Run the README SQLite quickstart against the published module
         run: python3 scripts/check-readme-quickstart.py
       - name: Run credential-free sample smoke tests
+        if: needs.profile.outputs.profile == 'full'
         run: bash scripts/test-samples.sh
       - name: Vet
+        if: needs.profile.outputs.profile == 'full'
         run: go vet ./...
+      - name: Test CI profiles and required results
+        if: needs.profile.outputs.profile == 'full'
+        run: python3 .github/scripts/test_ci_profile.py
       - name: Test release tooling
+        if: needs.profile.outputs.profile == 'full'
         run: bash .github/scripts/release_test.sh
 
   fuzz:
+    needs: profile
+    if: needs.profile.outputs.profile == 'full'
     name: Bounded fuzz (Go ${{ matrix.go }})
     runs-on: ubuntu-latest
     strategy:
@@ -68,6 +100,8 @@ jobs:
           if-no-files-found: ignore
 
   sqlite-vec-probe:
+    needs: profile
+    if: needs.profile.outputs.profile == 'full'
     name: SQLite vec probe (${{ matrix.os }}, Go ${{ matrix.go }})
     runs-on: ${{ matrix.os }}
     strategy:
@@ -94,6 +128,8 @@ jobs:
         run: go vet -tags=sqlitevecprobe ./internal/sqlitevecprobe ./stores/sqlitevec
 
   reference-catalog:
+    needs: profile
+    if: needs.profile.outputs.profile == 'full'
     name: Locked .NET catalog and native provider interoperability
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -104,6 +140,8 @@ jobs:
       - run: bash scripts/test-redis-parity.sh
 
   standalone-dotnet-parity:
+    needs: profile
+    if: needs.profile.outputs.profile == 'full'
     name: Native ${{ matrix.provider }} and .NET interoperability
     runs-on: ubuntu-latest
     timeout-minutes: 12
@@ -116,6 +154,8 @@ jobs:
       - run: bash scripts/test-${{ matrix.provider }}-parity.sh
 
   sqlserver-dotnet-parity:
+    needs: profile
+    if: needs.profile.outputs.profile == 'full'
     name: Native SQL Server 2025 and .NET interoperability
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -124,6 +164,8 @@ jobs:
       - run: bash scripts/test-sqlserver-parity.sh
 
   qdrant-dotnet-parity:
+    needs: profile
+    if: needs.profile.outputs.profile == 'full'
     name: Native Qdrant and .NET interoperability
     runs-on: ubuntu-latest
     timeout-minutes: 12
@@ -132,6 +174,8 @@ jobs:
       - run: bash scripts/test-qdrant-parity.sh
 
   qdrant-probe:
+    needs: profile
+    if: needs.profile.outputs.profile == 'full'
     name: Qdrant 1.20.2 probe (Go ${{ matrix.go }})
     runs-on: ubuntu-latest
     strategy:
@@ -167,6 +211,8 @@ jobs:
         run: go test -count=1 -race -tags=integration -run TestIntegrationRestart -timeout=3m ./stores/qdrant
 
   integration-postgres:
+    needs: profile
+    if: needs.profile.outputs.profile == 'full'
     name: Postgres ${{ matrix.postgres }} (Go ${{ matrix.go }})
     runs-on: ubuntu-latest
     strategy:
@@ -194,6 +240,8 @@ jobs:
         run: bash samples/handbook/replay.sh postgres
 
   integration-redis:
+    needs: profile
+    if: needs.profile.outputs.profile == 'full'
     name: Redis ${{ matrix.redis }} (Go ${{ matrix.go }})
     runs-on: ubuntu-latest
     # Bound build/startup and sample execution as well as the Go test binaries.
@@ -282,6 +330,8 @@ jobs:
           go run ./samples/redis-store -namespace redis_json_nostem_demo -storage json -native -index flat -no-stem
 
   local-doc-agent:
+    needs: profile
+    if: needs.profile.outputs.profile == 'full'
     name: Local doc agent (Go ${{ matrix.go }})
     runs-on: ubuntu-latest
     strategy:
@@ -306,6 +356,8 @@ jobs:
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 -test ./...
 
   docs-retrieval-pilot:
+    needs: profile
+    if: needs.profile.outputs.profile == 'full'
     name: Docs retrieval pilot (Go ${{ matrix.go }})
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -331,6 +383,8 @@ jobs:
         run: go run golang.org/x/vuln/cmd/govulncheck@v1.9.0 -test ./...
 
   aspire:
+    needs: profile
+    if: needs.profile.outputs.profile == 'full'
     name: Aspire samples (Go ${{ matrix.go }})
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -385,6 +439,8 @@ jobs:
         run: aspire stop --apphost samples/aspire-services/apphost.go --force --non-interactive
 
   vulnerabilities:
+    needs: profile
+    if: needs.profile.outputs.profile == 'full'
     name: Vulnerability scan
     runs-on: ubuntu-latest
     steps:
@@ -401,6 +457,8 @@ jobs:
           done
 
   storage-upgrade:
+    needs: profile
+    if: needs.profile.outputs.profile == 'full'
     name: Released storage upgrade
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -414,6 +472,8 @@ jobs:
       - run: bash scripts/test-storage-upgrade.sh
 
   api-compatibility:
+    needs: profile
+    if: needs.profile.outputs.profile == 'full'
     name: Public API compatibility
     runs-on: ubuntu-latest
     steps:
@@ -433,18 +493,11 @@ jobs:
   required:
     name: Required CI
     if: always()
-    needs: [test, fuzz, sqlite-vec-probe, qdrant-probe, reference-catalog, standalone-dotnet-parity, sqlserver-dotnet-parity, qdrant-dotnet-parity, integration-postgres, integration-redis, local-doc-agent, docs-retrieval-pilot, aspire, vulnerabilities, api-compatibility, storage-upgrade, documentation-site]
+    needs: [profile, test, fuzz, sqlite-vec-probe, qdrant-probe, reference-catalog, standalone-dotnet-parity, sqlserver-dotnet-parity, qdrant-dotnet-parity, integration-postgres, integration-redis, local-doc-agent, docs-retrieval-pilot, aspire, vulnerabilities, api-compatibility, storage-upgrade, documentation-site]
     runs-on: ubuntu-latest
     steps:
-      - name: Require every verification job to succeed
+      - uses: actions/checkout@v7
+      - name: Require the verification jobs selected for this run
         env:
           JOB_RESULTS: ${{ toJSON(needs) }}
-        run: |
-          python3 - <<'PY'
-          import json, os
-          jobs = json.loads(os.environ["JOB_RESULTS"])
-          failed = {name: job["result"] for name, job in jobs.items() if job["result"] != "success"}
-          if failed:
-              raise SystemExit(f"Required verification did not succeed: {failed}")
-          print("Every required verification job succeeded.")
-          PY
+        run: python3 .github/scripts/ci_profile.py verify
