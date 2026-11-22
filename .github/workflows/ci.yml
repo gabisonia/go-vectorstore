@@ -494,7 +494,7 @@ jobs:
     name: Required CI
     if: always()
     needs: [profile, test, fuzz, sqlite-vec-probe, qdrant-probe, reference-catalog, standalone-dotnet-parity, sqlserver-dotnet-parity, qdrant-dotnet-parity, integration-postgres, integration-redis, local-doc-agent, docs-retrieval-pilot, aspire, vulnerabilities, api-compatibility, storage-upgrade, documentation-site]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
     steps:
       - uses: actions/checkout@v7
       - name: Require the verification jobs selected for this run
