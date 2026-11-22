@@ -38,7 +38,11 @@ bash .github/scripts/release_test.sh
 Fetch tags first. The root must report zero incompatibilities against v0.7.0.
 Azure AI Search and Pinecone must each pass against their own v0.1.0 tag. Run `bash scripts/test-connector-modules.sh`
 for the independent consumer builds. Advance baselines after reviewing a release.
-`Required CI` joins all verification jobs. Include any new CI job in its needs list.
+`Required CI` joins all verification jobs. Include each new CI job in its needs
+list. The default CI profile requires every job to succeed. Only regular-file
+edits to the documentation paths in `.github/scripts/ci_profile.py` qualify
+for the prose PR profile. It runs the site and both Go quickstart lanes. Update
+the profile tests if changing which jobs can be skipped.
 
 These commands need no provider credentials. The sample script creates/removes
 its own temporary SQLite files. The documentation checks execute the AI guide
