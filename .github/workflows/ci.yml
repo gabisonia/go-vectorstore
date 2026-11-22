@@ -33,15 +33,6 @@ jobs:
         run: go test -race -timeout=5m ./...
       - name: Test experimental connector modules and consumer resolution
         run: bash scripts/test-connector-modules.sh
-      - name: Run bounded fuzz campaigns
-        run: bash scripts/test-fuzz.sh 50000x
-      - name: Retain failing fuzz inputs
-        if: failure()
-        uses: actions/upload-artifact@v7
-        with:
-          name: failing-fuzz-corpus-${{ matrix.go }}
-          path: '**/testdata/fuzz/**'
-          if-no-files-found: ignore
       - name: Check documentation links and executable quickstart
         run: python3 scripts/check-docs.py
       - name: Run the README SQLite quickstart against the published module
@@ -52,6 +43,29 @@ jobs:
         run: go vet ./...
       - name: Test release tooling
         run: bash .github/scripts/release_test.sh
+
+  fuzz:
+    name: Bounded fuzz (Go ${{ matrix.go }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        go: ['1.26.x', stable]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ matrix.go }}
+          cache: true
+      - name: Run bounded fuzz campaigns
+        run: bash scripts/test-fuzz.sh 50000x
+      - name: Retain failing fuzz inputs
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: failing-fuzz-corpus-${{ matrix.go }}
+          path: '**/testdata/fuzz/**'
+          if-no-files-found: ignore
 
   sqlite-vec-probe:
     name: SQLite vec probe (${{ matrix.os }}, Go ${{ matrix.go }})
@@ -419,7 +433,7 @@ jobs:
   required:
     name: Required CI
     if: always()
-    needs: [test, sqlite-vec-probe, qdrant-probe, reference-catalog, standalone-dotnet-parity, sqlserver-dotnet-parity, qdrant-dotnet-parity, integration-postgres, integration-redis, local-doc-agent, docs-retrieval-pilot, aspire, vulnerabilities, api-compatibility, storage-upgrade, documentation-site]
+    needs: [test, fuzz, sqlite-vec-probe, qdrant-probe, reference-catalog, standalone-dotnet-parity, sqlserver-dotnet-parity, qdrant-dotnet-parity, integration-postgres, integration-redis, local-doc-agent, docs-retrieval-pilot, aspire, vulnerabilities, api-compatibility, storage-upgrade, documentation-site]
     runs-on: ubuntu-latest
     steps:
       - name: Require every verification job to succeed
