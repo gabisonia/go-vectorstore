@@ -583,8 +583,8 @@ created. The size check occurs after downloading a read, so it does not bound th
 network or allocation cost of an externally modified oversized Redis value.
 
 Default and fallback reads transfer O(collection size) bytes; Query, filtered
-Count and search additionally decode a memory collection. The exact selector
-bounds candidates but the snapshot remains materialized. Native reads still
+Count rebuild an in-memory collection. Dense search ranks the validated snapshot
+directly and retains at most `Skip + top` candidates. All records are still decoded. Native reads still
 transfer the O(record count) token manifest; eligible Count avoids record payloads,
 filtered Query transfers matching payloads, HNSW transfers candidate payloads,
 and FLAT transfers all matching vector-bearing payloads. Unfiltered Query and Get/GetMany retain the whole-snapshot path. See

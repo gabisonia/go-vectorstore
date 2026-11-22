@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"iter"
 
+	"github.com/gabisonia/go-vectorstore/internal/exactsearch"
 	"github.com/gabisonia/go-vectorstore/internal/iteration"
 	"github.com/gabisonia/go-vectorstore/internal/modelcodec"
 	"github.com/gabisonia/go-vectorstore/stores/memory"
@@ -103,12 +104,16 @@ func (c *Collection) GetMany(ctx context.Context, keys []any, opts vectordata.Re
 	}
 	return records, nil
 }
-func (c *Collection) engine(ctx context.Context) (*memory.Collection, error) {
+func (c *Collection) snapshotRecords(ctx context.Context) ([]vectordata.ModelRecord, error) {
 	state, _, err := c.load(ctx)
 	if err != nil {
 		return nil, err
 	}
-	records, err := c.decode(ctx, state, nil)
+	return c.decode(ctx, state, nil)
+}
+
+func (c *Collection) engine(ctx context.Context) (*memory.Collection, error) {
+	records, err := c.snapshotRecords(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -205,11 +210,11 @@ func (c *Collection) Search(ctx context.Context, vector []float32, top int, opts
 		}
 	}
 	opts.ProviderOptions = nil
-	engine, err := c.engine(ctx)
+	records, err := c.snapshotRecords(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return engine.Search(ctx, vector, top, opts)
+	return exactsearch.DenseSnapshot(ctx, c.definition, p, vector, top, opts, records)
 }
 func (c *Collection) SearchText(ctx context.Context, text string, top int, opts vectordata.ModelSearchOptions) ([]vectordata.ModelSearchResult, error) {
 	return c.SearchInput(ctx, text, top, opts)

@@ -5,6 +5,7 @@ import (
 	"cmp"
 	"container/heap"
 	"context"
+	"fmt"
 	"iter"
 	"math"
 	"sort"
@@ -103,6 +104,34 @@ func (h *candidates) Pop() any {
 	(*h)[last] = vectordata.ModelSearchResult{}
 	*h = (*h)[:last]
 	return value
+}
+
+// DenseSnapshot ranks decoded and validated snapshot records against a normalized query.
+// Providers verify each stored key against its token before normalizing the record.
+func DenseSnapshot(ctx context.Context, d vectordata.CollectionDefinition, p vectordata.VectorProperty, query []float32, top int, opts vectordata.ModelSearchOptions, records []vectordata.ModelRecord) ([]vectordata.ModelSearchResult, error) {
+	source := func(yield func(vectordata.ModelRecord, error) bool) {
+		// Distinct UUID tokens can normalize to the same key in a damaged snapshot.
+		var uuids map[string]struct{}
+		if d.Key.Type == vectordata.KeyUUID {
+			uuids = make(map[string]struct{}, len(records))
+		}
+		for _, row := range records {
+			if uuids != nil {
+				key := row.Key.(string)
+				if _, exists := uuids[key]; exists {
+					yield(vectordata.ModelRecord{}, fmt.Errorf("%w: duplicate key", vectordata.ErrInvalidRecord))
+					return
+				}
+				uuids[key] = struct{}{}
+			}
+			if !yield(row, nil) {
+				return
+			}
+		}
+	}
+	return Run(ctx, d, p, top, opts, source, func(row vectordata.ModelRecord) (float64, error) {
+		return DenseDistance(query, row.Vectors[p.Name], p.Metric), nil
+	})
 }
 
 // DenseDistance receives normalized, dimension-checked float32/float16 values.
