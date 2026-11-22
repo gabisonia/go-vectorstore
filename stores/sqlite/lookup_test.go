@@ -317,3 +317,25 @@ func TestPointAndBatchReadsValidateSelectedVectors(t *testing.T) {
 		}
 	}
 }
+
+func TestLookupRejectsMismatchedStoredKey(t *testing.T) {
+	ctx := t.Context()
+	s, c := lookupFixture(t, vectordata.CollectionDefinition{Key: vectordata.KeyProperty{Name: "ID"}})
+	if _, err := c.Insert(ctx, []vectordata.ModelRecord{{Key: "a"}, {Key: "b"}}); err != nil {
+		t.Fatal(err)
+	}
+	// Both keys exist in the requested batch. Membership alone cannot establish
+	// that each payload belongs to its own physical row.
+	if _, err := s.db.ExecContext(ctx, `UPDATE __vectorstore_records SET payload=(SELECT payload FROM __vectorstore_records WHERE collection=? AND key=?) WHERE collection=? AND key=?`, c.name, keyToken("b"), c.name, keyToken("a")); err != nil {
+		t.Fatal(err)
+	}
+	for _, include := range []bool{false, true} {
+		opts := vectordata.RetrievalOptions{IncludeVectors: include}
+		if got, err := c.Get(ctx, "a", opts); !errors.Is(err, vectordata.ErrInvalidRecord) || got.Key != nil {
+			t.Fatalf("Get: %v, %v", got, err)
+		}
+		if got, err := c.GetMany(ctx, []any{"a", "b"}, opts); !errors.Is(err, vectordata.ErrInvalidRecord) || got != nil {
+			t.Fatalf("GetMany: %v, %v", got, err)
+		}
+	}
+}
