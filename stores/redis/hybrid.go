@@ -81,17 +81,9 @@ func (c *Collection) validateHybrid(ctx context.Context, keywords string, top in
 	if cfg.constant < 1 {
 		return cfg, fmt.Errorf("%w: RRF constant must be positive", vectordata.ErrInvalidSearchOptions)
 	}
-	opts.Filter, err = exactsearch.FreezeFilter(opts.Filter, c.definition)
+	opts.ModelSearchOptions, err = exactsearch.FreezeSearchOptions(opts.ModelSearchOptions, c.definition)
 	if err != nil {
 		return cfg, err
-	}
-	if opts.DistanceThreshold != nil {
-		v := *opts.DistanceThreshold
-		opts.DistanceThreshold = &v
-	}
-	if opts.ScoreThreshold != nil {
-		v := *opts.ScoreThreshold
-		opts.ScoreThreshold = &v
 	}
 	cfg.opts = opts
 	return cfg, nil

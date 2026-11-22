@@ -7,6 +7,22 @@ import (
 	"github.com/gabisonia/go-vectorstore/vectordata/filterast"
 )
 
+// FreezeSearchOptions takes ownership of portable filter and threshold values
+// before an embedder is invoked. ProviderOptions remains provider-specific.
+func FreezeSearchOptions(opts vectordata.ModelSearchOptions, d vectordata.CollectionDefinition) (vectordata.ModelSearchOptions, error) {
+	if opts.DistanceThreshold != nil {
+		value := *opts.DistanceThreshold
+		opts.DistanceThreshold = &value
+	}
+	if opts.ScoreThreshold != nil {
+		value := *opts.ScoreThreshold
+		opts.ScoreThreshold = &value
+	}
+	filter, err := FreezeFilter(opts.Filter, d)
+	opts.Filter = filter
+	return opts, err
+}
+
 // Canonicalize operands before a scan acquires database resources. Subsequent
 // matching must not invoke caller MarshalJSON/MarshalText/String methods while
 // SQLite holds its single pooled connection. JSON numbers retain exact precision.

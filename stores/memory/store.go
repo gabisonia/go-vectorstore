@@ -438,7 +438,8 @@ func (c *Collection) SearchInput(ctx context.Context, input any, top int, opts v
 	if err := vectordata.ValidateModelSearchOptions(top, opts); err != nil {
 		return nil, err
 	}
-	if err := vectordata.ValidateModelFilter(opts.Filter, c.definition); err != nil {
+	opts, err = exactsearch.FreezeSearchOptions(opts, c.definition)
+	if err != nil {
 		return nil, err
 	}
 	if opts.ProviderOptions != nil {

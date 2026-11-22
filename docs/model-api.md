@@ -695,7 +695,9 @@ for hit, err := range documents.SearchTextIter(ctx, "mountains", 3,
 Constructing a sequence does no database access, embedding or model decoding.
 Each enumeration reruns the operation, including one embedding request for text
 or input queries. Keep inputs unchanged during consumption. Options/filters are
-validated before embedding. Errors are yielded once and stop enumeration; a late
+validated before embedding. For dense text and input search, each enumeration
+copies portable filter operands and score/distance thresholds before calling the
+embedder. Errors are yielded once and stop enumeration; a late
 error can follow earlier valid results. Existing slice methods return no partial
 values on error. Typed codecs decode only consumed results and stop on the first
 decode error. Check every yielded error, including one at exhaustion if the final
