@@ -274,9 +274,16 @@ native index coverage on Redis 8.2 and 7.4.
 
 Default Redis storage transfers a complete collection snapshot even for one-key
 reads and nil-filter Count. Writes also read/serialize/publish complete snapshots;
-explicit CAS conflicts can repeat those transfers. Query, filtered Count and dense
-search materialize the shared memory engine. The default encoded collection limit
+explicit CAS conflicts can repeat those transfers. Query and filtered Count rebuild a memory
+collection. Dense search ranks validated snapshot records directly. The default encoded collection limit
 is 16 MiB. These tests establish correctness, not a throughput or latency claim.
+
+For the shared Redis/Qdrant dense fallback, `BenchmarkDenseSnapshotRanking`
+ranks five hits from 1,000 prepared int64-key records with a string and an
+optional two-dimensional L2 vector (every fifth vector absent). On an Apple
+M3 Pro with Go 1.26.1, direct ranking used 5,048 B/op and 36 allocations.
+Rebuilding a memory collection per search used 1,322,681 B/op and 6,428
+allocations. Both measurements exclude network transfer and snapshot decoding.
 
 Real-server checks run the shared model/embedding/filter-parity suites, concurrent
 generated-key inserts through separate clients, unchanged bytes/sequence after
