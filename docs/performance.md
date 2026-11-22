@@ -5,6 +5,18 @@ point reads and filtered exact searches while four clients update records.
 The [Redis comparison](benchmarks/redis-mixed/report.md) runs the same workload
 against the default snapshot layout with AOF persistence.
 
+## Memory batch reads and counts
+
+Memory looks up the distinct normalized keys in a batch under one read lock.
+It copies only the matching records for the caller. An unfiltered count reads
+the map length. A filtered count scans a shallow snapshot and counts matches.
+
+Run `go test -run '^$' -bench '^BenchmarkMemoryPointBatchAndCount$' -benchmem ./stores/memory`.
+On an Apple M3 Pro with Go 1.26.1, a one-key lookup used 440 bytes and five
+allocations and an unfiltered count allocated zero bytes at both 100 and 10,000
+rows. Each fixture row has an int64 key, a string and a two-dimensional vector.
+The benchmark omits vectors from returned rows.
+
 ## Shared provider and SQLite verification
 
 Run the complete model contract against both exact-search providers, then the
