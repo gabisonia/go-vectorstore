@@ -17,6 +17,10 @@ allocations and an unfiltered count allocated zero bytes at both 100 and 10,000
 rows. Each fixture row has an int64 key, a string and a two-dimensional vector.
 The benchmark omits vectors from returned rows.
 
+Memory queries scan a shallow snapshot of all record headers. They retain at most
+`Skip + top` matching rows for ordering and deep-copy just the returned page.
+A large offset therefore increases the memory required for ranking.
+
 ## Shared provider and SQLite verification
 
 Run the complete model contract against both exact-search providers, then the
