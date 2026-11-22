@@ -54,7 +54,7 @@ func TestSearchUsesOneReadSnapshot(t *testing.T) {
 	wrote := false
 	var writeErr error
 	connector := lookupConnector{base: store.db.Driver(), dsn: path + "?_txlock=immediate&_pragma=busy_timeout(0)", before: func(query string) {
-		if wrote || !strings.HasPrefix(query, "SELECT payload FROM") {
+		if wrote || !strings.HasPrefix(query, "SELECT payload,key FROM") {
 			return
 		}
 		wrote = true

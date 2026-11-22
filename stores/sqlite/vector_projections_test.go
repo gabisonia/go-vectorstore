@@ -250,7 +250,7 @@ func TestVectorProjectionReadSnapshotAndPageFetch(t *testing.T) {
 				_, writeErr = writer.Upsert(deadline, after)
 			}
 		}
-		if strings.HasPrefix(query, "SELECT payload FROM") || strings.HasPrefix(query, "SELECT payload,key FROM") {
+		if strings.HasPrefix(query, "SELECT payload,key FROM") {
 			if !strings.Contains(query, "key IN (") {
 				t.Error("projected search decoded all canonical payloads")
 			}

@@ -58,6 +58,11 @@ func Decode(payload []byte, d vectordata.CollectionDefinition) (vectordata.Model
 		return vectordata.ModelRecord{}, err
 	}
 	out := vectordata.ModelRecord{Data: map[string]any{}, Vectors: stored.Vectors, BinaryVectors: stored.BinaryVectors, SparseVectors: stored.SparseVectors}
+	// Unmarshaling JSON null into an integer succeeds and leaves it at zero.
+	// A persisted record must contain an actual key, including for generated keys.
+	if len(stored.Key) == 0 || bytes.Equal(stored.Key, []byte("null")) {
+		return out, fmt.Errorf("%w: missing stored key", vectordata.ErrInvalidRecord)
+	}
 	var key any
 	if d.Key.Type == vectordata.KeyInt64 {
 		key = new(int64)

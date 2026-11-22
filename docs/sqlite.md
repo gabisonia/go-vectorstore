@@ -228,8 +228,10 @@ are lazy at construction. They load their snapshot/result page before yielding
 and release the connection before invoking application callbacks or typed codecs.
 They do not promise bounded lookup-result memory or incremental SQL decoding.
 Get and GetMany validate the selected records before omitting vectors from the result.
-If a payload key differs from its indexed row key, either operation returns
-`ErrInvalidRecord` and discards the page.
+Every path that decodes a canonical payload verifies its key against the stored
+row key. A mismatch returns `ErrInvalidRecord`, discards the result page, and
+aborts an index rebuild if one is in progress. Index-only counts do not decode
+payloads.
 GetManyIter shares the same one-snapshot semantics as GetMany. Cancellation is
 checked before loading, between results and at exhaustion; a break terminates
 without yielding another error. Enumeration never retries after exposing results.

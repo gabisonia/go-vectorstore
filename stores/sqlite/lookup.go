@@ -121,38 +121,33 @@ func (c *Collection) lookupBatch(ctx context.Context, tx *sql.Tx, tokens []strin
 	}
 	defer rows.Close()
 	records := []vectordata.ModelRecord{}
-	var storedKeys []string
 	for rows.Next() {
 		var payload []byte
 		var key string
 		if err := rows.Scan(&payload, &key); err != nil {
 			return nil, err
 		}
-		r, err := decodeRecord(payload, c.definition)
+		r, err := decodeStoredRecord(payload, key, c.definition)
 		if err != nil {
 			return nil, err
 		}
 		records = append(records, r)
-		storedKeys = append(storedKeys, key)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
-	return c.prepareLookupRecords(ctx, records, storedKeys, opts)
+	return c.prepareLookupRecords(ctx, records, opts)
 }
 
-func (c *Collection) prepareLookupRecords(ctx context.Context, records []vectordata.ModelRecord, storedKeys []string, opts vectordata.RetrievalOptions) ([]vectordata.ModelRecord, error) {
+func (c *Collection) prepareLookupRecords(ctx context.Context, records []vectordata.ModelRecord, opts vectordata.RetrievalOptions) ([]vectordata.ModelRecord, error) {
 	// Validate only selected records using the same rules as snapshot replay,
 	// with embedding sources cleared. Prepared values own their maps and slices.
 	records, err := vectordata.PrepareModelRecords(ctx, c.readDefinition(), vectordata.ModelCollectionOptions{}, records)
 	if err != nil {
 		return nil, err
 	}
-	for i, record := range records {
-		if keyToken(record.Key) != storedKeys[i] {
-			return nil, fmt.Errorf("%w: canonical key differs from stored key", vectordata.ErrInvalidRecord)
-		}
-		if !opts.IncludeVectors {
+	if !opts.IncludeVectors {
+		for i := range records {
 			records[i].Vectors = nil
 			records[i].BinaryVectors = nil
 			records[i].SparseVectors = nil

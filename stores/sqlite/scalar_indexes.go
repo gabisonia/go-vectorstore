@@ -91,7 +91,7 @@ func (c *Collection) RebuildScalarIndexes(ctx context.Context) (err error) {
 func (c *Collection) rebuildScalarIndexes(ctx context.Context, tx *sql.Tx) error {
 	// Validate canonical records before publishing readiness, without embedding
 	// callbacks or retaining a collection-sized decoded snapshot.
-	rows, err := tx.QueryContext(ctx, `SELECT payload FROM __vectorstore_records WHERE collection=?`, c.name)
+	rows, err := tx.QueryContext(ctx, `SELECT payload,key FROM __vectorstore_records WHERE collection=?`, c.name)
 	if err != nil {
 		return err
 	}
@@ -99,10 +99,11 @@ func (c *Collection) rebuildScalarIndexes(ctx context.Context, tx *sql.Tx) error
 	d := c.readDefinition()
 	for rows.Next() {
 		var payload []byte
-		if err := rows.Scan(&payload); err != nil {
+		var key string
+		if err := rows.Scan(&payload, &key); err != nil {
 			return err
 		}
-		record, err := decodeRecord(payload, d)
+		record, err := decodeStoredRecord(payload, key, d)
 		if err != nil {
 			return err
 		}

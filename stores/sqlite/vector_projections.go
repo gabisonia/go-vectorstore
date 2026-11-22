@@ -160,16 +160,13 @@ func (c *Collection) vectorProjectionBatch(ctx context.Context, tx *sql.Tx, afte
 		if err := rows.Scan(&after, &payload); err != nil {
 			return nil, "", err
 		}
-		record, err := decodeRecord(payload, d)
+		record, err := decodeStoredRecord(payload, after, d)
 		if err != nil {
 			return nil, "", err
 		}
 		prepared, err := vectordata.PrepareModelRecords(ctx, d, vectordata.ModelCollectionOptions{}, []vectordata.ModelRecord{record})
 		if err != nil {
 			return nil, "", err
-		}
-		if keyToken(prepared[0].Key) != after {
-			return nil, "", fmt.Errorf("%w: canonical key differs from stored key", vectordata.ErrInvalidRecord)
 		}
 		records = append(records, prepared[0])
 	}
