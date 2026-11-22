@@ -13,6 +13,7 @@ import (
 	"sync"
 
 	"github.com/gabisonia/go-vectorstore/internal/exactsearch"
+	"github.com/gabisonia/go-vectorstore/internal/iteration"
 	"github.com/gabisonia/go-vectorstore/vectordata"
 )
 
@@ -362,22 +363,9 @@ func (c *Collection) Query(ctx context.Context, filter vectordata.Filter, top in
 	return out[start : start+min(top, len(out)-start)], nil
 }
 func (c *Collection) QueryIter(ctx context.Context, filter vectordata.Filter, top int, opts vectordata.QueryOptions) iter.Seq2[vectordata.ModelRecord, error] {
-	return func(yield func(vectordata.ModelRecord, error) bool) {
-		records, err := c.Query(ctx, filter, top, opts)
-		if err != nil {
-			yield(vectordata.ModelRecord{}, err)
-			return
-		}
-		for _, r := range records {
-			if err := ctx.Err(); err != nil {
-				yield(vectordata.ModelRecord{}, err)
-				return
-			}
-			if !yield(r, nil) {
-				return
-			}
-		}
-	}
+	return iteration.FromSlice(ctx, func() ([]vectordata.ModelRecord, error) {
+		return c.Query(ctx, filter, top, opts)
+	})
 }
 func (c *Collection) Count(ctx context.Context, filter vectordata.Filter) (int64, error) {
 	if filter == nil {
@@ -504,22 +492,9 @@ func (c *Collection) searchSnapshot(ctx context.Context) iter.Seq2[vectordata.Mo
 	}
 }
 func (c *Collection) SearchIter(ctx context.Context, vector []float32, top int, opts vectordata.ModelSearchOptions) iter.Seq2[vectordata.ModelSearchResult, error] {
-	return func(yield func(vectordata.ModelSearchResult, error) bool) {
-		results, err := c.Search(ctx, vector, top, opts)
-		if err != nil {
-			yield(vectordata.ModelSearchResult{}, err)
-			return
-		}
-		for _, r := range results {
-			if err := ctx.Err(); err != nil {
-				yield(vectordata.ModelSearchResult{}, err)
-				return
-			}
-			if !yield(r, nil) {
-				return
-			}
-		}
-	}
+	return iteration.FromSlice(ctx, func() ([]vectordata.ModelSearchResult, error) {
+		return c.Search(ctx, vector, top, opts)
+	})
 }
 func (c *Collection) SearchText(ctx context.Context, text string, top int, opts vectordata.ModelSearchOptions) ([]vectordata.ModelSearchResult, error) {
 	return c.SearchInput(ctx, text, top, opts)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"iter"
 
+	"github.com/gabisonia/go-vectorstore/internal/iteration"
 	"github.com/gabisonia/go-vectorstore/vectordata"
 )
 
@@ -30,20 +31,7 @@ func (c *Collection) SearchBinary(ctx context.Context, v vectordata.BinaryVector
 	})
 }
 func (c *Collection) SearchBinaryIter(ctx context.Context, v vectordata.BinaryVector, top int, opts vectordata.ModelSearchOptions) iter.Seq2[vectordata.ModelSearchResult, error] {
-	return func(yield func(vectordata.ModelSearchResult, error) bool) {
-		rows, err := c.SearchBinary(ctx, v, top, opts)
-		if err != nil {
-			yield(vectordata.ModelSearchResult{}, err)
-			return
-		}
-		for _, r := range rows {
-			if err := ctx.Err(); err != nil {
-				yield(vectordata.ModelSearchResult{}, err)
-				return
-			}
-			if !yield(r, nil) {
-				return
-			}
-		}
-	}
+	return iteration.FromSlice(ctx, func() ([]vectordata.ModelSearchResult, error) {
+		return c.SearchBinary(ctx, v, top, opts)
+	})
 }
