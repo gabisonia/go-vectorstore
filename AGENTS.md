@@ -34,12 +34,11 @@ bash scripts/test-samples.sh
 bash .github/scripts/release_test.sh
 ```
 
-`bash scripts/check-api.sh` uses a pinned, isolated Go 1.26+ apidiff tool and the
-immutable v0.6.0 tag (fetch tags first). For the v0.7.0 transition the only reviewed removals are stores/azuresearch and
-stores/pinecone. Run bash scripts/test-connector-modules.sh for both nested modules. The v0.4.1 report is historical release evidence,
-not a current exception list. Advance the baseline after a reviewed release;
-never accept unexpected differences simply to make CI green. `Required CI` joins
-all verification jobs; include any new CI job in its needs list.
+`bash scripts/check-api.sh` uses a pinned, isolated Go 1.26+ apidiff tool.
+Fetch tags first. The root must report zero incompatibilities against v0.7.0.
+Azure AI Search and Pinecone must each pass against their own v0.1.0 tag. Run `bash scripts/test-connector-modules.sh`
+for the independent consumer builds. Advance baselines after reviewing a release.
+`Required CI` joins all verification jobs. Include any new CI job in its needs list.
 
 These commands need no provider credentials. The sample script creates/removes
 its own temporary SQLite files. The documentation checks execute the AI guide
