@@ -232,6 +232,11 @@ func (c *Collection) SearchInput(ctx context.Context, input any, top int, o vect
 	if err != nil {
 		return nil, c.operation("search_text", err)
 	}
+	// Scan releases the connection before the embedder runs. Search verifies
+	// the registration again in the snapshot used to select records.
+	if _, err := retryBusy(ctx, func() (int64, error) { return c.metadata(ctx, c.store.db) }); err != nil {
+		return nil, c.operation("search_text", err)
+	}
 	v, err := vectordata.EmbedInputQuery(ctx, input, p, c.options)
 	if err != nil {
 		return nil, c.operation("embed_query", err)

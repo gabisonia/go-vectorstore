@@ -212,6 +212,10 @@ its locking semantics; see the upstream [WAL restrictions](https://www.sqlite.or
 
 ## Query costs and provider limits
 
+Text and input searches check the collection registration before invoking the
+embedder. The callback can reenter the store. The search checks the registration
+again when it reads the records.
+
 Get fetches one record directly. GetMany normalizes/deduplicates native keys and
 uses the collection/key primary index in chunks of at most 500 keys. Metadata and
 all chunks use one deferred read transaction, so results stay on the same WAL

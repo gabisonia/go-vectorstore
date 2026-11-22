@@ -268,11 +268,16 @@ func (c *Collection) checkDefinition(registration string, format int) error {
 	}
 	return nil
 }
-func (c *Collection) metadata(ctx context.Context, tx *sql.Tx) (int64, error) {
+
+type rowQueryer interface {
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}
+
+func (c *Collection) metadata(ctx context.Context, db rowQueryer) (int64, error) {
 	var registration string
 	var format int
 	var next int64
-	err := tx.QueryRowContext(ctx, `SELECT definition,format,next_key FROM __vectorstore_collections WHERE name=?`, c.name).Scan(&registration, &format, &next)
+	err := db.QueryRowContext(ctx, `SELECT definition,format,next_key FROM __vectorstore_collections WHERE name=?`, c.name).Scan(&registration, &format, &next)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, vectordata.ErrCollectionNotFound
 	}

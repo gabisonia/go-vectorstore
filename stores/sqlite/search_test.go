@@ -116,3 +116,41 @@ func TestSearchScanErrorsDiscardResultsAndReleaseConnection(t *testing.T) {
 		t.Fatalf("search after error: %+v %v", hits, err)
 	}
 }
+
+func TestSearchTextChecksRegistrationBeforeAndAfterEmbedding(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	d := vectordata.CollectionDefinition{Key: vectordata.KeyProperty{Name: "ID"}, Vectors: []vectordata.VectorProperty{{Name: "V", Dimensions: 1, Metric: vectordata.DistanceL2}}}
+	s, live := lookupFixture(t, d)
+	calls := 0
+	opts := vectordata.ModelCollectionOptions{Embedder: vectordata.EmbeddingFunc(func(ctx context.Context, _ []string) ([][]float32, error) {
+		calls++
+		// Reenter through the same single connection and change the registration
+		// after the initial check but before the search snapshot.
+		if err := live.EnsureDeleted(ctx); err != nil {
+			return nil, err
+		}
+		return [][]float32{{1}}, nil
+	})}
+	stale := d.Clone()
+	stale.Vectors[0].Dimensions = 2
+	for _, test := range []struct {
+		name  string
+		def   vectordata.CollectionDefinition
+		want  error
+		calls int
+	}{
+		{"absent", d, vectordata.ErrCollectionNotFound, 0},
+		{live.name, stale, vectordata.ErrSchemaMismatch, 0},
+		{live.name, d, vectordata.ErrCollectionNotFound, 1},
+	} {
+		c, err := s.GetModelCollection(test.name, test.def, opts)
+		if err != nil {
+			t.Fatal(err)
+		}
+		rows, err := c.SearchText(ctx, "query", 1, vectordata.ModelSearchOptions{})
+		if rows != nil || !errors.Is(err, test.want) || calls != test.calls {
+			t.Fatalf("name=%q rows=%v err=%v calls=%d, want %v and %d calls", test.name, rows, err, calls, test.want, test.calls)
+		}
+	}
+}
