@@ -2,6 +2,7 @@ package sqlite
 
 import (
 	"context"
+	"database/sql"
 	"iter"
 
 	"github.com/gabisonia/go-vectorstore/internal/exactsearch"
@@ -17,7 +18,7 @@ func (c *Collection) read(ctx context.Context, key *string) ([]vectordata.ModelR
 	return retryBusy(ctx, func() ([]vectordata.ModelRecord, error) { return c.readOnce(ctx, key) })
 }
 func (c *Collection) readOnce(ctx context.Context, key *string) ([]vectordata.ModelRecord, error) {
-	statement := `SELECT c.definition,c.format,r.payload FROM __vectorstore_collections c LEFT JOIN __vectorstore_records r ON r.collection=c.name`
+	statement := `SELECT c.definition,c.format,r.payload,r.key FROM __vectorstore_collections c LEFT JOIN __vectorstore_records r ON r.collection=c.name`
 	args := []any{}
 	if key != nil {
 		statement += ` AND r.key=?`
@@ -37,16 +38,17 @@ func (c *Collection) readOnce(ctx context.Context, key *string) ([]vectordata.Mo
 		var registration string
 		var format int
 		var payload []byte
-		if err := rows.Scan(&registration, &format, &payload); err != nil {
+		var storedKey sql.NullString
+		if err := rows.Scan(&registration, &format, &payload, &storedKey); err != nil {
 			return nil, err
 		}
 		if err := c.checkDefinition(registration, format); err != nil {
 			return nil, err
 		}
-		if payload == nil {
+		if !storedKey.Valid {
 			continue
 		}
-		record, err := decodeRecord(payload, c.definition)
+		record, err := decodeStoredRecord(payload, storedKey.String, c.definition)
 		if err != nil {
 			return nil, err
 		}
@@ -105,7 +107,7 @@ func (c *Collection) Get(ctx context.Context, key any, opts vectordata.Retrieval
 	if len(records) == 0 {
 		return record, vectordata.ErrNotFound
 	}
-	records, err = c.prepareLookupRecords(ctx, records, []string{token}, opts)
+	records, err = c.prepareLookupRecords(ctx, records, opts)
 	if err != nil {
 		return record, err
 	}

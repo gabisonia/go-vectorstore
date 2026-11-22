@@ -32,7 +32,7 @@ func (c *Collection) searchScan(ctx context.Context) iter.Seq2[vectordata.ModelR
 			yield(vectordata.ModelRecord{}, err)
 			return
 		}
-		rows, err := tx.QueryContext(ctx, `SELECT payload FROM __vectorstore_records WHERE collection=?`, c.name)
+		rows, err := tx.QueryContext(ctx, `SELECT payload,key FROM __vectorstore_records WHERE collection=?`, c.name)
 		if err != nil {
 			yield(vectordata.ModelRecord{}, err)
 			return
@@ -45,11 +45,12 @@ func (c *Collection) searchScan(ctx context.Context) iter.Seq2[vectordata.ModelR
 				return
 			}
 			var payload []byte
-			if err := rows.Scan(&payload); err != nil {
+			var key string
+			if err := rows.Scan(&payload, &key); err != nil {
 				yield(vectordata.ModelRecord{}, err)
 				return
 			}
-			record, err := decodeRecord(payload, c.definition)
+			record, err := decodeStoredRecord(payload, key, c.definition)
 			if err != nil {
 				yield(vectordata.ModelRecord{}, err)
 				return

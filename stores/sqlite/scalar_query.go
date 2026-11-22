@@ -53,7 +53,7 @@ func (c *Collection) scalarPlan(filter vectordata.Filter, top int, opts vectorda
 		}
 		keyOrder, _ := compiler.order(c.definition.Key.Name, false)
 		order = append(order, keyOrder...)
-		query = "SELECT r.payload FROM __vectorstore_records r WHERE r.collection=?1 AND (" + where + ")"
+		query = "SELECT r.payload,r.key FROM __vectorstore_records r WHERE r.collection=?1 AND (" + where + ")"
 		whereEnd = len(query)
 		query += " ORDER BY " + strings.Join(order, ",") + " LIMIT " + compiler.bind(top) + " OFFSET " + compiler.bind(opts.Skip)
 	}
@@ -264,10 +264,11 @@ func (c *Collection) scalarRead(ctx context.Context, plan scalarQueryPlan) ([]ve
 			return nil, err
 		}
 		var payload []byte
-		if err := rows.Scan(&payload); err != nil {
+		var key string
+		if err := rows.Scan(&payload, &key); err != nil {
 			return nil, err
 		}
-		r, err := decodeRecord(payload, c.definition)
+		r, err := decodeStoredRecord(payload, key, c.definition)
 		if err != nil {
 			return nil, err
 		}

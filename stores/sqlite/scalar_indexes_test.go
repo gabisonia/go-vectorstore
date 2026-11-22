@@ -295,3 +295,56 @@ func TestNativeScalarIndexValidation(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestCanonicalReadsAndScalarBackfillRejectMismatchedKey(t *testing.T) {
+	ctx := t.Context()
+	path := filepath.Join(t.TempDir(), "rows.db")
+	legacy, err := Open(ctx, path, StoreOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer legacy.Close()
+	d := scalarIndexDefinition()
+	d.Vectors = []vectordata.VectorProperty{{Name: "V", Dimensions: 1, Metric: vectordata.DistanceL2}}
+	c, err := legacy.EnsureModelCollection(ctx, "records", d, vectordata.ModelCollectionOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	row := scalarIndexRow(int64(1), 7)
+	row.Vectors = map[string][]float32{"V": {1}}
+	if _, err := c.Insert(ctx, []vectordata.ModelRecord{row}); err != nil {
+		t.Fatal(err)
+	}
+	// Change only the physical key so the payload remains a fully valid record.
+	if _, err = legacy.db.ExecContext(ctx, `UPDATE __vectorstore_records SET key=? WHERE collection=? AND key=?`, keyToken(int64(2)), c.Name(), keyToken(int64(1))); err != nil {
+		t.Fatal(err)
+	}
+
+	native, err := Open(ctx, path, StoreOptions{NativeIndexes: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer native.Close()
+	base, err := native.GetModelCollection(c.Name(), d, vectordata.ModelCollectionOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, filter := range []vectordata.Filter{
+		vectordata.Eq(vectordata.Column("Number"), int64(7)), // scalar SQL
+		vectordata.Eq(vectordata.Column("JSON"), nil),        // canonical Go fallback
+	} {
+		if rows, err := base.Query(ctx, filter, 1, vectordata.QueryOptions{}); rows != nil || !errors.Is(err, vectordata.ErrInvalidRecord) {
+			t.Fatalf("Query(%v)=%v, %v", filter, rows, err)
+		}
+	}
+	if hits, err := base.Search(ctx, []float32{1}, 1, vectordata.ModelSearchOptions{}); hits != nil || !errors.Is(err, vectordata.ErrInvalidRecord) {
+		t.Fatalf("Search=%v, %v", hits, err)
+	}
+	if err := base.(*Collection).RebuildScalarIndexes(ctx); !errors.Is(err, vectordata.ErrInvalidRecord) {
+		t.Fatalf("backfill: %v", err)
+	}
+	var registrations int
+	if err := native.db.QueryRowContext(ctx, `SELECT count(*) FROM __vectorstore_scalar_indexes WHERE collection=?`, c.Name()).Scan(&registrations); err != nil || registrations != 0 {
+		t.Fatalf("published registrations=%d err=%v", registrations, err)
+	}
+}

@@ -339,3 +339,17 @@ func TestLookupRejectsMismatchedStoredKey(t *testing.T) {
 		}
 	}
 }
+
+func TestStoredKeyZeroRequiresAnExplicitNumericKey(t *testing.T) {
+	for _, kind := range []vectordata.KeyType{vectordata.KeyInt64, vectordata.KeyUint64} {
+		d := vectordata.CollectionDefinition{Key: vectordata.KeyProperty{Name: "ID", Type: kind}}
+		for _, payload := range []string{`{}`, `{"Key": null}`} {
+			if _, err := decodeStoredRecord([]byte(payload), "0", d); !errors.Is(err, vectordata.ErrInvalidRecord) {
+				t.Fatalf("%s %s: %v", kind, payload, err)
+			}
+		}
+		if _, err := decodeStoredRecord([]byte(`{"Key":0}`), "0", d); err != nil {
+			t.Fatalf("%s zero: %v", kind, err)
+		}
+	}
+}
