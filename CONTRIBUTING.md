@@ -30,7 +30,11 @@ run downloads Go dependencies. No API keys or database services are needed.
 
 Format changed Go files with `gofmt`. For provider integrations, release
 checks and isolated Go modules, see the [repository verification guide](AGENTS.md).
-CI runs the wider matrix on pull requests.
+For edits limited to existing, allowlisted documentation such as this guide or
+the README, CI builds the site and runs the executable quickstarts on both
+supported Go versions. Code changes, mixed changes, and added or renamed files
+run the full matrix. Every push to master and every release runs the full
+matrix. Both profiles report their result through **Required CI**.
 
 ## Submit a pull request
 
