@@ -160,10 +160,11 @@ operands before embedding callbacks and embed once across read retries.
 Keep filtering/KNN/wrapper reads in the
 manifest/readiness Lua guard.
 Scope index pruning to each layout's lease and namespace.
-CI's Redis 8.2 job requires real JSON contracts, native conformance/recall and the
-projection proof; Redis 7.4 covers missing-module behavior. CI separates storage
-and native index suites to bound their runtime; the expanded native matrix has a
-ten-minute timeout, while storage checks retain five minutes.
+CI runs Redis 8.2 storage and native index suites in parallel on independent
+servers for each Go version. Storage runs recovery and the conversion samples.
+Native runs index conformance, recall, the projection proof and native samples.
+Redis 7.4 runs both suites together and covers missing-module behavior.
+The native Go test suite has a ten-minute timeout. The storage suite has five minutes.
 
 `REDIS_TEST_RECOVERY=true` enables persistent owned-server tests with AOF and
 appendfsync=always. It rejects supplied REDIS_TEST_ADDR values. Run recovery tests

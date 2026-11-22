@@ -242,7 +242,7 @@ jobs:
   integration-redis:
     needs: profile
     if: needs.profile.outputs.profile == 'full'
-    name: Redis ${{ matrix.redis }} (Go ${{ matrix.go }})
+    name: Redis ${{ matrix.redis.version }} ${{ matrix.redis.suite }} (Go ${{ matrix.go }})
     runs-on: ubuntu-latest
     # Bound build/startup and sample execution as well as the Go test binaries.
     timeout-minutes: 30
@@ -250,10 +250,13 @@ jobs:
       fail-fast: false
       matrix:
         go: ['1.26.x', stable]
-        redis: ['7.4', '8.2']
+        redis:
+          - {version: '7.4', suite: combined}
+          - {version: '8.2', suite: storage}
+          - {version: '8.2', suite: native}
     services:
       redis:
-        image: redis:${{ matrix.redis }}
+        image: redis:${{ matrix.redis.version }}
         ports:
           - 6379:6379
         options: >-
@@ -266,32 +269,36 @@ jobs:
           go-version: ${{ matrix.go }}
           cache: true
       - name: Run Redis storage contracts and failure tests
+        if: matrix.redis.suite != 'native'
         env:
           REDIS_TEST_ADDR: localhost:6379
-          REDIS_REQUIRE_SEARCH: ${{ matrix.redis == '8.2' }}
-          REDIS_REQUIRE_JSON: ${{ matrix.redis == '8.2' }}
+          REDIS_REQUIRE_SEARCH: ${{ matrix.redis.version == '8.2' }}
+          REDIS_REQUIRE_JSON: ${{ matrix.redis.version == '8.2' }}
         run: go test -count=1 -race -tags=integration -timeout=5m -skip 'TestIntegration(Native|JSONNative)' ./stores/redis
       - name: Run Redis native index contracts and failure tests
+        if: matrix.redis.suite != 'storage'
         env:
           REDIS_TEST_ADDR: localhost:6379
-          REDIS_REQUIRE_SEARCH: ${{ matrix.redis == '8.2' }}
-          REDIS_REQUIRE_JSON: ${{ matrix.redis == '8.2' }}
+          REDIS_REQUIRE_SEARCH: ${{ matrix.redis.version == '8.2' }}
+          REDIS_REQUIRE_JSON: ${{ matrix.redis.version == '8.2' }}
         run: go test -count=1 -race -tags=integration -timeout=10m -run 'TestIntegration(Native|JSONNative)' ./stores/redis
       - name: Verify recovery on an owned persistent Redis fixture
+        if: matrix.redis.suite != 'native'
         env:
-          REDIS_TEST_IMAGE: redis:${{ matrix.redis }}
+          REDIS_TEST_IMAGE: redis:${{ matrix.redis.version }}
           REDIS_TEST_RECOVERY: 'true'
-          REDIS_REQUIRE_SEARCH: ${{ matrix.redis == '8.2' }}
-          REDIS_REQUIRE_JSON: ${{ matrix.redis == '8.2' }}
+          REDIS_REQUIRE_SEARCH: ${{ matrix.redis.version == '8.2' }}
+          REDIS_REQUIRE_JSON: ${{ matrix.redis.version == '8.2' }}
         run: go test -count=1 -race -v -tags=integration -timeout=5m -run '^TestIntegrationRecovery' ./stores/redis
       - name: Run persistent sample twice
+        if: matrix.redis.suite != 'native'
         run: |
           go run ./samples/redis-store
           go run ./samples/redis-store
           go run ./samples/redis-store -namespace redis_hash_demo -storage hash
           go run ./samples/redis-store -namespace redis_hash_demo -storage hash
       - name: Run native indexed samples twice
-        if: matrix.redis == '8.2'
+        if: matrix.redis.suite == 'native'
         run: |
           go run ./samples/redis-store -namespace redis_native_demo -native
           go run ./samples/redis-store -namespace redis_native_demo -native
@@ -300,7 +307,7 @@ jobs:
           go run ./samples/redis-store -namespace redis_text_demo -native -fulltext
           go run ./samples/redis-store -namespace redis_text_demo -native -fulltext
       - name: Run RedisJSON sample and explicit conversion twice
-        if: matrix.redis == '8.2'
+        if: matrix.redis.suite == 'storage'
         run: |
           go run ./samples/redis-store -namespace redis_json_demo -storage json
           go run ./samples/redis-store -namespace redis_json_demo -storage json
@@ -314,7 +321,7 @@ jobs:
           go run ./samples/redis-store -namespace redis_json_text_demo -storage json -native -fulltext
 
       - name: Run native hybrid samples twice
-        if: matrix.redis == '8.2'
+        if: matrix.redis.suite == 'native'
         run: |
           go run ./samples/redis-store -namespace redis_hybrid_demo -native -hybrid
           go run ./samples/redis-store -namespace redis_hybrid_demo -native -hybrid
