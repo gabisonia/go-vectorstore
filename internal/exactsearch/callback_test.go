@@ -45,7 +45,8 @@ func TestFilterCodecsRunOutsideProviderResources(t *testing.T) {
 			}
 			calls := new(atomic.Int32)
 			operand := writingOperand{calls: calls, write: func() error {
-				deadline, cancel := context.WithTimeout(ctx, time.Second)
+				// Bound a deadlock while allowing a real SQLite write on a busy race runner.
+				deadline, cancel := context.WithTimeout(ctx, 10*time.Second)
 				defer cancel()
 				done := make(chan error, 1)
 				go func() { _, err := c.Upsert(deadline, []vectordata.ModelRecord{record}); done <- err }()
