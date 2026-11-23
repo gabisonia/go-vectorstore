@@ -19,7 +19,7 @@ jobs:
           python-version: '3.13'
       - run: python -m pip install -r scripts/pages/requirements.txt
       - run: python -m mkdocs build --strict
-      - uses: actions/upload-pages-artifact@v4
+      - uses: actions/upload-pages-artifact@v5
         if: inputs.upload
         with:
           path: site
