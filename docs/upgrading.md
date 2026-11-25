@@ -1,5 +1,27 @@
 # Upgrading model collections
 
+## Upgrading from v0.7.0 to v1.0.0
+
+Keep the existing root module path and Go 1.26 or later. Once the v1.0.0 tag
+is published, select it for `github.com/gabisonia/go-vectorstore` in your
+application, run `go mod tidy` and run your tests. Azure AI Search and Pinecone
+stay on their own v0.1.0 tags. Record callers, model registrations and existing
+third-party provider implementations can upgrade in place. Adopting typed native
+search or composing a text searcher is optional.
+
+Back up your store and reopen a restored copy with the same provider, schema,
+namespace, layout and immutable limits. Supply the application's runtime
+embedders again. The released-writer fixtures directly reopened all eleven
+configurations below, verified keys 1 and 2 and the integer 9007199254740993,
+ranked key 1 at distance zero while excluding the missing vector, and generated
+key 3 on the next insert. These paths require no collection rebuild or data
+conversion. [v0.7.0 restore results](https://github.com/gabisonia/go-vectorstore/actions/runs/45594622615/job/139137427718) · [v0.6.0 restore results](https://github.com/gabisonia/go-vectorstore/actions/runs/45594622615/job/139137427779)
+
+If you handle iterator errors, check `errors.Is(err, context.Canceled)` when
+continuing after the final hit. Breaking out of the loop closes the iterator.
+Review the [v1.x compatibility commitment](releases.md#v1x-compatibility) for
+native filtering, score and ordering guarantees.
+
 ## Upgrading to v0.7.0
 
 With Go 1.26 or later, update the root module in your application:
@@ -22,13 +44,13 @@ v0.7.0. After updating imports and dependencies, run `go mod tidy` and
 `go test ./...` in your application. See the [native connector support
 matrix](native-support.md) for the tested backends and operations.
 
-## Reading data written by v0.6.0
+## Reading data written by v0.6.0 and v0.7.0
 
-Required CI builds a writer from the published v0.6.0 source (commit
-`545df9b8974c88e086c2f599e33a6703a01c1033`) with that release's dependencies,
-and a second binary from the checkout. Both execute the same public-API
-fixture. Run `bash scripts/test-storage-upgrade.sh` with Go, Docker and a
-checkout containing the release commit. All databases and backups belong to
+Required CI builds writers from published v0.6.0 (`545df9b8974c`) and
+v0.7.0 (`ade43e87fc76`) with each release's dependencies, and a reader from
+the checkout. All execute the same public-API fixture. Fetch the release tags,
+then run `bash scripts/test-storage-upgrade.sh v0.6.0` and
+`bash scripts/test-storage-upgrade.sh v0.7.0` with Go and Docker. All databases and backups belong to
 the script and are removed on exit.
 
 | Released configuration | Backup and reopen path on the same backend version |

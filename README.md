@@ -444,7 +444,7 @@ any publishing job runs. Existing tags must point to the checked-out, tested
 commit; the workflow will not move a tag to another commit. Prerelease versions
 are published as GitHub prereleases.
 
-`VERSION` selects the source version being prepared or tagged (`0.7.0`). It does
+`VERSION` selects the source version being prepared or tagged (`1.0.0`). It does
 not establish that the tag has been published. Choose an unused version and update
 `VERSION` and the changelog in a reviewed PR before publishing from master. Published tags are immutable; documentation updates after
 a release do not change the source stored under that tag.

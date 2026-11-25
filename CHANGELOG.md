@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.0.0
+
+- Adopt the [v1.x compatibility commitment](docs/releases.md#v1x-compatibility) for the root module, including original Record callers, typed models and third-party providers. Go 1.26 remains the minimum.
+- Add `vectordata.VectorSearcher[T]` for typed dense retrieval. Bind Qdrant named points or SQL Server vector tables with schema-aware model searchers, or supply a custom Qdrant decoder. Compose a dense searcher with `embeddingsearch.New` for text queries.
+- Check cancellation through the final hit and release iterator resources on early exit. Validate model batches before embedding and freeze supported filter, threshold and hybrid keyword operands before invoking query embedders.
+- Reduce memory collection write and bounded query allocations. SQLite can restrict ready packed vectors using an indexed equality filter and verifies canonical record identities on retrieval.
+- Verify direct reads from v0.6.0 and v0.7.0 writers across eleven storage configurations. See the [upgrade instructions](docs/upgrading.md#upgrading-from-v070-to-v100).
+
 ## v0.7.0 — 2026-11-21
 
 [Release notes](https://github.com/gabisonia/go-vectorstore/releases/tag/v0.7.0).

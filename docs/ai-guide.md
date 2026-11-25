@@ -7,7 +7,7 @@ ensure that a tool reads its documentation or instruction files.
 
 ## Version and starting point
 
-This quickstart uses the published **v0.7.0** root module and requires Go 1.26
+The checkout is preparing v1.0.0. This quickstart uses the published **v0.7.0** root module and requires Go 1.26
 or later. Start in an empty directory. If you already have a Go module, skip
 the initialization line.
 
