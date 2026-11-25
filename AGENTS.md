@@ -35,7 +35,7 @@ bash .github/scripts/release_test.sh
 ```
 
 `bash scripts/check-api.sh` uses a pinned, isolated Go 1.26+ apidiff tool.
-Fetch tags first. The root must report zero incompatibilities against v0.7.0.
+Fetch tags first. The root must report zero incompatibilities against v1.0.0.
 Azure AI Search and Pinecone must each pass against their own v0.1.0 tag. Run `bash scripts/test-connector-modules.sh`
 for the independent consumer builds. Advance baselines after reviewing a release.
 `Required CI` joins all verification jobs. Include each new CI job in its needs

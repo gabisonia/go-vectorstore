@@ -8,7 +8,7 @@ filters and provider-specific native connectors.
 Install the published library with Go 1.26 or later.
 
 ```sh
-go get github.com/gabisonia/go-vectorstore@v0.7.0
+go get github.com/gabisonia/go-vectorstore@v1.0.0
 ```
 
 [Run your first SQLite search](https://github.com/gabisonia/go-vectorstore#your-first-sqlite-search) from an empty directory, or [try the in-memory example](ai-guide.md#minimal-complete-program). Then [compare provider capabilities](parity.md) or
