@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/gabisonia/go-vectorstore/stores/memory"
@@ -31,7 +32,11 @@ func TestMetadataDiscoveryAfterClose(t *testing.T) {
 		t.Fatal(err)
 	}
 	pool.Close()
-	path := filepath.Join(t.TempDir(), "literal?mode=memory#x.db")
+	filename := "literal?mode=memory#x.db"
+	if runtime.GOOS == "windows" {
+		filename = "literal%3Fmode=memory#x.db"
+	}
+	path := filepath.Join(t.TempDir(), filename)
 	sq, err := sqlite.Open(ctx, path, sqlite.StoreOptions{})
 	if err != nil {
 		t.Fatal(err)

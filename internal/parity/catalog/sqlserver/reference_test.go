@@ -123,4 +123,7 @@ func TestRankedGuides(t *testing.T) {
 		t.Fatal(err)
 	}
 	rankedguides.Check(t, searcher)
+	if inUse := db.Stats().InUse; inUse != 0 {
+		t.Fatalf("%d connections still in use after iteration", inUse)
+	}
 }

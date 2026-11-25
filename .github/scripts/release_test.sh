@@ -24,14 +24,11 @@ if bash -c 'bash "$1" resolve "$RAW_VERSION"' _ "$script" > /dev/null 2>&1; then
 [[ ! -e "$scratch/injected" ]] || fail 'Version input executed as shell code'
 
 git init --bare -q "$scratch/remote.git"
-git init -q "$scratch/work"
+git init -q -b master "$scratch/work"
 cd "$scratch/work"
 git config user.name 'Release test'
 git config user.email 'release-test@example.invalid'
 git remote add origin "$scratch/remote.git"
-git commit -q --allow-empty -m initial
-first="$(git rev-parse HEAD)"
-
 printf '1.2.3\n' > VERSION
 printf '# Changelog\n\n## v1.2.3\n' > CHANGELOG.md
 bash "$script" verify-source v1.2.3
@@ -39,6 +36,16 @@ if bash "$script" verify-source v1.2.4 > /dev/null 2>&1; then fail 'Mismatched s
 printf '# Changelog\n\n## v1.2.30\n' > CHANGELOG.md
 if bash "$script" verify-source v1.2.3 > /dev/null 2>&1; then fail 'Missing changelog entry accepted'; fi
 printf '# Changelog\n\n## v1.2.3 — 2026-01-01\n' > CHANGELOG.md
+git add VERSION CHANGELOG.md
+git commit -qm initial
+first="$(git rev-parse HEAD)"
+git push -q origin master
+export GITHUB_EVENT_NAME=workflow_dispatch GITHUB_REF=refs/heads/master GITHUB_SHA="$first"
+bash "$script" verify-target
+if GITHUB_REF=refs/heads/topic bash "$script" publish-tag v1.2.3; then fail 'Topic dispatch accepted'; fi
+if GITHUB_EVENT_NAME=push GITHUB_REF=refs/tags/v1.2.3 bash "$script" publish-tag v1.2.3; then fail 'Tag push accepted'; fi
+if GITHUB_SHA=wrong bash "$script" publish-tag v1.2.3; then fail 'Untested checkout accepted'; fi
+if git show-ref --verify --quiet refs/tags/v1.2.3; then fail 'Failed checks created a tag'; fi
 bash "$script" verify-source v1.2.3
 bash "$script" verify-tag v1.2.3
 bash "$script" publish-tag v1.2.3 > /dev/null 2>&1
@@ -48,9 +55,16 @@ git tag -a v1.2.4 -m 'Annotated tag'
 bash "$script" verify-tag v1.2.4
 
 git commit -q --allow-empty -m second
+export GITHUB_SHA="$(git rev-parse HEAD)"
+git tag v1.2.5 HEAD
+if bash "$script" verify-target; then fail 'Tagged off-master checkout accepted'; fi
+git push -q origin master
+bash "$script" verify-target
 if bash "$script" verify-tag v1.2.3 > /dev/null 2>&1; then fail 'Mismatched lightweight tag accepted'; fi
 if bash "$script" verify-tag v1.2.4 > /dev/null 2>&1; then fail 'Mismatched annotated tag accepted'; fi
 if bash "$script" publish-tag v1.2.3 > /dev/null 2>&1; then fail 'Mismatched tag published'; fi
 [[ "$(git --git-dir="$scratch/remote.git" rev-parse refs/tags/v1.2.3)" == "$first" ]] || fail 'Existing tag moved'
+git checkout -q --detach "$first"
+if GITHUB_SHA="$first" bash "$script" verify-target; then fail 'Superseded dispatch accepted'; fi
 
 printf 'Release tooling tests passed\n'

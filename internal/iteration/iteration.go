@@ -27,6 +27,9 @@ func WithContext[T any](ctx context.Context, source iter.Seq2[T, error]) iter.Se
 			if !yield(value, nil) {
 				return
 			}
+			if ctx.Err() != nil {
+				break
+			}
 		}
 		if err := ctx.Err(); err != nil {
 			yield(zero, err)
