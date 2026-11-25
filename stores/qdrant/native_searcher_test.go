@@ -8,55 +8,61 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/gabisonia/go-vectorstore/internal/parity/rankedguides"
 	"github.com/gabisonia/go-vectorstore/stores/memory"
 	"github.com/gabisonia/go-vectorstore/vectordata"
+	"github.com/google/uuid"
 )
 
-type article struct {
-	ID        uint64    `vectordata:"key"`
-	Category  string    `vectordata:"data,index"`
-	Direction []float32 `vectordata:"vector,dimensions=2"`
-}
-
-func articles() []article {
-	return []article{{1, "guide", []float32{1, 0}}, {2, "guide", []float32{0, 1}}, {3, "news", []float32{1, 0}}}
-}
-
-// rankedGuides is application code shared by both backend fixtures.
-func rankedGuides(ctx context.Context, searcher vectordata.VectorSearcher[article]) ([]vectordata.TypedModelSearchResult[article], error) {
-	opts := vectordata.ModelSearchOptions{VectorProperty: "Direction", Filter: vectordata.Eq(vectordata.Column("Category"), "guide")}
-	var results []vectordata.TypedModelSearchResult[article]
-	for hit, err := range searcher.SearchIter(ctx, []float32{1, 0}, 2, opts) {
+func TestNativeModelPayloadMapping(t *testing.T) {
+	type document struct {
+		ID        uuid.UUID `vectordata:"key,type=uuid"`
+		Revision  int64     `vectordata:"data,name=revision_no"`
+		Direction []float32 `vectordata:"vector,dimensions=2,name=content_vector"`
+	}
+	id := uuid.New()
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintf(w, `{"result":{"points":[{"id":"%s","score":1,"payload":{"revision_no":9007199254740993},"vector":{"content_vector":[1,0]}}]}}`, id)
+	}))
+	defer server.Close()
+	store, err := New(StoreOptions{URL: server.URL})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.Close()
+	points := &NativePoints[uuid.UUID]{store: store, path: "/collections/docs", dimensions: map[string]int{"content_vector": 2}}
+	searcher, err := NewNativeModelSearcher[document](points, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	count := 0
+	for hit, err := range searcher.SearchIter(t.Context(), []float32{1, 0}, 1, vectordata.ModelSearchOptions{IncludeVectors: true}) {
 		if err != nil {
-			return nil, err
+			t.Fatal(err)
 		}
-		results = append(results, hit)
-	}
-	return results, nil
-}
-
-func checkRankedGuides(t *testing.T, searcher vectordata.VectorSearcher[article]) {
-	t.Helper()
-	hits, err := rankedGuides(t.Context(), searcher)
-	if err != nil || len(hits) != 2 {
-		t.Fatalf("ranked guides: %+v, %v", hits, err)
-	}
-	for i, hit := range hits {
-		if hit.Item.ID != uint64(i+1) || hit.Item.Category != "guide" || len(hit.Item.Direction) != 0 || hit.Distance != float64(i) || hit.Score != float64(1-i) || hit.ScoreKind != vectordata.ScoreSimilarity {
-			t.Fatalf("rank %d: %+v", i, hit)
+		count++
+		if hit.Item.ID != id || hit.Item.Revision != 9007199254740993 || len(hit.Item.Direction) != 2 {
+			t.Fatalf("decoded %+v", hit.Item)
 		}
+	}
+	if count != 1 {
+		t.Fatalf("%d hits", count)
+	}
+	points.dimensions["content_vector"] = 3
+	if _, err := NewNativeModelSearcher[document](points, nil); !errors.Is(err, vectordata.ErrSchemaMismatch) {
+		t.Fatalf("dimension mismatch: %v", err)
 	}
 }
 
 func TestMemoryRankedGuides(t *testing.T) {
-	c, err := vectordata.EnsureTypedModelCollection[uint64, article](t.Context(), memory.New(), "articles", nil, vectordata.ModelCollectionOptions{})
+	c, err := vectordata.EnsureTypedModelCollection[uint64, rankedguides.Article](t.Context(), memory.New(), "articles", nil, vectordata.ModelCollectionOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := c.Upsert(t.Context(), articles()); err != nil {
+	if _, err := c.Upsert(t.Context(), rankedguides.Articles()); err != nil {
 		t.Fatal(err)
 	}
-	checkRankedGuides(t, c)
+	rankedguides.Check(t, c)
 }
 
 func TestNativeSearcherIteration(t *testing.T) {

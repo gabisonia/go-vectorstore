@@ -62,6 +62,40 @@ Retrieval functions that only search by dense vector can accept
 its `SearchIter` results. The retrieval function needs only the model type;
 collection setup owns the key type and provider choice.
 
+Native Qdrant and SQL Server expose `NewNativeModelSearcher[T]` for attached
+storage. Both resolve logical fields through the model definition or tags.
+Their shared query supports named dense cosine search, paging, optional vector
+projection and one exact string equality. Qdrant requires a keyword index on
+the payload field. SQL Server supports one bigint key, one nvarchar(max) field
+and one vector column. Negative SQL IDs require a signed model key.
+
+For text input on a read-only dense searcher, import
+`github.com/gabisonia/go-vectorstore/vectordata/embeddingsearch`:
+
+```go
+definition, err := vectordata.DefinitionFor[Article]()
+if err != nil {
+    return err
+}
+text, err := embeddingsearch.New(searcher, definition,
+    vectordata.ModelCollectionOptions{Embedder: embedder})
+if err != nil {
+    return err
+}
+for hit, err := range text.SearchTextIter(ctx, "documentation", 5,
+    vectordata.ModelSearchOptions{VectorProperty: "Direction"}) {
+    if err != nil {
+        return err
+    }
+    fmt.Println(hit.Item.ID, hit.Score)
+}
+```
+
+Each enumeration validates portable options, copies filter operands and
+thresholds, embeds the text once, and queries the selected vector.
+Backend filter and threshold limits still apply. See the
+[three-provider fixture](../internal/parity/rankedguides/guides.go).
+
 `TypedModelCollection` checks the operation context before and after each model
 codec callback. Cancellation stops later callbacks and prevents handing an encoded
 batch to the provider. Reads return no partial slice values on decode failure or

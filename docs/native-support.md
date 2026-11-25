@@ -14,7 +14,7 @@ Hosted recovery observations there apply to their specific deployments.
 | PostgreSQL 16/18 with pgvector | Typed shared-table mapping, CRUD and cosine ordering | [PostgreSQL fixture](../scripts/test-postgres-parity.sh) |
 | Redis 8.2 standalone | Attach to hash/JSON search indexes, document CRUD and FLAT cosine ranking | [Redis fixture](../scripts/test-redis-parity.sh) |
 | Qdrant 1.20.2 standalone | Named cosine vectors, native IDs, keyword filters and bounded hybrid fixture | [Qdrant fixture](../scripts/test-qdrant-parity.sh) |
-| SQL Server 2025 Developer | Shared bigint-keyed vector table, reads, writes and exact cosine distance | [SQL Server fixture](../scripts/test-sqlserver-parity.sh) |
+| SQL Server 2025 Developer | Shared bigint-keyed vector table, reads, writes and exact cosine distance, typed retrieval with logical names and text equality | [SQL Server fixture](../scripts/test-sqlserver-parity.sh) |
 | Weaviate 1.40.7 standalone | UUID object CRUD and named-vector cosine search | [Weaviate fixture](../scripts/test-weaviate-parity.sh) |
 | Chroma 1.5.9 | Collection attachment, document updates and native cosine ranking | [Chroma fixture](../scripts/test-chroma-parity.sh) |
 | Elasticsearch 8.19.9 | Dense cosine search with a keyword filter and shared document operations | [Elasticsearch fixture](../scripts/test-elasticsearch-parity.sh) |

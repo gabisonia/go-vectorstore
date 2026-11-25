@@ -162,7 +162,15 @@ named vectors. Score is Qdrant cosine similarity and distance is one minus
 score. Qdrant controls tie ordering. Thresholds and provider options return
 `vectordata.ErrUnsupported`.
 
-The [shared retrieval example](../stores/qdrant/native_searcher_test.go) runs
+Use `NewNativeModelSearcher[Article](points, nil)` to infer the model mapping
+from tags. An explicit collection definition can supply the same mapping.
+Queries then use logical property names. The adapter resolves the payload and
+vector storage names, maps the native point ID to the model key, and decodes
+the ranked response through the struct codec. With multiple model vectors,
+select the logical vector name in the query. A missing optional payload field
+maps to nil; explicit null on a JSON field is a JSON null.
+
+The [shared retrieval example](../internal/parity/rankedguides/guides.go) runs
 with `go test ./stores/qdrant -run TestMemoryRankedGuides`. Run
 `bash scripts/test-qdrant-parity.sh` to exercise the same model, query and
 rank assertions on its disposable Qdrant server. The

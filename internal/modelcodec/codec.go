@@ -84,55 +84,63 @@ func Decode(payload []byte, d vectordata.CollectionDefinition) (vectordata.Model
 			out.Data[p.Name] = nil
 			continue
 		}
-		var target any
-		switch p.Type {
-		case vectordata.TypeString, vectordata.TypeUUID, vectordata.TypeDateOnly, vectordata.TypeTimeOnly:
-			target = new(string)
-		case vectordata.TypeInt64:
-			target = new(int64)
-		case vectordata.TypeFloat64:
-			target = new(float64)
-		case vectordata.TypeBool:
-			target = new(bool)
-		case vectordata.TypeTime:
-			target = new(time.Time)
-		case vectordata.TypeStringArray, vectordata.TypeUUIDArray, vectordata.TypeDateOnlyArray, vectordata.TypeTimeOnlyArray:
-			target = new([]string)
-		case vectordata.TypeBytes:
-			target = new([]byte)
-		case vectordata.TypeInt64Array:
-			target = new([]int64)
-		case vectordata.TypeFloat64Array:
-			target = new([]float64)
-		case vectordata.TypeBoolArray:
-			target = new([]bool)
-		case vectordata.TypeTimeArray:
-			target = new([]time.Time)
-		case vectordata.TypeDecimal:
-			target = new(vectordata.Decimal)
-		case vectordata.TypeDecimalArray:
-			target = new([]vectordata.Decimal)
-		case vectordata.TypeJSON:
-			var value any
-			decoder := json.NewDecoder(bytes.NewReader(entry.Value))
-			decoder.UseNumber()
-			if err := decoder.Decode(&value); err != nil {
-				return out, err
-			}
-			if value == nil {
-				value = vectordata.JSONNull{}
-			}
-			out.Data[p.Name] = value
-			continue
-		default:
-			return out, fmt.Errorf("%w: unknown stored data type", vectordata.ErrSchemaMismatch)
-		}
-		if err := json.Unmarshal(entry.Value, target); err != nil {
+		value, err := DecodeProperty(entry.Value, p)
+		if err != nil {
 			return out, err
 		}
-		out.Data[p.Name] = reflect.ValueOf(target).Elem().Interface()
+		out.Data[p.Name] = value
 	}
 	return out, nil
+}
+
+// DecodeProperty reconstructs the native value of a non-SQL-NULL JSON field.
+func DecodeProperty(raw json.RawMessage, p vectordata.DataProperty) (any, error) {
+	var target any
+	switch p.Type {
+	case vectordata.TypeString, vectordata.TypeUUID, vectordata.TypeDateOnly, vectordata.TypeTimeOnly:
+		target = new(string)
+	case vectordata.TypeInt64:
+		target = new(int64)
+	case vectordata.TypeFloat64:
+		target = new(float64)
+	case vectordata.TypeBool:
+		target = new(bool)
+	case vectordata.TypeTime:
+		target = new(time.Time)
+	case vectordata.TypeStringArray, vectordata.TypeUUIDArray, vectordata.TypeDateOnlyArray, vectordata.TypeTimeOnlyArray:
+		target = new([]string)
+	case vectordata.TypeBytes:
+		target = new([]byte)
+	case vectordata.TypeInt64Array:
+		target = new([]int64)
+	case vectordata.TypeFloat64Array:
+		target = new([]float64)
+	case vectordata.TypeBoolArray:
+		target = new([]bool)
+	case vectordata.TypeTimeArray:
+		target = new([]time.Time)
+	case vectordata.TypeDecimal:
+		target = new(vectordata.Decimal)
+	case vectordata.TypeDecimalArray:
+		target = new([]vectordata.Decimal)
+	case vectordata.TypeJSON:
+		var value any
+		decoder := json.NewDecoder(bytes.NewReader(raw))
+		decoder.UseNumber()
+		if err := decoder.Decode(&value); err != nil {
+			return nil, err
+		}
+		if value == nil {
+			value = vectordata.JSONNull{}
+		}
+		return value, nil
+	default:
+		return nil, fmt.Errorf("%w: unknown stored data type", vectordata.ErrSchemaMismatch)
+	}
+	if err := json.Unmarshal(raw, target); err != nil {
+		return nil, err
+	}
+	return reflect.ValueOf(target).Elem().Interface(), nil
 }
 
 // encoding/json replaces invalid UTF-8. Reject it in native text values so keys
