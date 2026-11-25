@@ -36,6 +36,6 @@ check_module() {
   diff -u /dev/null "$api_tmp/report"
 }
 
-check_module . "$api_module" v0.7.0
+check_module . "$api_module" v1.0.0
 check_module connectors/azuresearch "$api_module/connectors/azuresearch" connectors/azuresearch/v0.1.0
 check_module connectors/pinecone "$api_module/connectors/pinecone" connectors/pinecone/v0.1.0

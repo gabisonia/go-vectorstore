@@ -15,7 +15,7 @@ With Go 1.26 or later, start in an empty directory and run:
 
 ```sh
 go mod init example.com/handbook
-go get github.com/gabisonia/go-vectorstore/stores/sqlite@v0.7.0
+go get github.com/gabisonia/go-vectorstore/stores/sqlite@v1.0.0
 ```
 
 Save this as `main.go`. Each handbook page has a two-number vector describing

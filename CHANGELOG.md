@@ -1,6 +1,8 @@
 # Changelog
 
-## v1.0.0
+## v1.0.0 — 2026-11-25
+
+[Release notes](https://github.com/gabisonia/go-vectorstore/releases/tag/v1.0.0).
 
 - Adopt the [v1.x compatibility commitment](docs/releases.md#v1x-compatibility) for the root module, including original Record callers, typed models and third-party providers. Go 1.26 remains the minimum.
 - Add `vectordata.VectorSearcher[T]` for typed dense retrieval. Bind Qdrant named points or SQL Server vector tables with schema-aware model searchers, or supply a custom Qdrant decoder. Compose a dense searcher with `embeddingsearch.New` for text queries.

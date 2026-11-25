@@ -2,10 +2,15 @@
 
 ## Upgrading from v0.7.0 to v1.0.0
 
-Keep the existing root module path and Go 1.26 or later. Once the v1.0.0 tag
-is published, select it for `github.com/gabisonia/go-vectorstore` in your
-application, run `go mod tidy` and run your tests. Azure AI Search and Pinecone
-stay on their own v0.1.0 tags. Record callers, model registrations and existing
+With Go 1.26 or later, update and test your application in its existing module.
+
+```sh
+go get github.com/gabisonia/go-vectorstore@v1.0.0
+go mod tidy
+go test ./...
+```
+
+Azure AI Search and Pinecone stay on their own v0.1.0 tags. Record callers, model registrations and existing
 third-party provider implementations can upgrade in place. Adopting typed native
 search or composing a text searcher is optional.
 
@@ -224,6 +229,12 @@ Qdrant integration tests, SQLite/optional-adapter checks, API compatibility, sam
 checks and vulnerability scanning. Local equivalents are in the repository
 workflow and [performance guide](performance.md). Run the model sample for each
 provider you use and the persistent SQLite sample when adopting embedded storage.
+
+The v1.0.0 tag and the public Go proxy resolved to
+`84a2d126147a2077c676ebc935d57cc27a816549`. A fresh Go consumer downloaded
+the module, verified checksums and ran a typed dense search. All 46 checks on
+the protected master commit and all 48 jobs in the publication workflow passed.
+[Master CI](https://github.com/gabisonia/go-vectorstore/actions/runs/45597252637) · [v1.0.0 publication](https://github.com/gabisonia/go-vectorstore/actions/runs/45598253819)
 
 The [v0.5.0 release workflow](https://github.com/gabisonia/go-vectorstore/actions/runs/44713607599)
 passed all 25 jobs and published tag `v0.5.0` at commit

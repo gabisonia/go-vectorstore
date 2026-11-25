@@ -7,19 +7,19 @@ ensure that a tool reads its documentation or instruction files.
 
 ## Version and starting point
 
-The checkout is preparing v1.0.0. This quickstart uses the published **v0.7.0** root module and requires Go 1.26
+This quickstart uses the published **v1.0.0** root module and requires Go 1.26
 or later. Start in an empty directory. If you already have a Go module, skip
 the initialization line.
 
 ```sh
 go mod init example.com/vector-demo
-go get github.com/gabisonia/go-vectorstore/stores/memory@v0.7.0
+go get github.com/gabisonia/go-vectorstore/stores/memory@v1.0.0
 ```
 
 Applications using Go 1.25 can use v0.5.0. Run repository samples from the
 matching checkout and check isolated samples' own `go.mod` files. Azure AI Search
-and Pinecone have separate module paths and versions. See the [v0.7.0 API
-reference](https://pkg.go.dev/github.com/gabisonia/go-vectorstore@v0.7.0/vectordata)
+and Pinecone have separate module paths and versions. See the [v1.0.0 API
+reference](https://pkg.go.dev/github.com/gabisonia/go-vectorstore@v1.0.0/vectordata)
 and [upgrade guide](upgrading.md).
 
 Use the model API for new applications. Import the provider you need and

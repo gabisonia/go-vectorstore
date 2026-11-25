@@ -3,8 +3,8 @@
 `VERSION` selects the source version being prepared or tagged. A version is
 available to consumers only after its immutable tag/release is published; consult
 [GitHub releases](https://github.com/gabisonia/go-vectorstore/releases). Source on
-master may be newer than the latest tag. The [v0.7.0 release](https://github.com/gabisonia/go-vectorstore/releases/tag/v0.7.0)
-requires Go 1.26+ and ships Azure AI Search and Pinecone as separate modules.
+master may be newer than the latest tag. The [v1.0.0 release](https://github.com/gabisonia/go-vectorstore/releases/tag/v1.0.0)
+requires Go 1.26+. Azure AI Search and Pinecone ship as separate modules.
 Consult the changelog for changes since the previous tag. See the
 [v0.5.0 compatibility review](release-0.5.md) and [upgrade guide](upgrading.md).
 
@@ -57,7 +57,7 @@ Fixes can tighten behavior that violates the documented contract, such as yieldi
 buffered records after cancellation. Applications must not depend on internal SQL,
 index names, undocumented error text, timing, or driver implementation details.
 
-CI compares the root module against v0.7.0, Azure AI Search against
+CI compares the root module against v1.0.0, Azure AI Search against
 `connectors/azuresearch/v0.1.0`, and Pinecone against `connectors/pinecone/v0.1.0`.
 Each comparison must report zero incompatible changes. The [upgrade guide](upgrading.md)
 records the two package moves that shipped in v0.7.0. Advance each module's
