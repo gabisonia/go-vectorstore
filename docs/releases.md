@@ -10,6 +10,47 @@ Consult the changelog for changes since the previous tag. See the
 
 ## Compatibility policy
 
+### v1.x compatibility
+
+The root module commits to source compatibility across v1 minor and patch
+releases. Applications using the original Record API, typed collections,
+custom codecs or keyed option literals can update within v1. Third-party
+implementations of the published store, collection, codec and search interfaces
+continue to satisfy them. New optional operations use separate interfaces and
+capability checks. An intentional incompatible change requires a new major version.
+
+The exported additions since v0.7.0 are the single-method
+`vectordata.VectorSearcher[T]` interface, Qdrant's `NewNativeVectorSearcher`
+and `NewNativeModelSearcher`, SQL Server's `NewNativeModelSearcher`, and
+`vectordata/embeddingsearch` with `New`, `Searcher[T]` and `SearchTextIter`.
+Existing typed model collections already implement the dense interface.
+
+- **Retrieval.** Preserve projection, key precision, optional-vector behavior,
+  distance units and score kinds. Enumeration is lazy. A caller that continues
+  after cancellation receives one terminal error matching the context error,
+  including after the final hit. Breaking releases resources immediately.
+  Documented sentinel and wrapped error types remain matchable with
+  `errors.Is` and `errors.As`.
+- **Embeddings.** Preserve property, collection and store override precedence,
+  explicit vectors, input/output validation and atomic model batch writes.
+  The text wrapper embeds once per enumeration using the selected logical
+  vector. Runtime generators must be supplied again on reopen.
+- **Provider scope.** Portable filters retain their documented NULL semantics.
+  Native Qdrant typed search accepts indexed keyword equality and retains server
+  tie order. Native SQL Server typed search accepts equality on its mapped text
+  field and orders distance ties by key. PostgreSQL ordinary vector search orders
+  by distance alone. A search-only adapter grants no collection creation,
+  migration or deletion operations. Supported backend versions, operations and
+  topologies are listed in the [native support matrix](native-support.md).
+- **Persisted data.** Preserve the documented read or explicit migration path for
+  supported registrations, values and generated keys. Format changes require a
+  version, backup instructions and a migration procedure. The tested paths,
+  matching server versions and restore boundaries are in the [upgrade guide](upgrading.md).
+
+Azure AI Search and Pinecone keep independently versioned v0 module contracts.
+
+## Verification and supported versions
+
 Within a supported minor line, patch releases preserve exported APIs, existing
 record/model registrations, declared error matching, and supported persisted data.
 Fixes can tighten behavior that violates the documented contract, such as yielding
@@ -31,22 +72,15 @@ generated-key continuation. Keep released fixtures; add new ones when formats
 change. This is a backwards-read compatibility check, not a promise that an older
 binary understands a newer storage format.
 
-An intentional breaking change before v1 requires a minor-version increase,
-release notes and upgrade guidance. A storage format change requires an explicit
-version and migration/backup procedure; Ensure does not silently convert data.
 Go/driver/database support changes must be called out. The Go minimum is 1.26;
 CI tests minimum/current stable Go, PostgreSQL 16/18, Redis 7.4/8.2 and the pinned
 standalone Qdrant server. Optional sqlite-vec checks run CGo-free on Linux, macOS
 and Windows. Deployed pgvector operators,
 permissions and index limits still determine feature availability.
 
-A v1.0 release should follow an explicit review of the public API and its long-term
-compatibility commitment. Version numbering communicates compatibility; it does
-not replace workload validation or database operations. See
-[Go module version guidance](https://go.dev/doc/modules/version-numbers) and
-[security support](../SECURITY.md).
-
-The [pre-v1 review](pre-v1-review.md) maps these promises to tests and fixtures and records the approved v1 scope. Verify the v0.6.0 storage upgrade paths and verify independent connector tags against the [support matrix](native-support.md) before tagging v1.
+The [pre-v1 review](pre-v1-review.md) maps the original scope to conformance
+tests and persisted fixtures. See the [security policy](../SECURITY.md) for
+supported release lines.
 
 ## Preparing and publishing
 

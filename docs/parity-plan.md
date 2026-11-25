@@ -276,7 +276,7 @@ Continue auditing schema/codec agreement, decode overflow, error propagation and
 mutable-value ownership. Extend restore and failure drills as supported storage
 layouts evolve. The following results cover released configurations.
 
-- The [upgrade matrix](upgrading.md#reading-data-written-by-v060) records restore and direct-read checks using fixtures written by v0.6.0.
+- The [upgrade matrix](upgrading.md#reading-data-written-by-v060-and-v070) records restore and direct-read checks using fixtures written by v0.6.0 and v0.7.0.
 - The [PostgreSQL report](benchmarks/postgres-mixed/report.md) and [Redis comparison](benchmarks/redis-mixed/report.md) give the fixture, concurrency and measured results for each layout tested.
 - The [v0.7.0 upgrade guide](upgrading.md) covers the released module split. CI runs the pinned SQLite consumer quickstart against a fresh database and again after reopening it.
 
