@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -91,7 +90,7 @@ func TestSQLiteCrashWorker(t *testing.T) {
 		_, _ = io.Copy(io.Discard, os.Stdin)
 		t.Fatal("parent closed worker stdin instead of killing process")
 	}
-	dsn := (&url.URL{Scheme: "file", Path: path}).String() + "?_txlock=immediate&_pragma=journal_mode(WAL)&_pragma=synchronous(FULL)&_pragma=foreign_keys(1)&_pragma=wal_autocheckpoint(0)"
+	dsn := sqliteFileURI(filepath.ToSlash(path)) + "?_txlock=immediate&_pragma=journal_mode(WAL)&_pragma=synchronous(FULL)&_pragma=foreign_keys(1)&_pragma=wal_autocheckpoint(0)"
 	store.db = sql.OpenDB(crashConnector{base: base, dsn: dsn, after: func(q string) {
 		if armed && strings.HasPrefix(q, "UPDATE __vectorstore_collections SET next_key=") {
 			ready()

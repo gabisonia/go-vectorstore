@@ -131,7 +131,7 @@ jobs:
         run: go vet -tags=sqlitevecprobe ./internal/sqlitevecprobe ./stores/sqlitevec
       - name: Verify Windows SQLite filename handling
         if: runner.os == 'Windows'
-        run: go test -count=1 -run 'TestMetadataDiscoveryAfterClose|TestPersistenceAndAtomicity' ./vectordata ./stores/sqlite
+        run: go test -count=1 -run 'TestMetadataDiscoveryAfterClose|TestPersistenceAndAtomicity|TestWALRecoveryAfterProcessKill' ./vectordata ./stores/sqlite
 
   reference-catalog:
     needs: profile
