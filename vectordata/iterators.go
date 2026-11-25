@@ -13,6 +13,12 @@ import (
 // Enumerating a sequence again reruns the operation, including embedding calls.
 // Callers must keep inputs unchanged while a sequence is being consumed.
 
+// VectorSearcher provides read-only dense vector search over records of type T.
+// TypedModelCollection implements this interface for any supported key type.
+type VectorSearcher[T any] interface {
+	SearchIter(ctx context.Context, vector []float32, top int, opts ModelSearchOptions) iter.Seq2[TypedModelSearchResult[T], error]
+}
+
 // CollectionNameIterator optionally enumerates a store's collection names.
 type CollectionNameIterator interface {
 	ListCollectionNamesIter(context.Context) iter.Seq2[string, error]

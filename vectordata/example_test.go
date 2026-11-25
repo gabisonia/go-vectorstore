@@ -44,7 +44,7 @@ func Example_getMetadata() {
 	// docs
 }
 
-func Example_typedSearch() {
+func ExampleVectorSearcher() {
 	type Document struct {
 		ID       string    `vectordata:"key"`
 		Category string    `vectordata:"data,index"`
@@ -59,11 +59,14 @@ func Example_typedSearch() {
 	if err != nil {
 		panic(err)
 	}
-	hits, err := documents.Search(ctx, []float32{1, 0}, 2, vectordata.ModelSearchOptions{Filter: vectordata.Eq(vectordata.Column("Category"), "travel")})
-	if err != nil {
-		panic(err)
+	var searcher vectordata.VectorSearcher[Document] = documents
+	opts := vectordata.ModelSearchOptions{Filter: vectordata.Eq(vectordata.Column("Category"), "travel")}
+	for hit, err := range searcher.SearchIter(ctx, []float32{1, 0}, 2, opts) {
+		if err != nil {
+			panic(err)
+		}
+		fmt.Println(hit.Item.ID, hit.Distance, len(hit.Item.Vector))
 	}
-	fmt.Println(hits[0].Item.ID, hits[0].Distance, len(hits[0].Item.Vector))
 	// Output: guide 0 0
 }
 

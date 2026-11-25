@@ -150,3 +150,21 @@ Try the [rerunnable typed sample](../samples/qdrant-store/README.md) with the
 [Aspire services](../samples/aspire-services/README.md). Keep deployment backup,
 restore drills, capacity monitoring and unknown-write reconciliation explicit;
 the API does not provide operational guarantees beyond its documented scope.
+## Typed retrieval from native points
+
+After attaching with `AttachNativePoints`, pass the handle, default named
+cosine vector and a point-to-model decoder to `NewNativeVectorSearcher`.
+The resulting `vectordata.VectorSearcher[T]` accepts physical vector and
+payload field names. It supports top, skip, one indexed string equality and
+optional vector projection. The decoder receives the point ID and full payload
+in the ranked response. With `IncludeVectors` it also receives all stored
+named vectors. Score is Qdrant cosine similarity and distance is one minus
+score. Qdrant controls tie ordering. Thresholds and provider options return
+`vectordata.ErrUnsupported`.
+
+The [shared retrieval example](../stores/qdrant/native_searcher_test.go) runs
+with `go test ./stores/qdrant -run TestMemoryRankedGuides`. Run
+`bash scripts/test-qdrant-parity.sh` to exercise the same model, query and
+rank assertions on its disposable Qdrant server. The
+[native setup](../stores/qdrant/native_searcher_parity_test.go) creates the
+physical schema and maps ranked points to the application model.

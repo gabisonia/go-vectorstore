@@ -57,6 +57,11 @@ type parameters. Both struct values and pointers to structs are supported.
 Reflection mappings are resolved once when constructing a `StructCodec[T]`.
 Custom `ModelCodec[T]` implementations can provide their own mappings.
 
+Retrieval functions that only search by dense vector can accept
+`vectordata.VectorSearcher[T]`. Pass the typed collection directly and iterate
+its `SearchIter` results. The retrieval function needs only the model type;
+collection setup owns the key type and provider choice.
+
 `TypedModelCollection` checks the operation context before and after each model
 codec callback. Cancellation stops later callbacks and prevents handing an encoded
 batch to the provider. Reads return no partial slice values on decode failure or
