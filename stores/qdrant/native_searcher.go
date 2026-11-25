@@ -13,7 +13,8 @@ import (
 type nativeSearcher[K NativeKey, T any] struct {
 	points        *NativePoints[K]
 	defaultVector string
-	decode        func(NamedPoint[K]) (T, error)
+	decode        func(NamedPoint[K], bool) (T, error)
+	definition    *vectordata.CollectionDefinition
 }
 
 // NewNativeVectorSearcher adapts an attached collection for typed retrieval.
@@ -24,7 +25,7 @@ func NewNativeVectorSearcher[K NativeKey, T any](points *NativePoints[K], defaul
 	if points == nil || points.dimensions[defaultVector] == 0 || decode == nil {
 		return nil, fmt.Errorf("%w: attached points, a configured default vector and a decoder are required", vectordata.ErrSchemaMismatch)
 	}
-	return &nativeSearcher[K, T]{points, defaultVector, decode}, nil
+	return &nativeSearcher[K, T]{points: points, defaultVector: defaultVector, decode: func(p NamedPoint[K], _ bool) (T, error) { return decode(p) }}, nil
 }
 
 func (s *nativeSearcher[K, T]) SearchIter(ctx context.Context, vector []float32, top int, opts vectordata.ModelSearchOptions) iter.Seq2[vectordata.TypedModelSearchResult[T], error] {
@@ -58,7 +59,7 @@ func (s *nativeSearcher[K, T]) SearchIter(ctx context.Context, vector []float32,
 				yield(zero, ErrCorrupt)
 				return
 			}
-			item, err := s.decode(hit.NamedPoint)
+			item, err := s.decode(hit.NamedPoint, opts.IncludeVectors)
 			if err = errors.Join(err, ctx.Err()); err != nil {
 				yield(zero, err)
 				return
@@ -81,14 +82,31 @@ func (s *nativeSearcher[K, T]) query(vector []float32, top int, opts vectordata.
 	if opts.Filter != nil {
 		eq, ok := opts.Filter.(vectordata.EqFilter)
 		value, stringValue := eq.Value.(string)
-		if !ok || !stringValue || eq.Field.Kind != vectordata.FieldColumn || len(eq.Field.Path) != 0 || !s.points.keywordFields[eq.Field.Name] {
+		field := eq.Field.Name
+		if s.definition != nil {
+			field = ""
+			for _, p := range s.definition.Data {
+				if p.Name == eq.Field.Name && p.Type == vectordata.TypeString {
+					field = p.StorageName
+					break
+				}
+			}
+		}
+		if !ok || !stringValue || eq.Field.Kind != vectordata.FieldColumn || len(eq.Field.Path) != 0 || !s.points.keywordFields[field] {
 			return nil, fmt.Errorf("%w: native typed search requires indexed keyword equality", vectordata.ErrUnsupported)
 		}
-		native.Keyword = &NativeKeywordFilter{Field: eq.Field.Name, Value: value}
+		native.Keyword = &NativeKeywordFilter{Field: field, Value: value}
 	}
 	name := opts.VectorProperty
 	if name == "" {
 		name = s.defaultVector
+	}
+	if s.definition != nil {
+		p, err := s.definition.Vector(name)
+		if err != nil {
+			return nil, err
+		}
+		name = p.StorageName
 	}
 	query, err := s.points.searchQuery(name, vector, top, native)
 	if err != nil {

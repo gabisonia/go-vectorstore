@@ -11,6 +11,7 @@ import (
 	"slices"
 	"testing"
 
+	"github.com/gabisonia/go-vectorstore/internal/parity/rankedguides"
 	"github.com/gabisonia/go-vectorstore/stores/sqlserver"
 	"github.com/gabisonia/go-vectorstore/vectordata"
 	_ "github.com/microsoft/go-mssqldb"
@@ -91,4 +92,35 @@ func TestSharedTable(t *testing.T) {
 			ref("verify-empty")
 		})
 	}
+}
+
+func TestRankedGuides(t *testing.T) {
+	db, err := sql.Open("sqlserver", os.Getenv("PARITY_SQL_URL"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	ctx := t.Context()
+	if _, err := db.ExecContext(ctx, "CREATE TABLE dbo.ranked_guides (id bigint NOT NULL PRIMARY KEY,category nvarchar(max),content_vector vector(2))"); err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if _, err := db.ExecContext(ctx, "DROP TABLE dbo.ranked_guides"); err != nil {
+			t.Error(err)
+		}
+	}()
+	c, err := sqlserver.AttachNative(ctx, db, sqlserver.NativeSchema{Table: "ranked_guides", Key: "id", Text: "category", Vector: "content_vector", Dimensions: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, a := range rankedguides.Articles() {
+		if err := c.Upsert(ctx, sqlserver.NativePoint{ID: int64(a.ID), Text: a.Category, Vector: a.Direction}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	searcher, err := sqlserver.NewNativeModelSearcher[rankedguides.Article](c, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rankedguides.Check(t, searcher)
 }

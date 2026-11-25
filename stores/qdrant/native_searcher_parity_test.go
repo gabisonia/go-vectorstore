@@ -3,7 +3,7 @@
 package qdrant
 
 import (
-	"fmt"
+	"github.com/gabisonia/go-vectorstore/internal/parity/rankedguides"
 	"os"
 	"testing"
 )
@@ -18,30 +18,24 @@ func TestNativeRankedGuides(t *testing.T) {
 	defer s.Close()
 	ctx := t.Context()
 	path := "/collections/" + name
-	if _, err := s.request(ctx, "PUT", path, map[string]any{"vectors": map[string]any{"Direction": map[string]any{"size": 2, "distance": "Cosine"}}}, nil); err != nil {
+	if _, err := s.request(ctx, "PUT", path, map[string]any{"vectors": map[string]any{"content_vector": map[string]any{"size": 2, "distance": "Cosine"}}}, nil); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.request(ctx, "PUT", path+"/index?wait=true", map[string]string{"field_name": "Category", "field_schema": "keyword"}, nil); err != nil {
+	if _, err := s.request(ctx, "PUT", path+"/index?wait=true", map[string]string{"field_name": "category", "field_schema": "keyword"}, nil); err != nil {
 		t.Fatal(err)
 	}
-	points, err := AttachNativePoints[uint64](ctx, s, name, map[string]int{"Direction": 2})
+	points, err := AttachNativePoints[uint64](ctx, s, name, map[string]int{"content_vector": 2})
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, a := range articles() {
-		if err := points.UpsertPoint(ctx, NamedPoint[uint64]{ID: a.ID, Payload: map[string]any{"Category": a.Category}, Vectors: map[string][]float32{"Direction": a.Direction}}); err != nil {
+	for _, a := range rankedguides.Articles() {
+		if err := points.UpsertPoint(ctx, NamedPoint[uint64]{ID: a.ID, Payload: map[string]any{"category": a.Category}, Vectors: map[string][]float32{"content_vector": a.Direction}}); err != nil {
 			t.Fatal(err)
 		}
 	}
-	searcher, err := NewNativeVectorSearcher(points, "Direction", func(p NamedPoint[uint64]) (article, error) {
-		category, ok := p.Payload["Category"].(string)
-		if !ok {
-			return article{}, fmt.Errorf("point %d has no string Category", p.ID)
-		}
-		return article{p.ID, category, p.Vectors["Direction"]}, nil
-	})
+	searcher, err := NewNativeModelSearcher[rankedguides.Article](points, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
-	checkRankedGuides(t, searcher)
+	rankedguides.Check(t, searcher)
 }
