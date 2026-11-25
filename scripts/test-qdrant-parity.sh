@@ -9,4 +9,4 @@ docker run --rm --network "container:$server" --entrypoint curl "$image" \
   --retry 30 --retry-delay 1 --retry-connrefused -fsS http://localhost:6333/readyz
 docker run --rm --network "container:$server" \
   -e PARITY_HTTP_URL=http://localhost:6333 -e PARITY_GRPC_PORT=6334 \
-  "$image" -test.run '^TestNative(DotNetParity|IndexedRecall)$'
+  "$image" -test.run '^TestNative(DotNetParity|IndexedRecall|RankedGuides)$'

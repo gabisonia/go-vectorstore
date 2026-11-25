@@ -223,6 +223,14 @@ type NativeSearchOptions struct {
 // Search ranks points on the selected physical vector. The zero options value
 // performs an unfiltered nearest-neighbor query.
 func (c *NativePoints[K]) Search(ctx context.Context, name string, vector []float32, top int, opts NativeSearchOptions) ([]NamedHit[K], error) {
+	query, err := c.searchQuery(name, vector, top, opts)
+	if err != nil {
+		return nil, err
+	}
+	return c.query(ctx, query)
+}
+
+func (c *NativePoints[K]) searchQuery(name string, vector []float32, top int, opts NativeSearchOptions) (map[string]any, error) {
 	if top < 1 || opts.Skip < 0 {
 		return nil, vectordata.ErrInvalidRecord
 	}
@@ -242,7 +250,7 @@ func (c *NativePoints[K]) Search(ctx context.Context, name string, vector []floa
 		}
 		query["filter"] = map[string]any{"must": []any{map[string]any{"key": filter.Field, "match": map[string]string{"value": filter.Value}}}}
 	}
-	return c.query(ctx, query)
+	return query, nil
 }
 
 // HybridSearch fuses a named cosine search and full-text keyword matches using
