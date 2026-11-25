@@ -57,6 +57,9 @@ jobs:
       - name: Test experimental connector modules and consumer resolution
         if: needs.profile.outputs.profile == 'full'
         run: bash scripts/test-connector-modules.sh
+      - name: Build published Azure AI Search and Pinecone with the candidate root
+        if: needs.profile.outputs.profile == 'full'
+        run: bash scripts/test-connector-modules.sh --published
       - name: Check documentation links and executable quickstart
         run: python3 scripts/check-docs.py
       - name: Run the README SQLite quickstart against the published module
@@ -126,6 +129,9 @@ jobs:
           go test -count=1 -v -tags=sqlitevecprobe -run 'TestNativeVector|TestFileURI|TestVectorProjectionCleanupUsesKeyIndex' -timeout=3m ./stores/sqlite
       - name: Vet probe
         run: go vet -tags=sqlitevecprobe ./internal/sqlitevecprobe ./stores/sqlitevec
+      - name: Verify Windows SQLite filename handling
+        if: runner.os == 'Windows'
+        run: go test -count=1 -run 'TestMetadataDiscoveryAfterClose|TestPersistenceAndAtomicity|TestWALRecoveryAfterProcessKill' ./vectordata ./stores/sqlite
 
   reference-catalog:
     needs: profile
@@ -466,7 +472,11 @@ jobs:
   storage-upgrade:
     needs: profile
     if: needs.profile.outputs.profile == 'full'
-    name: Released storage upgrade
+    name: Released storage upgrade (${{ matrix.producer }})
+    strategy:
+      fail-fast: false
+      matrix:
+        producer: [v0.6.0, v0.7.0]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -476,7 +486,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: stable
-      - run: bash scripts/test-storage-upgrade.sh
+      - run: bash scripts/test-storage-upgrade.sh "${{ matrix.producer }}"
 
   api-compatibility:
     needs: profile

@@ -11,7 +11,9 @@ cleanup() {
 }
 trap cleanup EXIT
 export GOWORK=off
-producer_commit=545df9b8974c88e086c2f599e33a6703a01c1033
+producer=${1:-v0.6.0}
+producer_commit=$(git rev-parse --verify "refs/tags/$producer^{commit}")
+echo "Checking $producer ($producer_commit) against $(git rev-parse HEAD)"
 mkdir "$work/release"
 git archive "$producer_commit" | tar -x -C "$work/release"
 cp internal/upgradefixture/main.go "$work/release/fixture.go"
@@ -69,4 +71,4 @@ wait_for curl -fsS "http://$endpoint/readyz"
 restore /qdrant/storage
 wait_for curl -fsS "http://$endpoint/readyz"
 "$work/reader" verify qdrant "http://$endpoint"
-echo "Verified all 11 v0.6.0 storage configurations from restored copies"
+echo "Verified all 11 $producer storage configurations from restored copies"

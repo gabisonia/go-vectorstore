@@ -8,6 +8,7 @@ import (
 	"iter"
 
 	"github.com/gabisonia/go-vectorstore/internal/exactsearch"
+	"github.com/gabisonia/go-vectorstore/internal/iteration"
 	"github.com/gabisonia/go-vectorstore/vectordata"
 	"github.com/gabisonia/go-vectorstore/vectordata/filterast"
 )
@@ -67,6 +68,6 @@ func (s *Searcher[T]) SearchTextIter(ctx context.Context, text string, top int, 
 			yield(zero, err)
 			return
 		}
-		s.dense.SearchIter(ctx, vector, top, frozen)(yield)
+		iteration.WithContext(ctx, s.dense.SearchIter(ctx, vector, top, frozen))(yield)
 	}
 }

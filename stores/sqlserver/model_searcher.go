@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"iter"
 
+	"github.com/gabisonia/go-vectorstore/internal/iteration"
 	"github.com/gabisonia/go-vectorstore/vectordata"
 )
 
@@ -36,12 +37,8 @@ func NewNativeModelSearcher[T any](c *NativeCollection, definition *vectordata.C
 }
 
 func (s *modelSearcher[T]) SearchIter(ctx context.Context, vector []float32, top int, opts vectordata.ModelSearchOptions) iter.Seq2[vectordata.TypedModelSearchResult[T], error] {
-	return func(yield func(vectordata.TypedModelSearchResult[T], error) bool) {
+	return iteration.WithContext(ctx, func(yield func(vectordata.TypedModelSearchResult[T], error) bool) {
 		var zero vectordata.TypedModelSearchResult[T]
-		if err := ctx.Err(); err != nil {
-			yield(zero, err)
-			return
-		}
 		rows, err := s.query(ctx, vector, top, opts)
 		if err != nil {
 			yield(zero, err)
@@ -61,7 +58,7 @@ func (s *modelSearcher[T]) SearchIter(ctx context.Context, vector []float32, top
 		if err := rows.Err(); err != nil {
 			yield(zero, err)
 		}
-	}
+	})
 }
 
 func (s *modelSearcher[T]) query(ctx context.Context, vector []float32, top int, opts vectordata.ModelSearchOptions) (*sql.Rows, error) {

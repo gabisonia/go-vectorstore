@@ -3,12 +3,55 @@ package embeddingsearch_test
 import (
 	"context"
 	"errors"
+	"iter"
 	"testing"
 
 	"github.com/gabisonia/go-vectorstore/stores/memory"
 	"github.com/gabisonia/go-vectorstore/vectordata"
 	"github.com/gabisonia/go-vectorstore/vectordata/embeddingsearch"
 )
+
+// A third-party dense searcher may finish immediately after its only result.
+type singleHit struct{}
+
+func (singleHit) SearchIter(context.Context, []float32, int, vectordata.ModelSearchOptions) iter.Seq2[vectordata.TypedModelSearchResult[int], error] {
+	return func(yield func(vectordata.TypedModelSearchResult[int], error) bool) {
+		yield(vectordata.TypedModelSearchResult[int]{Item: 7}, nil)
+	}
+}
+
+func TestTextIteratorObservesCancellationOnLastDenseHit(t *testing.T) {
+	def := vectordata.CollectionDefinition{
+		Key:     vectordata.KeyProperty{Name: "ID"},
+		Vectors: []vectordata.VectorProperty{{Name: "V", Dimensions: 2}},
+	}
+	s, err := embeddingsearch.New(singleHit{}, def, vectordata.ModelCollectionOptions{Embedder: vectordata.EmbeddingFunc(func(context.Context, []string) ([][]float32, error) {
+		return [][]float32{{1, 0}}, nil
+	})})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	hits, failures := 0, 0
+	for hit, err := range s.SearchTextIter(ctx, "query", 1, vectordata.ModelSearchOptions{}) {
+		if err != nil {
+			if !errors.Is(err, context.Canceled) {
+				t.Fatal(err)
+			}
+			failures++
+			continue
+		}
+		if hit.Item != 7 {
+			t.Fatalf("unexpected hit %+v", hit)
+		}
+		hits++
+		cancel()
+	}
+	if hits != 1 || failures != 1 {
+		t.Fatalf("got %d hits and %d errors", hits, failures)
+	}
+}
 
 func TestValidationAndEmbeddingCancellation(t *testing.T) {
 	type Document struct {

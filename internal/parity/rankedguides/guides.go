@@ -3,6 +3,8 @@ package rankedguides
 
 import (
 	"context"
+	"errors"
+	"iter"
 	"testing"
 
 	"github.com/gabisonia/go-vectorstore/vectordata"
@@ -72,5 +74,58 @@ func Check(t *testing.T, searcher vectordata.VectorSearcher[Article]) {
 	}
 	if count != 1 || calls != 1 {
 		t.Fatalf("text search: %d hits, %d embedding calls", count, calls)
+	}
+	t.Run("dense cancellation", func(t *testing.T) {
+		checkCancellation(t, func(ctx context.Context) iter.Seq2[vectordata.TypedModelSearchResult[Article], error] {
+			return searcher.SearchIter(ctx, []float32{1, 0}, 2, vectordata.ModelSearchOptions{})
+		})
+	})
+	t.Run("text cancellation", func(t *testing.T) {
+		checkCancellation(t, func(ctx context.Context) iter.Seq2[vectordata.TypedModelSearchResult[Article], error] {
+			return text.SearchTextIter(ctx, "documentation", 2, vectordata.ModelSearchOptions{})
+		})
+	})
+}
+
+func checkCancellation(t *testing.T, search func(context.Context) iter.Seq2[vectordata.TypedModelSearchResult[Article], error]) {
+	for _, tc := range []struct {
+		name        string
+		cancelAfter int
+		stop        bool
+	}{
+		{"before query", 0, false}, {"between hits", 1, false}, {"on final hit", 2, false},
+		{"break on first hit", 1, true}, {"break on final hit", 2, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancel(t.Context())
+			defer cancel()
+			if tc.cancelAfter == 0 {
+				cancel()
+			}
+			hits, failures := 0, 0
+			for _, err := range search(ctx) {
+				if err != nil {
+					if !errors.Is(err, context.Canceled) {
+						t.Fatal(err)
+					}
+					failures++
+					continue
+				}
+				hits++
+				if hits == tc.cancelAfter {
+					cancel()
+					if tc.stop {
+						break
+					}
+				}
+			}
+			wantFailures := 1
+			if tc.stop {
+				wantFailures = 0
+			}
+			if hits != tc.cancelAfter || failures != wantFailures {
+				t.Fatalf("got %d hits and %d errors, want %d and %d", hits, failures, tc.cancelAfter, wantFailures)
+			}
+		})
 	}
 }

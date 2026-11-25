@@ -59,8 +59,12 @@ The [pre-v1 review](pre-v1-review.md) maps these promises to tests and fixtures 
    vulnerability results. The release workflow repeats the complete CI gate.
 3. Merge the reviewed release-preparation PR. Publishing is a separate explicit
    action: dispatch the Release workflow on master with the selected version.
-   It verifies VERSION/changelog consistency and that any existing tag points to
-   the tested commit. It never moves an existing tag.
+   Before dispatch, check repository tag rulesets, bypass actors and write access
+   to determine who can create or move root release tags. Confirm the version is
+   unused. The workflow checks VERSION and the changelog, runs full CI including
+   the published connector consumer, and fetches master again before creating the
+   tag. The checkout, dispatch SHA and current master tip must agree. A retry can
+   reuse an existing tag only at the same commit.
 4. After publishing, verify the tag/release commit and public Go proxy download,
    and update the quickstart install commands to the published tag. Run
    `python3 scripts/check-docs.py` and `python3 scripts/check-readme-quickstart.py`

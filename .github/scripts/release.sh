@@ -25,6 +25,20 @@ resolve_version() {
   printf 'v%s\n' "$version"
 }
 
+verify_target() {
+  if [[ ${GITHUB_EVENT_NAME:-} != workflow_dispatch || ${GITHUB_REF:-} != refs/heads/master ]]; then
+    printf 'Dispatch Release from master\n' >&2
+    return 1
+  fi
+  local tested
+  tested=$(git rev-parse --verify HEAD)
+  git fetch --no-tags origin refs/heads/master
+  if [[ $tested != "${GITHUB_SHA:-}" || $tested != "$(git rev-parse --verify FETCH_HEAD)" ]]; then
+    printf 'The tested checkout must match the dispatch SHA and current master tip\n' >&2
+    return 1
+  fi
+}
+
 verify_tag() {
   local tag="$1" normalized target
   normalized="$(resolve_version "$tag")"
@@ -61,6 +75,10 @@ verify_source() {
 }
 
 case "${1:-}" in
+  verify-target)
+    [[ "$#" -eq 1 ]] || exit 2
+    verify_target
+    ;;
   resolve)
     [[ "$#" -eq 2 ]] || exit 2
     resolve_version "$2"
@@ -75,6 +93,8 @@ case "${1:-}" in
     ;;
   publish-tag)
     [[ "$#" -eq 2 ]] || exit 2
+    verify_target
+    verify_source "$2"
     verify_tag "$2"
     if ! git show-ref --verify --quiet "refs/tags/$2"; then
       git tag "$2" HEAD
@@ -82,7 +102,7 @@ case "${1:-}" in
     git push origin "refs/tags/$2"
     ;;
   *)
-    printf 'Usage: release.sh {resolve|verify-source|verify-tag|publish-tag} VERSION\n' >&2
+    printf 'Usage: release.sh verify-target | {resolve|verify-source|verify-tag|publish-tag} VERSION\n' >&2
     exit 2
     ;;
 esac

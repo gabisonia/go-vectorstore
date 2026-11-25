@@ -1,8 +1,6 @@
 name: Release
 
 on:
-  push:
-    tags: ['v*.*.*']
   workflow_dispatch:
     inputs:
       version:
@@ -31,9 +29,10 @@ jobs:
         id: version
         shell: bash
         env:
-          RAW_VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.version || github.ref_name }}
+          RAW_VERSION: ${{ inputs.version }}
         run: |
           set -euo pipefail
+          bash .github/scripts/release.sh verify-target
           tag="$(bash .github/scripts/release.sh resolve "$RAW_VERSION")"
           bash .github/scripts/release.sh verify-source "$tag"
           bash .github/scripts/release.sh verify-tag "$tag"
@@ -54,13 +53,6 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: actions/setup-go@v5
-        if: startsWith(needs.resolve.outputs.tag, 'v0.7.')
-        with:
-          go-version: stable
-      - name: Verify published connector modules from a clean consumer
-        if: startsWith(needs.resolve.outputs.tag, 'v0.7.')
-        run: bash scripts/test-connector-modules.sh --published
       - name: Ensure tag points to the tested commit
         env:
           RELEASE_TAG: ${{ needs.resolve.outputs.tag }}

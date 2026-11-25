@@ -437,7 +437,7 @@ the separate [Aspire vector-search sample](samples/aspire-vector-search/README.m
 GitHub Actions workflows are configured for:
 
 - CI on pushes/PRs with race detection, `go vet`, release-script tests, and vulnerability scanning, testing Go 1.26/current stable and PostgreSQL 16/18 (`.github/workflows/ci.yml`)
-- release publishing from semver tags or manual workflow dispatch (`.github/workflows/release.yml`), gated on the same CI checks
+- release publishing by dispatch from `master` (`.github/workflows/release.yml`), gated on full CI
 
 Release version input is passed through environment variables and validated before
 any publishing job runs. Existing tags must point to the checked-out, tested
@@ -449,16 +449,9 @@ not establish that the tag has been published. Choose an unused version and upda
 `VERSION` and the changelog in a reviewed PR before publishing from master. Published tags are immutable; documentation updates after
 a release do not change the source stored under that tag.
 
-Release options for that new version:
-
-1. Manual (recommended): run `Release` workflow on master via GitHub UI with the new `version` input, with or without leading `v`.
-2. Tag-driven: push a semver tag and the workflow publishes release notes automatically:
-
-```bash
-RELEASE_VERSION="$(cat VERSION)" # After updating VERSION to the unused release version.
-git tag "v${RELEASE_VERSION}"
-git push origin "v${RELEASE_VERSION}"
-```
+Dispatch the `Release` workflow on `master` with the new `version` input, with
+or without a leading `v`. Immediately before tagging, the workflow checks that
+the tested SHA is still the tip of `master`. See the [release procedure](docs/releases.md).
 
 ## Samples
 
